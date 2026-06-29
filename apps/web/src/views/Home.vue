@@ -65,7 +65,7 @@ function exportThisMonth() {
   <div class="home page-enter">
     <header class="home__header">
       <h1 class="home__title">经营总览</h1>
-      <WorkerStatus :online="auth.workerOnline" compact />
+      <WorkerStatus :status="auth.workerStatus" compact />
     </header>
 
     <LuxuryCard dark :stagger="0" padding="18px 16px 16px">

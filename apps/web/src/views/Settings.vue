@@ -50,7 +50,7 @@ function logout() {
 
 <template>
   <AppShell title="我的">
-    <WorkerStatus :online="workerStatus.online" />
+    <WorkerStatus :status="workerStatus" />
 
     <LuxuryCard>
       <div class="section-title">手机快捷入口</div>

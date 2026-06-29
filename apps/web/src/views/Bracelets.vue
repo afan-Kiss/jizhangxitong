@@ -60,7 +60,7 @@ async function queryCode() {
 
 <template>
   <AppShell title="镯子查询">
-    <WorkerStatus :online="auth.workerOnline" compact />
+    <WorkerStatus :status="auth.workerStatus" compact />
 
     <div class="search-bar" :class="{ 'shake-soft': shake }">
       <van-search

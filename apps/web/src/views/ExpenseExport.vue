@@ -3,15 +3,18 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import api, { withBase } from '../api'
+import { useAuthStore } from '../stores/auth'
 import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import ExportProgress from '../components/ExportProgress.vue'
 import ActionButton from '../components/ActionButton.vue'
 import ExpenseItem from '../components/ExpenseItem.vue'
 import StatusPill from '../components/StatusPill.vue'
+import WorkerStatus from '../components/WorkerStatus.vue'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 const filter = ref({
   startDate: (route.query.startDate as string) || new Date().toISOString().slice(0, 10).replace(/-\d{2}$/, '-01'),
   endDate: (route.query.endDate as string) || new Date().toISOString().slice(0, 10),
@@ -54,6 +57,11 @@ async function onPreview() {
 }
 
 async function onExport() {
+  await auth.fetchWorkerStatus()
+  if (!auth.workerOnline) {
+    showToast('本地助手没连上，暂时不能导出带图片的报销表。')
+    return
+  }
   if (missingImageCount.value > 0) {
     showToast(`有 ${missingImageCount.value} 笔缺少图片，导出后会标注`)
   }
@@ -88,11 +96,16 @@ function download() {
   }
 }
 
-onMounted(onPreview)
+onMounted(async () => {
+  await auth.fetchWorkerStatus()
+  onPreview()
+})
 </script>
 
 <template>
   <AppShell title="报销导出" show-back no-tab-pad fixed-bottom @back="router.back()">
+    <WorkerStatus :status="auth.workerStatus" compact />
+
     <LuxuryCard>
       <div class="section-title">筛选条件</div>
       <van-field v-model="filter.startDate" label="开始" type="date" />

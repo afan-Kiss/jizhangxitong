@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * 一键部署阿里云：本地构建 → 上传 → 同步 Worker token → 远程验收
+ * 一键部署阿里云：本地构建 → 上传 → 重启 Worker → 远程验收
  */
-import { spawn, execSync } from 'child_process'
+import { execSync } from 'child_process'
 import fs from 'fs/promises'
-import fsSync from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { loadDeployEnv, RECOMMENDED_URL } from './lib/deploy-env.mjs'
+import { fetchJson, login, sleep } from './lib/services.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(__dirname, '..')
@@ -20,27 +20,53 @@ function run(cmd, opts = {}) {
 
 async function restartWorker() {
   console.log('\n>>> 重启本地 Worker...')
+  const ps1 = path.join(ROOT, 'scripts/windows/restart-local-worker.ps1')
   try {
-    execSync(
-      'powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"name=\'node.exe\'\\" | Where-Object { $_.CommandLine -match \'@jade-account/worker\' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"',
-      { stdio: 'ignore' },
-    )
-  } catch { /* ignore */ }
+    execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${ps1}"`, {
+      cwd: ROOT,
+      stdio: 'inherit',
+      timeout: 120000,
+    })
+  } catch (e) {
+    console.error('Worker 重启脚本失败:', e.message)
+  }
+}
 
-  const logDir = path.join(ROOT, 'apps/worker/logs')
-  await fs.mkdir(logDir, { recursive: true })
-  const out = path.join(logDir, 'worker-deploy-restart.log')
-  const logStream = fsSync.openSync(out, 'a')
-  const child = spawn('npm', ['run', 'dev:worker'], {
-    cwd: ROOT,
-    detached: true,
-    stdio: ['ignore', logStream, logStream],
-    shell: true,
-    env: { ...process.env },
-  })
-  child.unref()
-  fsSync.closeSync(logStream)
-  console.log(`Worker 已在后台启动，日志: ${out}`)
+async function verifyWorkerRemote(baseUrl) {
+  console.log('\n>>> 部署后 Worker 验收...')
+  const prev = process.env.ACCEPTANCE_SERVER
+  process.env.ACCEPTANCE_SERVER = baseUrl
+  try {
+    const token = await login()
+    const st = await fetchJson(`${baseUrl}/api/local-worker/status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const d = st.json.data || {}
+    console.log('Worker online:', d.online)
+    console.log('reason:', d.reason)
+    console.log('message:', d.message)
+    console.log('lastHeartbeatAt:', d.lastHeartbeatAt)
+    console.log('scannerAvailable:', d.scannerAvailable)
+    console.log('scannerApiBaseUrl:', d.scannerApiBaseUrl)
+
+    let localStatus = {}
+    try {
+      const out = execSync('npm run worker:status', { cwd: ROOT, encoding: 'utf-8' })
+      const i = out.indexOf('{')
+      if (i >= 0) localStatus = JSON.parse(out.slice(i))
+    } catch { /* ignore */ }
+    console.log('本地 serverWsUrl:', localStatus.serverWsUrl)
+    console.log('本地 fileBaseWritable:', localStatus.fileBaseWritable)
+    console.log('本地 scannerAvailable:', localStatus.scannerAvailable)
+
+    return d
+  } catch (e) {
+    console.error('Worker 验收失败:', e.message)
+    return { online: false, reason: 'WORKER_NOT_CONNECTED' }
+  } finally {
+    if (prev !== undefined) process.env.ACCEPTANCE_SERVER = prev
+    else delete process.env.ACCEPTANCE_SERVER
+  }
 }
 
 async function main() {
@@ -61,11 +87,11 @@ async function main() {
   run(`python "${DEPLOY_PY}"`, { env: { ...process.env } })
 
   await restartWorker()
-
-  console.log('等待 Worker 连接阿里云 (30s)...')
-  await new Promise((r) => setTimeout(r, 30000))
+  await sleep(5000)
 
   const remoteUrl = RECOMMENDED_URL
+  const workerReport = await verifyWorkerRemote(remoteUrl)
+
   run(`node scripts/remote-acceptance.mjs`, {
     env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl, ACCEPTANCE_MODE: 'full' },
   })
@@ -76,6 +102,16 @@ async function main() {
   run('npm run test:login', {
     env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl },
   })
+
+  run('npm run test:worker-online', {
+    env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl },
+  })
+
+  console.log('\n=== 部署 Worker 报告 ===')
+  console.log(JSON.stringify(workerReport, null, 2))
+  if (!workerReport.online) {
+    console.error('警告: 部署后 Worker 仍离线，请在公司电脑运行「一键修复本地Worker连接.bat」')
+  }
 }
 
 main().catch((e) => {

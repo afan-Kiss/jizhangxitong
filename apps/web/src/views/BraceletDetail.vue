@@ -17,6 +17,7 @@ const imageUrl = ref('')
 const imageError = ref('')
 
 onMounted(async () => {
+  await auth.fetchWorkerStatus()
   try {
     const res = await api.get(`/bracelets/${route.params.code}`)
     const b = res.data.data
@@ -36,7 +37,11 @@ onMounted(async () => {
 })
 
 function onImageError() {
-  imageError.value = '本地电脑未连接，暂时无法查看镯子图片。'
+  if (!auth.workerOnline) {
+    imageError.value = auth.workerStatus.message || '公司电脑上的本地助手没连上，暂时无法查看镯子图片。'
+  } else {
+    imageError.value = '暂时无法加载镯子图片。'
+  }
   imageUrl.value = ''
 }
 </script>

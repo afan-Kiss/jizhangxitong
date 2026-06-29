@@ -12,7 +12,7 @@ New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $npmCmd = (Get-Command npm -ErrorAction SilentlyContinue).Source
 if (-not $npmCmd) { throw '未找到 npm，请先安装 Node.js' }
 
-$action = New-ScheduledTaskAction -Execute $npmCmd -Argument 'run dev' -WorkingDirectory $WorkerDir
+$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $ProjectRoot 'scripts\windows\start-local-worker.ps1')`"" -WorkingDirectory $ProjectRoot
 $trigger = New-ScheduledTaskTrigger -AtLogOn
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
 $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited

@@ -43,8 +43,9 @@ export async function getAdminPassword() {
 }
 
 export async function login() {
+  const server = (process.env.ACCEPTANCE_SERVER || 'http://127.0.0.1:3001').replace(/\/$/, '')
   const password = await getAdminPassword()
-  const { res, json } = await fetchJson(`${SERVER}/api/auth/login`, {
+  const { res, json } = await fetchJson(`${server}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: 'admin', password }),

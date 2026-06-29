@@ -25,6 +25,7 @@ export type WorkerRegisterMessage = {
 export type WorkerHeartbeatMessage = {
   type: 'heartbeat'
   workerId: string
+  scannerAvailable?: boolean
 }
 
 export type WorkerMessage = RpcResultMessage | WorkerRegisterMessage | WorkerHeartbeatMessage

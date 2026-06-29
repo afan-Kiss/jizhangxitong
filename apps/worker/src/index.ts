@@ -1,16 +1,28 @@
 import WebSocket from 'ws'
-import dotenv from 'dotenv'
 import { RPC_METHODS, RpcMessage } from '@jade-account/shared'
 import { ensureBaseDirs, fileExists, readFileByPath, saveUpload, deleteLocalFile, assertPathAllowed } from './file-store'
-import { getBraceletByCode, readImageByPath, SCANNER_NOT_FOUND_MSG, searchBraceletsFromScanner } from './scanner-client'
+import { getBraceletByCode, readImageByPath, SCANNER_NOT_FOUND_MSG, searchBraceletsFromScanner, checkScannerHealth } from './scanner-client'
 import { workerLog, nextBackoffMs } from './logger'
+import {
+  loadWorkerEnv,
+  getWorkerEnvPath,
+  getServerWsUrl,
+  getWorkerWsToken,
+  assertWorkerEnvForBoot,
+  maskToken,
+  WORKER_DIR,
+  PRODUCTION_WS,
+} from './load-env'
 
-dotenv.config()
+loadWorkerEnv()
+assertWorkerEnvForBoot()
 
-const SERVER_WS_URL = process.env.SERVER_WS_URL || 'ws://localhost:3001/ws/worker'
-const WORKER_WS_TOKEN = process.env.WORKER_WS_TOKEN || ''
+const SERVER_WS_URL = getServerWsUrl()
+const WORKER_WS_TOKEN = getWorkerWsToken()
 const WORKER_ID = process.env.WORKER_ID || 'local-worker-1'
 const WORKER_NAME = process.env.WORKER_NAME || '本地记账Worker'
+const SCANNER_API_URL = process.env.SCANNER_API_URL || 'http://127.0.0.1:7789'
+const FILE_BASE_DIR = process.env.FILE_BASE_DIR || ''
 const VERSION = '1.0.0'
 
 let reconnectAttempt = 0
@@ -28,7 +40,7 @@ async function handleRpc(msg: RpcMessage) {
     switch (msg.method) {
       case RPC_METHODS.SCANNER_GET_BRACELET: {
         const code = String(msg.params.braceletCode || '')
-        const baseUrl = String(msg.params.scannerApiBaseUrl || process.env.SCANNER_API_URL || 'http://127.0.0.1:7789')
+        const baseUrl = String(msg.params.scannerApiBaseUrl || SCANNER_API_URL)
         const timeoutMs = Number(msg.params.timeoutMs || 8000)
         try {
           const data = await getBraceletByCode(code, baseUrl, timeoutMs)
@@ -46,7 +58,7 @@ async function handleRpc(msg: RpcMessage) {
       }
       case RPC_METHODS.SCANNER_SEARCH_BRACELETS: {
         const keyword = String(msg.params.keyword || '')
-        const baseUrl = String(msg.params.scannerApiBaseUrl || process.env.SCANNER_API_URL || 'http://127.0.0.1:7789')
+        const baseUrl = String(msg.params.scannerApiBaseUrl || SCANNER_API_URL)
         const timeoutMs = Number(msg.params.timeoutMs || 8000)
         try {
           const data = await searchBraceletsFromScanner(keyword, baseUrl, timeoutMs)
@@ -172,12 +184,17 @@ function connect() {
       workerName: WORKER_NAME,
       version: VERSION,
       token: WORKER_WS_TOKEN,
-      localBaseInfo: { fileBase: process.env.FILE_BASE_DIR },
+      localBaseInfo: {
+        fileBase: FILE_BASE_DIR,
+        serverWsUrl: SERVER_WS_URL,
+        scannerApiUrl: SCANNER_API_URL,
+      },
     }))
     if (heartbeatTimer) clearInterval(heartbeatTimer)
-    heartbeatTimer = setInterval(() => {
+    heartbeatTimer = setInterval(async () => {
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'heartbeat', workerId: WORKER_ID }))
+        const scannerAvailable = await checkScannerHealth(SCANNER_API_URL)
+        ws.send(JSON.stringify({ type: 'heartbeat', workerId: WORKER_ID, scannerAvailable }))
       }
     }, 30000)
   })
@@ -207,8 +224,19 @@ function connect() {
 
 async function main() {
   await ensureBaseDirs()
+  await workerLog('======== Worker 启动 ========')
+  await workerLog(`cwd: ${process.cwd()}`)
+  await workerLog(`workerDir: ${WORKER_DIR}`)
+  await workerLog(`envFile: ${getWorkerEnvPath() || '(none)'}`)
+  await workerLog(`SERVER_WS_URL: ${SERVER_WS_URL}`)
+  await workerLog(`WORKER_ID: ${WORKER_ID}`)
+  await workerLog(`FILE_BASE_DIR: ${FILE_BASE_DIR || '(default)'}`)
+  await workerLog(`SCANNER_API_URL: ${SCANNER_API_URL}`)
+  await workerLog(`WORKER_WS_TOKEN: ${maskToken(WORKER_WS_TOKEN)}`)
+  if (/localhost|127\.0\.0\.1/i.test(SERVER_WS_URL) && SERVER_WS_URL !== PRODUCTION_WS) {
+    await workerLog('警告: SERVER_WS_URL 指向 localhost，不会连接阿里云')
+  }
   await workerLog(`本地 Worker 启动: ${WORKER_NAME}`)
-  await workerLog(`连接地址: ${SERVER_WS_URL}`)
   connect()
 }
 

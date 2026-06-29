@@ -3,10 +3,20 @@ import { checkWritable, getFileBaseDir } from './file-store'
 import { workerLog } from './logger'
 import fs from 'fs/promises'
 import path from 'path'
+import {
+  loadWorkerEnv,
+  getWorkerEnvPath,
+  getServerWsUrl,
+  getWorkerWsToken,
+  maskToken,
+  WORKER_DIR,
+} from './load-env'
 
-const SERVER_WS_URL = process.env.SERVER_WS_URL || 'ws://localhost:3001/ws/worker'
+loadWorkerEnv()
+
+const SERVER_WS_URL = getServerWsUrl()
 const SCANNER_API_URL = process.env.SCANNER_API_URL || 'http://127.0.0.1:7789'
-const LOG_DIR = process.env.WORKER_LOG_DIR || path.join(process.cwd(), 'logs')
+const LOG_DIR = process.env.WORKER_LOG_DIR || path.join(WORKER_DIR, 'logs')
 
 async function readLastLogLines(maxLines = 15) {
   try {
@@ -27,9 +37,14 @@ async function main() {
   const recentLogs = await readLastLogLines()
 
   const status = {
+    cwd: process.cwd(),
+    workerDir: WORKER_DIR,
+    envFile: getWorkerEnvPath(),
     workerId: process.env.WORKER_ID || 'local-worker-1',
     workerName: process.env.WORKER_NAME || '本地记账Worker',
     serverWsUrl: SERVER_WS_URL,
+    workerWsTokenSet: Boolean(getWorkerWsToken()),
+    workerWsTokenPreview: maskToken(getWorkerWsToken()),
     fileBaseDir: fileBase,
     fileBaseWritable: writable,
     scannerApiUrl: SCANNER_API_URL,
@@ -40,7 +55,6 @@ async function main() {
   }
 
   console.log(JSON.stringify(status, null, 2))
-  await workerLog('status 命令执行完成')
 }
 
 main().catch(async (err) => {

@@ -1,12 +1,32 @@
 import { defineStore } from 'pinia'
 import api, { resolveApiErrorMessage } from '../api'
 
+export type WorkerStatusData = {
+  online: boolean
+  reason?: string
+  message?: string
+  workerId?: string | null
+  workerName?: string | null
+  lastSeenAt?: string | null
+  lastHeartbeatAt?: string | null
+  serverNow?: string | null
+  secondsSinceLastSeen?: number | null
+  localWorkerEnabled?: boolean
+  scannerApiBaseUrl?: string
+  scannerAvailable?: boolean | null
+}
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: localStorage.getItem('token') || '',
     user: null as { id: number; username: string; name: string } | null,
     permissions: [] as string[],
     workerOnline: false,
+    workerStatus: {
+      online: false,
+      reason: 'WORKER_NOT_CONNECTED',
+      message: '公司电脑开着，但本地助手没有连上。请在公司电脑运行「一键修复本地Worker连接」。',
+    } as WorkerStatusData,
     sessionReady: false,
   }),
   actions: {
@@ -62,9 +82,16 @@ export const useAuthStore = defineStore('auth', {
     async fetchWorkerStatus() {
       try {
         const res = await api.get('/local-worker/status')
-        this.workerOnline = res.data.data.online
+        const data = res.data.data as WorkerStatusData
+        this.workerStatus = data
+        this.workerOnline = Boolean(data.online)
       } catch {
         this.workerOnline = false
+        this.workerStatus = {
+          online: false,
+          reason: 'WORKER_NOT_CONNECTED',
+          message: '公司电脑开着，但本地助手没有连上。请在公司电脑运行「一键修复本地Worker连接」。',
+        }
       }
     },
     hasPermission(code: string) {

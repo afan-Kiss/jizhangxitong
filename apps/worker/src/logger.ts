@@ -1,7 +1,8 @@
 import fs from 'fs/promises'
 import path from 'path'
+import { WORKER_DIR } from './load-env'
 
-const LOG_DIR = process.env.WORKER_LOG_DIR || path.join(process.cwd(), 'logs')
+const LOG_DIR = process.env.WORKER_LOG_DIR || path.join(WORKER_DIR, 'logs')
 
 export async function workerLog(message: string) {
   const line = `[${new Date().toISOString()}] ${message}`

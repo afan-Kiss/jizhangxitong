@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { authMiddleware, requirePermission, AuthRequest, getUserPermissions } from '../middleware/auth'
 import { verifyToken } from '../lib/jwt'
 import { workerHub } from '../websocket/worker-hub'
+import { getWorkerStatusDetail } from '../services/worker-status.service'
 import {
   findBraceletByExactCode,
   getBraceletDetail,
@@ -118,6 +119,6 @@ braceletRouter.post('/:id/cost-adjustment', requirePermission('cost:adjust'), as
 export const workerRouter = Router()
 workerRouter.use(authMiddleware)
 workerRouter.get('/status', async (_req, res) => {
-  const status = await workerHub.getStatus()
+  const status = await getWorkerStatusDetail()
   res.json({ success: true, data: status })
 })
