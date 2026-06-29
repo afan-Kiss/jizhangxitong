@@ -4,7 +4,7 @@
 
 | 项 | 值 |
 |---|---|
-| Commit | `87ce427`（加固基线；功能基线 `003e73c`） |
+| Commit | `0171844`（加固基线；功能基线 `003e73c`） |
 | Message | `chore: harden deploy pipeline against test hangs` |
 | 分支 | `main` |
 | 生产入口 | http://8.137.126.18/account/ |
