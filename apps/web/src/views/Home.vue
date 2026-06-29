@@ -62,19 +62,21 @@ function exportThisMonth() {
 </script>
 
 <template>
-  <div class="home page-enter">
-    <header class="home__header">
-      <h1 class="home__title">经营总览</h1>
-      <WorkerStatus :status="auth.workerStatus" compact />
+  <div class="home-page page-enter">
+    <header class="home-page__header">
+      <h1 class="home-page__title">经营总览</h1>
+      <div class="show-mobile-only">
+        <WorkerStatus :status="auth.workerStatus" compact />
+      </div>
     </header>
 
     <LuxuryCard dark :stagger="0" padding="18px 16px 16px">
-      <div class="home__cockpit">
-        <div class="home__cockpit-grid">
+      <div class="home-page__cockpit">
+        <div class="desktop-card-grid">
           <MoneyCard label="今日支出" :value="todayAmount" :stagger="1" />
           <MoneyCard label="本周支出" :value="weekAmount" :stagger="2" />
           <MoneyCard label="本月支出" :value="monthAmount" :stagger="3" />
-          <div class="home__pending" @click="router.push('/reimbursements')">
+          <div class="home-page__pending" @click="router.push('/reimbursements')">
             <MoneyCard
               label="未报销"
               :value="pendingAmount"
@@ -89,33 +91,34 @@ function exportThisMonth() {
 
     <LuxuryCard :stagger="5">
       <div class="section-title">快捷操作</div>
-      <div class="home__actions">
-        <button class="home__action" @click="router.push('/expense/create')">
+      <div class="home-page__actions">
+        <button class="home-page__action" @click="router.push('/expense/create')">
           <van-icon name="balance-pay" size="22" />
           <span>记一笔</span>
         </button>
-        <button class="home__action" @click="router.push('/bracelets')">
+        <button class="home-page__action" @click="router.push('/bracelets')">
           <van-icon name="scan" size="22" />
           <span>扫镯子</span>
         </button>
-        <button class="home__action" @click="exportThisMonth">
+        <button class="home-page__action" @click="exportThisMonth">
           <van-icon name="down" size="22" />
           <span>导出报销</span>
         </button>
-        <button class="home__action" @click="router.push('/sales/create')">
+        <button class="home-page__action" @click="router.push('/sales/create')">
           <van-icon name="shopping-cart-o" size="22" />
           <span>销售登记</span>
         </button>
       </div>
     </LuxuryCard>
 
+    <div class="desktop-grid-2">
     <LuxuryCard :stagger="6">
       <div class="section-title">最近支出</div>
       <div v-if="!recentExpenses.length" class="muted">暂无记录</div>
       <div
         v-for="item in recentExpenses"
         :key="item.id"
-        class="home__expense-row"
+        class="home-page__expense-row"
         @click="router.push(`/expense/${item.id}`)"
       >
         <ExpenseItem
@@ -131,37 +134,24 @@ function exportThisMonth() {
 
     <LuxuryCard :stagger="7">
       <div class="section-title">最近操作</div>
-      <div v-for="log in recentLogs" :key="log.id" class="home__log muted">
+      <div v-for="log in recentLogs" :key="log.id" class="home-page__log muted">
         {{ formatLog(log) }}
       </div>
     </LuxuryCard>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.home {
-  padding: 16px 16px 80px;
-  min-height: 100vh;
-}
-.home__header { margin-bottom: 4px; }
-.home__title {
+.home-page__header { margin-bottom: 4px; }
+.home-page__title {
   margin: 0 0 8px;
   font-size: 22px;
   font-weight: 600;
   color: var(--color-text-main);
 }
-.home__cockpit { position: relative; z-index: 1; }
-.home__cockpit-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.home__actions {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-}
-.home__action {
+.home-page__cockpit { position: relative; z-index: 1; }
+.home-page__action {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -175,15 +165,15 @@ function exportThisMonth() {
   cursor: pointer;
   transition: transform var(--duration-fast) var(--ease-out);
 }
-.home__action:active { transform: scale(0.96); }
-.home__action :deep(.van-icon) { color: var(--color-gold); }
-.home__log {
+.home-page__action:active { transform: scale(0.96); }
+.home-page__action :deep(.van-icon) { color: var(--color-gold); }
+.home-page__log {
   padding: 10px 0;
   border-bottom: 1px solid rgba(198, 161, 91, 0.08);
   font-size: 13px;
   line-height: 1.5;
 }
-.home__log:last-child { border-bottom: none; }
-.home__pending { cursor: pointer; }
-.home__expense-row { cursor: pointer; }
+.home-page__log:last-child { border-bottom: none; }
+.home-page__pending { cursor: pointer; }
+.home-page__expense-row { cursor: pointer; }
 </style>

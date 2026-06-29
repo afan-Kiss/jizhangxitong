@@ -10,8 +10,10 @@ import BraceletCard from '../components/BraceletCard.vue'
 import BraceletIcon from '../components/BraceletIcon.vue'
 import WorkerStatus from '../components/WorkerStatus.vue'
 import ActionButton from '../components/ActionButton.vue'
+import { useBreakpoint } from '../composables/useBreakpoint'
 
 const router = useRouter()
+const { isDesktop } = useBreakpoint()
 const auth = useAuthStore()
 const keyword = ref('')
 const items = ref<any[]>([])
@@ -60,59 +62,65 @@ async function queryCode() {
 
 <template>
   <AppShell title="镯子查询">
-    <WorkerStatus :status="auth.workerStatus" compact />
+    <div class="desktop-two-column bracelets-page">
+      <div class="desktop-two-column__main">
+        <WorkerStatus :status="auth.workerStatus" compact />
 
-    <div class="search-bar" :class="{ 'shake-soft': shake }">
-      <van-search
-        v-model="keyword"
-        placeholder="输入或扫码镯子编号"
-        shape="round"
-        background="transparent"
-        @search="queryCode"
-      />
-      <span v-if="searching" class="search-bar__loading">
-        <span class="search-bar__ring" />
-      </span>
-    </div>
+        <div class="search-bar" :class="{ 'shake-soft': shake }">
+          <van-search
+            v-model="keyword"
+            placeholder="输入或扫码镯子编号"
+            shape="round"
+            background="transparent"
+            @search="queryCode"
+          />
+          <span v-if="searching" class="search-bar__loading">
+            <span class="search-bar__ring" />
+          </span>
+        </div>
 
-    <div class="search-actions">
-      <ActionButton @click="queryCode">精确查询</ActionButton>
-      <ActionButton variant="secondary" @click="search">模糊搜索</ActionButton>
-    </div>
+        <div class="search-actions">
+          <ActionButton @click="queryCode">精确查询</ActionButton>
+          <ActionButton variant="secondary" @click="search">模糊搜索</ActionButton>
+        </div>
 
-    <BraceletCard
-      v-if="found"
-      :code="found.braceletCode"
-      :status="found.scannerStatus"
-      :inbound-at="found.inboundAt"
-      :inbound-cost="Number(found.inboundCost)"
-      :show-cost="auth.hasPermission('bracelet:cost:view')"
-      :highlight="highlight"
-    />
-
-    <LuxuryCard v-if="items.length">
-      <div class="section-title">搜索结果</div>
-      <div
-        v-for="item in items"
-        :key="item.braceletCode"
-        @click="router.push(`/bracelets/${item.braceletCode}`)"
-      >
         <BraceletCard
-          :code="item.braceletCode"
-          :status="item.scannerStatus"
-          :inbound-cost="Number(item.inboundCost)"
+          v-if="found"
+          :code="found.braceletCode"
+          :status="found.scannerStatus"
+          :inbound-at="found.inboundAt"
+          :inbound-cost="Number(found.inboundCost)"
           :show-cost="auth.hasPermission('bracelet:cost:view')"
-          :not-synced="item.notSynced"
+          :highlight="highlight"
         />
-      </div>
-    </LuxuryCard>
 
-    <LuxuryCard v-else-if="!found && !searching && !keyword">
-      <div class="bracelets-empty">
-        <BraceletIcon :size="48" />
-        <p>输入或扫描镯子编号，从扫码枪同步和田玉镯子信息</p>
+        <LuxuryCard v-else-if="!searching && !keyword">
+          <div class="bracelets-empty">
+            <BraceletIcon :size="48" />
+            <p>输入或扫描镯子编号，从扫码枪同步和田玉镯子信息</p>
+          </div>
+        </LuxuryCard>
       </div>
-    </LuxuryCard>
+
+      <div class="desktop-two-column__aside">
+        <LuxuryCard v-if="items.length">
+          <div class="section-title">搜索结果</div>
+          <div
+            v-for="item in items"
+            :key="item.braceletCode"
+            @click="router.push(`/bracelets/${item.braceletCode}`)"
+          >
+            <BraceletCard
+              :code="item.braceletCode"
+              :status="item.scannerStatus"
+              :inbound-cost="Number(item.inboundCost)"
+              :show-cost="auth.hasPermission('bracelet:cost:view')"
+              :not-synced="item.notSynced"
+            />
+          </div>
+        </LuxuryCard>
+      </div>
+    </div>
   </AppShell>
 </template>
 

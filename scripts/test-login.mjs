@@ -87,9 +87,9 @@ async function main() {
   }
 
   // 6. 源码结构检查（底部导航 / 登录页）
-  const appVue = fs.readFileSync(path.join(ROOT, 'apps/web/src/App.vue'), 'utf-8')
-  ok('App.vue hideTab 使用 computed', appVue.includes('computed') && appVue.includes('hideTab'))
-  ok('登录页路由隐藏底部导航', appVue.includes("route.path === '/login'"))
+  const layoutVue = fs.readFileSync(path.join(ROOT, 'apps/web/src/components/ResponsiveLayout.vue'), 'utf-8')
+  ok('ResponsiveLayout hideMobileTab 使用 computed', layoutVue.includes('computed') && layoutVue.includes('hideMobileTab'))
+  ok('登录页路由隐藏底部导航', layoutVue.includes("route.path === '/login'"))
 
   const loginVue = fs.readFileSync(path.join(ROOT, 'apps/web/src/views/Login.vue'), 'utf-8')
   ok('Login.vue 无空 catch', !loginVue.includes('catch { /* */ }'))

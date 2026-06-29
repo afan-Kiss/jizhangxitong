@@ -15,7 +15,7 @@ const DEPLOY_PY = path.join(ROOT, 'deploy/aliyun/upload-and-deploy.py')
 
 function run(cmd, opts = {}) {
   console.log(`\n>>> ${cmd}`)
-  execSync(cmd, { cwd: ROOT, stdio: 'inherit', ...opts })
+  execSync(cmd, { cwd: ROOT, stdio: 'inherit', timeout: opts.timeout ?? 600000, ...opts })
 }
 
 async function restartWorker() {
@@ -96,16 +96,11 @@ async function main() {
     env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl, ACCEPTANCE_MODE: 'full' },
   })
 
-  run('npm run test:white-screen', {
-    env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl },
-  })
-  run('npm run test:login', {
-    env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl },
-  })
-
-  run('npm run test:worker-online', {
-    env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl },
-  })
+  const testEnv = { ...process.env, ACCEPTANCE_SERVER: remoteUrl }
+  run('npm run test:white-screen', { env: testEnv, timeout: 180000 })
+  run('npm run test:responsive', { env: testEnv, timeout: 300000 })
+  run('npm run test:login', { env: testEnv, timeout: 60000 })
+  run('npm run test:worker-online', { env: testEnv, timeout: 120000 })
 
   console.log('\n=== 部署 Worker 报告 ===')
   console.log(JSON.stringify(workerReport, null, 2))

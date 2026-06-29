@@ -3,13 +3,18 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import api from '../api'
+import { useAuthStore } from '../stores/auth'
+import { useBreakpoint } from '../composables/useBreakpoint'
 import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
+import WorkerStatus from '../components/WorkerStatus.vue'
 import ImageUploader from '../components/ImageUploader.vue'
 import ActionButton from '../components/ActionButton.vue'
 import { resolveApiErrorMessage } from '../utils/api-errors'
 
 const router = useRouter()
+const auth = useAuthStore()
+const { isDesktop } = useBreakpoint()
 const settings = ref<any>({})
 const form = ref({
   amount: '',
@@ -35,6 +40,7 @@ const displayAmount = computed(() => {
 })
 
 onMounted(async () => {
+  await auth.fetchWorkerStatus()
   const res = await api.get('/settings')
   settings.value = res.data.data
   if (settings.value.expenseTypes?.length) form.value.expenseType = settings.value.expenseTypes[0].value
@@ -84,85 +90,112 @@ async function onSubmit() {
 </script>
 
 <template>
-  <AppShell title="记支出" show-back no-tab-pad fixed-bottom @back="router.back()">
-    <LuxuryCard gold padding="20px 16px">
-      <div class="amount-zone" :class="{ 'amount-zone--focus': amountFocused }">
-        <div class="amount-zone__label">这笔花了多少钱</div>
-        <div class="amount-zone__input-row">
-          <span class="amount-zone__prefix">¥</span>
-          <input
-            v-model="form.amount"
-            type="number"
-            inputmode="decimal"
-            class="amount-zone__input money"
-            placeholder="0.00"
-            @focus="amountFocused = true"
-            @blur="amountFocused = false"
-          />
+  <AppShell title="记支出" show-back no-tab-pad :fixed-bottom="!isDesktop" @back="router.back()">
+    <div class="desktop-two-column expense-create" data-testid="expense-create-layout">
+      <div class="desktop-two-column__main">
+        <LuxuryCard gold padding="20px 16px">
+          <div class="amount-zone" :class="{ 'amount-zone--focus': amountFocused }">
+            <div class="amount-zone__label">这笔花了多少钱</div>
+            <div class="amount-zone__input-row">
+              <span class="amount-zone__prefix">¥</span>
+              <input
+                v-model="form.amount"
+                type="number"
+                inputmode="decimal"
+                class="amount-zone__input money"
+                placeholder="0.00"
+                @focus="amountFocused = true"
+                @blur="amountFocused = false"
+              />
+            </div>
+            <div v-if="displayAmount && form.amount" class="amount-zone__hint muted">{{ displayAmount }}</div>
+          </div>
+        </LuxuryCard>
+
+        <LuxuryCard>
+          <div class="section-title">支出类型</div>
+          <div class="pill-row">
+            <button
+              v-for="t in settings.expenseTypes || []"
+              :key="t.value"
+              class="pill"
+              :class="{ 'pill--active': form.expenseType === t.value }"
+              @click="form.expenseType = t.value"
+            >{{ t.label }}</button>
+          </div>
+        </LuxuryCard>
+
+        <LuxuryCard>
+          <div class="section-title">付款来源</div>
+          <div class="pay-grid">
+            <button
+              v-for="s in settings.paySources || []"
+              :key="s.value"
+              class="pay-card"
+              :class="{ 'pay-card--active': form.paySource === s.value }"
+              @click="form.paySource = s.value"
+            >{{ s.label }}</button>
+          </div>
+        </LuxuryCard>
+
+        <LuxuryCard v-if="form.paySource === '员工垫付'">
+          <div class="section-title">报销状态</div>
+          <div class="segment">
+            <button
+              v-for="opt in [{ v: 'pending', l: '未报销' }, { v: 'reimbursed', l: '已报销' }, { v: 'not_required', l: '不需要' }]"
+              :key="opt.v"
+              class="segment__item"
+              :class="{ 'segment__item--active': form.reimbursementStatus === opt.v }"
+              @click="form.reimbursementStatus = opt.v"
+            >{{ opt.l }}</button>
+          </div>
+          <van-field v-model="form.reimbursementPerson" label="报销人" placeholder="如：范帅" class="field-custom" />
+        </LuxuryCard>
+
+        <LuxuryCard>
+          <van-field v-model="form.occurredAt" label="支出时间" type="date" class="field-custom" />
+          <van-field v-model="form.expenseSummary" label="摘要" class="field-custom" />
+          <van-field v-model="form.remark" label="备注" type="textarea" rows="2" class="field-custom" />
+        </LuxuryCard>
+      </div>
+
+      <div class="desktop-two-column__aside">
+        <LuxuryCard>
+          <WorkerStatus :status="auth.workerStatus" />
+          <p class="aside-tip muted">绑定镯子或上传图片时需要公司电脑本地助手在线。</p>
+        </LuxuryCard>
+
+        <LuxuryCard>
+          <div class="section-title">镯子编号</div>
+          <van-field v-model="form.braceletCode" placeholder="可扫码，可为空" class="field-custom" />
+        </LuxuryCard>
+
+        <LuxuryCard>
+          <div class="section-title">凭证图片</div>
+          <ImageUploader v-model="uploadedFiles" />
+        </LuxuryCard>
+
+        <div v-if="isDesktop" class="expense-create__save-desktop">
+          <ActionButton block size="lg" :loading="loading" @click="onSubmit">保存支出</ActionButton>
         </div>
-        <div v-if="displayAmount && form.amount" class="amount-zone__hint muted">{{ displayAmount }}</div>
       </div>
-    </LuxuryCard>
+    </div>
 
-    <LuxuryCard>
-      <div class="section-title">支出类型</div>
-      <div class="pill-row">
-        <button
-          v-for="t in settings.expenseTypes || []"
-          :key="t.value"
-          class="pill"
-          :class="{ 'pill--active': form.expenseType === t.value }"
-          @click="form.expenseType = t.value"
-        >{{ t.label }}</button>
-      </div>
-    </LuxuryCard>
-
-    <LuxuryCard>
-      <div class="section-title">付款来源</div>
-      <div class="pay-grid">
-        <button
-          v-for="s in settings.paySources || []"
-          :key="s.value"
-          class="pay-card"
-          :class="{ 'pay-card--active': form.paySource === s.value }"
-          @click="form.paySource = s.value"
-        >{{ s.label }}</button>
-      </div>
-    </LuxuryCard>
-
-    <LuxuryCard v-if="form.paySource === '员工垫付'">
-      <div class="section-title">报销状态</div>
-      <div class="segment">
-        <button
-          v-for="opt in [{ v: 'pending', l: '未报销' }, { v: 'reimbursed', l: '已报销' }, { v: 'not_required', l: '不需要' }]"
-          :key="opt.v"
-          class="segment__item"
-          :class="{ 'segment__item--active': form.reimbursementStatus === opt.v }"
-          @click="form.reimbursementStatus = opt.v"
-        >{{ opt.l }}</button>
-      </div>
-      <van-field v-model="form.reimbursementPerson" label="报销人" placeholder="如：范帅" class="field-custom" />
-    </LuxuryCard>
-
-    <LuxuryCard>
-      <van-field v-model="form.braceletCode" label="镯子编号" placeholder="可扫码，可为空" class="field-custom" />
-      <van-field v-model="form.occurredAt" label="支出时间" type="date" class="field-custom" />
-      <van-field v-model="form.expenseSummary" label="摘要" class="field-custom" />
-      <van-field v-model="form.remark" label="备注" type="textarea" rows="2" class="field-custom" />
-    </LuxuryCard>
-
-    <LuxuryCard>
-      <div class="section-title">凭证图片</div>
-      <ImageUploader v-model="uploadedFiles" />
-    </LuxuryCard>
-
-    <template #footer>
+    <template v-if="!isDesktop" #footer>
       <ActionButton block size="lg" :loading="loading" @click="onSubmit">保存支出</ActionButton>
     </template>
   </AppShell>
 </template>
 
 <style scoped>
+.expense-create__save-desktop {
+  padding-top: 4px;
+}
+.aside-tip {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
 .amount-zone { transition: transform var(--duration-fast); }
 .amount-zone--focus { transform: scale(1.01); }
 .amount-zone__label { font-size: 13px; color: var(--color-text-sub); margin-bottom: 8px; }
@@ -200,6 +233,9 @@ async function onSubmit() {
 .pill:active { transform: scale(0.97); }
 
 .pay-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+@media (min-width: 1200px) {
+  .pay-grid { grid-template-columns: repeat(2, 1fr); }
+}
 .pay-card {
   padding: 14px;
   border-radius: 14px;

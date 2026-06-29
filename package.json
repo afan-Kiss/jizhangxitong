@@ -35,6 +35,7 @@
     "test:subpath": "node scripts/test-subpath-refresh.mjs",
     "test:login": "node scripts/test-login.mjs",
     "test:white-screen": "node scripts/test-white-screen.mjs",
+    "test:responsive": "node scripts/test-responsive.mjs",
     "test:worker-online": "node scripts/test-worker-online.mjs",
     "test:assets": "node scripts/check-assets-remote.mjs"
   },

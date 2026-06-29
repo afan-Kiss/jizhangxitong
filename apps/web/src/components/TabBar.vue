@@ -1,33 +1,21 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
+import { mobileTabs, isNavActive } from '../config/nav'
 import BraceletIcon from './BraceletIcon.vue'
 
 const route = useRoute()
-
-const tabs = [
-  { path: '/', label: '首页', icon: 'home-o', custom: false },
-  { path: '/expense/create', label: '记支出', icon: 'balance-list-o', custom: false },
-  { path: '/sales', label: '销售', icon: 'orders-o', custom: false },
-  { path: '/bracelets', label: '镯子', icon: '', custom: true },
-  { path: '/settings', label: '我的', icon: 'user-o', custom: false },
-]
-
-function isActive(tab: { path: string }) {
-  if (tab.path === '/') return route.path === '/'
-  return route.path === tab.path || route.path.startsWith(tab.path + '/')
-}
 </script>
 
 <template>
-  <nav class="luxury-tabbar">
+  <nav class="luxury-tabbar" data-testid="mobile-tabbar">
     <router-link
-      v-for="tab in tabs"
+      v-for="tab in mobileTabs"
       :key="tab.path"
       :to="tab.path"
       class="luxury-tabbar__item"
-      :class="{ 'luxury-tabbar__item--active': isActive(tab) }"
+      :class="{ 'luxury-tabbar__item--active': isNavActive(tab.path, route.path) }"
     >
-      <BraceletIcon v-if="tab.custom" :size="22" :active="isActive(tab)" />
+      <BraceletIcon v-if="tab.custom" :size="22" :active="isNavActive(tab.path, route.path)" />
       <van-icon v-else :name="tab.icon" size="22" />
       <span>{{ tab.label }}</span>
     </router-link>

@@ -9,8 +9,10 @@ import LuxuryCard from '../components/LuxuryCard.vue'
 import WorkerStatus from '../components/WorkerStatus.vue'
 import PermissionManage from '../components/PermissionManage.vue'
 import { loginPath } from '../utils/base-path'
+import { useBreakpoint } from '../composables/useBreakpoint'
 
 const router = useRouter()
+const { isDesktop } = useBreakpoint()
 const auth = useAuthStore()
 const canManagePermission = computed(() => auth.hasPermission('permission:manage'))
 const settings = ref<any>({})
@@ -50,8 +52,11 @@ function logout() {
 
 <template>
   <AppShell title="我的">
-    <WorkerStatus :status="workerStatus" />
+    <div class="show-mobile-only">
+      <WorkerStatus :status="workerStatus" />
+    </div>
 
+    <div class="settings-grid desktop-grid-2">
     <LuxuryCard>
       <div class="section-title">手机快捷入口</div>
       <p class="mobile-tip muted">
@@ -84,6 +89,7 @@ function logout() {
     </LuxuryCard>
 
     <PermissionManage v-if="canManagePermission" />
+    </div>
 
     <div style="padding:8px 0 24px">
       <button class="logout-btn" @click="logout">退出登录</button>
@@ -104,8 +110,13 @@ function logout() {
 .logout-btn:active { transform: scale(0.97); }
 .mobile-tip {
   margin: 0;
-  padding: 0 16px 14px;
+  padding: 0 0 14px;
   font-size: 13px;
   line-height: 1.55;
+}
+@media (min-width: 1200px) {
+  .settings-grid :deep(.van-cell-group) {
+    border-radius: var(--radius-card);
+  }
 }
 </style>

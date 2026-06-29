@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import api, { withBase } from '../api'
 import { useAuthStore } from '../stores/auth'
+import { useBreakpoint } from '../composables/useBreakpoint'
 import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import ExportProgress from '../components/ExportProgress.vue'
@@ -15,6 +16,7 @@ import WorkerStatus from '../components/WorkerStatus.vue'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { isDesktop } = useBreakpoint()
 const filter = ref({
   startDate: (route.query.startDate as string) || new Date().toISOString().slice(0, 10).replace(/-\d{2}$/, '-01'),
   endDate: (route.query.endDate as string) || new Date().toISOString().slice(0, 10),
@@ -103,21 +105,33 @@ onMounted(async () => {
 </script>
 
 <template>
-  <AppShell title="报销导出" show-back no-tab-pad fixed-bottom @back="router.back()">
-    <WorkerStatus :status="auth.workerStatus" compact />
+  <AppShell title="报销导出" show-back no-tab-pad :fixed-bottom="!isDesktop" @back="router.back()">
+    <div class="export-layout">
+      <WorkerStatus :status="auth.workerStatus" compact />
 
-    <LuxuryCard>
-      <div class="section-title">筛选条件</div>
-      <van-field v-model="filter.startDate" label="开始" type="date" />
-      <van-field v-model="filter.endDate" label="结束" type="date" />
-      <van-field v-model="filter.reimbursementStatus" label="报销状态" placeholder="all / pending / reimbursed" />
-      <van-field v-model="filter.reimbursementPerson" label="报销人" />
-    </LuxuryCard>
+      <div class="export-layout__top">
+        <LuxuryCard>
+          <div class="section-title">筛选条件</div>
+          <div class="filter-row">
+            <van-field v-model="filter.startDate" label="开始" type="date" />
+            <van-field v-model="filter.endDate" label="结束" type="date" />
+            <van-field v-model="filter.reimbursementStatus" label="报销状态" placeholder="all / pending / reimbursed" />
+            <van-field v-model="filter.reimbursementPerson" label="报销人" />
+          </div>
+        </LuxuryCard>
 
-    <LuxuryCard gold>
-      <div class="section-title">导出进度</div>
-      <ExportProgress :steps="exportSteps" />
-    </LuxuryCard>
+        <LuxuryCard gold>
+          <div class="section-title">导出进度</div>
+          <ExportProgress :steps="exportSteps" />
+          <div v-if="isDesktop" class="export-actions export-actions--inline">
+            <ActionButton :loading="exporting" size="lg" data-testid="export-btn" @click="onExport">导出 Excel 报销表</ActionButton>
+            <div class="export-footer__secondary">
+              <ActionButton variant="secondary" @click="onPreview">刷新预览</ActionButton>
+              <ActionButton v-if="exportResult" variant="ghost" @click="download">下载文件</ActionButton>
+            </div>
+          </div>
+        </LuxuryCard>
+      </div>
 
     <LuxuryCard v-if="missingImageCount > 0">
       <StatusPill type="warning" dot>
@@ -138,9 +152,11 @@ onMounted(async () => {
       />
     </LuxuryCard>
 
-    <template #footer>
-      <div class="export-footer">
-        <ActionButton :loading="exporting" size="lg" @click="onExport">导出 Excel 报销表</ActionButton>
+    </div>
+
+    <template v-if="!isDesktop" #footer>
+      <div class="export-footer export-actions">
+        <ActionButton :loading="exporting" size="lg" data-testid="export-btn" @click="onExport">导出 Excel 报销表</ActionButton>
         <div class="export-footer__secondary">
           <ActionButton variant="secondary" @click="onPreview">刷新预览</ActionButton>
           <ActionButton v-if="exportResult" variant="ghost" @click="download">下载文件</ActionButton>
@@ -151,12 +167,15 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.export-footer {
+.export-footer,
+.export-actions--inline {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  margin-top: 16px;
 }
-.export-footer .action-btn { width: 100%; }
+.export-footer .action-btn,
+.export-actions--inline .action-btn { width: 100%; }
 .export-footer__secondary {
   display: flex;
   gap: 8px;
