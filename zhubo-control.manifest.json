@@ -1,0 +1,41 @@
+{
+  "manifestVersion": 1,
+  "name": "记账系统",
+  "code": "jade-accounting",
+  "category": "记账",
+  "gitRemote": "https://github.com/afan-Kiss/jizhangxitong.git",
+  "localPath": "E:\\我的软件源码\\记账系统",
+  "desktopStartCommand": "npm run dev",
+  "localWebUrl": "http://127.0.0.1:5173",
+  "localHealthUrl": "http://127.0.0.1:3001/api/health",
+  "publicUrl": "http://8.137.126.18/account/",
+  "healthType": "http",
+  "ports": [
+    3001,
+    5173
+  ],
+  "services": [
+    {
+      "name": "server",
+      "command": "npm run dev:server",
+      "port": 3001,
+      "healthUrl": "http://127.0.0.1:3001/api/health"
+    },
+    {
+      "name": "web",
+      "command": "npm run dev:web",
+      "port": 5173,
+      "webUrl": "http://127.0.0.1:5173"
+    },
+    {
+      "name": "worker",
+      "command": "npm run dev:worker",
+      "type": "worker"
+    }
+  ],
+  "control": {
+    "enabled": true,
+    "showInDesktop": true,
+    "cookieMode": "none"
+  }
+}
