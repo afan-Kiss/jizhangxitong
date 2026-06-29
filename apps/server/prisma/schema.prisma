@@ -1,0 +1,256 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int        @id @default(autoincrement())
+  username  String     @unique
+  password  String
+  name      String
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  userRoles UserRole[]
+}
+
+model Role {
+  id              Int              @id @default(autoincrement())
+  name            String           @unique
+  description     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+}
+
+model Permission {
+  id              Int              @id @default(autoincrement())
+  code            String           @unique
+  name            String
+  description     String?
+  createdAt       DateTime         @default(now())
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  id           Int        @id @default(autoincrement())
+  roleId       Int
+  permissionId Int
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+model UserRole {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  roleId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+}
+
+model Bracelet {
+  id                Int              @id @default(autoincrement())
+  braceletCode      String           @unique
+  certificateNo     String?
+  scannerProductId  String?
+  barcodeValue      String?
+  imageFileId       Int?
+  sourceImagePath   String?
+  inboundAt         DateTime?
+  inboundCost       Decimal          @default(0)
+  scannerStatus     String?
+  localSnapshotJson String?
+  sourceSyncedAt    DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  expenses          Expense[]
+  sales             Sale[]
+  costAdjustments   CostAdjustment[]
+  refunds           Refund[]
+}
+
+model Expense {
+  id                   Int                 @id @default(autoincrement())
+  expenseNo            String              @unique
+  braceletId           Int?
+  braceletCode         String?
+  saleId               Int?
+  expenseType          String
+  paySource            String
+  amount               Decimal
+  occurredAt           DateTime
+  expenseSummary       String?
+  remark               String?
+  reimbursementPerson  String?
+  reimbursementStatus  String              @default("pending")
+  needsAttachment      Boolean             @default(false)
+  isVoided             Boolean             @default(false)
+  voidReason           String?
+  voidedAt             DateTime?
+  voidedBy             Int?
+  createdBy            Int
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  bracelet             Bracelet?           @relation(fields: [braceletId], references: [id])
+  sale                 Sale?               @relation(fields: [saleId], references: [id])
+  attachments          ExpenseAttachment[]
+}
+
+model ExpenseAttachment {
+  id        Int      @id @default(autoincrement())
+  expenseId Int
+  fileId    Int
+  fileType  String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  expense   Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  file      File     @relation(fields: [fileId], references: [id])
+}
+
+model File {
+  id           Int                 @id @default(autoincrement())
+  relatedType  String?
+  relatedId    Int?
+  fileType     String
+  localPath    String
+  thumbPath    String?
+  originalName String?
+  mimeType     String?
+  fileSize     Int                 @default(0)
+  sha256       String?
+  uploadedBy   Int?
+  createdAt    DateTime            @default(now())
+  attachments  ExpenseAttachment[]
+}
+
+model Sale {
+  id                      Int       @id @default(autoincrement())
+  saleNo                  String    @unique
+  platform                String
+  externalOrderNo         String?
+  customerName            String?
+  customerRemark          String?
+  braceletId              Int
+  braceletCode            String
+  saleAmount              Decimal
+  depositAmount           Decimal   @default(0)
+  finalPaymentAmount      Decimal   @default(0)
+  unpaidAmount            Decimal   @default(0)
+  inboundCostSnapshot     Decimal
+  certificateFeeSnapshot  Decimal
+  packageFeeSnapshot      Decimal
+  expressFeeSnapshot      Decimal
+  costAdjustmentSnapshot  Decimal   @default(0)
+  totalCostSnapshot       Decimal
+  grossProfit             Decimal
+  compensationAmount      Decimal   @default(0)
+  finalProfit             Decimal
+  soldAt                  DateTime
+  status                  String    @default("sold")
+  createdBy               Int
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  bracelet                Bracelet  @relation(fields: [braceletId], references: [id])
+  expenses                Expense[]
+  refunds                 Refund[]
+}
+
+model Refund {
+  id           Int      @id @default(autoincrement())
+  saleId       Int
+  braceletId   Int
+  braceletCode String
+  refundAmount Decimal
+  refundReason String?
+  refundedAt   DateTime
+  status       String   @default("completed")
+  createdBy    Int
+  createdAt    DateTime @default(now())
+  sale         Sale     @relation(fields: [saleId], references: [id])
+  bracelet     Bracelet @relation(fields: [braceletId], references: [id])
+}
+
+model CostAdjustment {
+  id              Int      @id @default(autoincrement())
+  braceletId      Int
+  braceletCode    String
+  amount          Decimal
+  reason          String
+  beforeTotalCost Decimal
+  afterTotalCost  Decimal
+  createdBy       Int
+  createdAt       DateTime @default(now())
+  bracelet        Bracelet @relation(fields: [braceletId], references: [id])
+}
+
+model SystemSetting {
+  id           Int      @id @default(autoincrement())
+  settingKey   String   @unique
+  settingValue String
+  valueType    String   @default("string")
+  remark       String?
+  updatedBy    Int?
+  updatedAt    DateTime @updatedAt
+}
+
+model OperationLog {
+  id           Int      @id @default(autoincrement())
+  module       String
+  action       String
+  targetType   String?
+  targetId     Int?
+  targetCode   String?
+  beforeJson   String?
+  afterJson    String?
+  operatorId   Int?
+  operatorName String?
+  ip           String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+}
+
+model LocalWorkerConnection {
+  id            Int      @id @default(autoincrement())
+  workerId      String   @unique
+  workerName    String?
+  status        String   @default("offline")
+  lastSeenAt    DateTime?
+  version       String?
+  localBaseInfo String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model ExportTask {
+  id                Int       @id @default(autoincrement())
+  exportNo          String    @unique
+  exportType        String
+  filtersJson       String
+  status            String    @default("pending")
+  filePath          String?
+  downloadToken     String?
+  downloadExpiresAt DateTime?
+  errorMessage      String?
+  createdBy         Int
+  createdAt         DateTime  @default(now())
+  finishedAt        DateTime?
+}
+
+model ConfigOption {
+  id        Int      @id @default(autoincrement())
+  category  String
+  value     String
+  label     String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}

@@ -1,0 +1,117 @@
+:root {
+  /* 主色 */
+  --color-bg: #F7F3EA;
+  --color-bg-deep: #101614;
+  --color-card: rgba(255, 255, 255, 0.78);
+  --color-card-dark: rgba(18, 26, 23, 0.92);
+
+  /* 点缀 */
+  --color-gold: #C6A15B;
+  --color-gold-light: #E6D3A3;
+  --color-jade: #4E7D69;
+  --color-jade-deep: #1F4D3A;
+
+  /* 文字 */
+  --color-text-main: #1D2522;
+  --color-text-sub: #6F7772;
+  --color-text-light: #F8F3E8;
+
+  /* 状态 */
+  --color-success: #2F7D57;
+  --color-warning: #C9822B;
+  --color-danger: #B94A48;
+  --color-info: #3E6C8C;
+
+  /* 布局 */
+  --radius-card: 20px;
+  --radius-btn: 16px;
+  --radius-pill: 999px;
+  --shadow-card: 0 12px 30px rgba(16, 22, 20, 0.08);
+  --shadow-glow: 0 4px 24px rgba(198, 161, 91, 0.15);
+  --border-gold: 1px solid rgba(198, 161, 91, 0.18);
+  --blur-glass: blur(16px);
+
+  /* 动效 */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 220ms;
+  --duration-slow: 480ms;
+
+  /* Vant 主题覆盖 */
+  --van-primary-color: var(--color-jade-deep);
+  --van-success-color: var(--color-success);
+  --van-warning-color: var(--color-warning);
+  --van-danger-color: var(--color-danger);
+  --van-text-color: var(--color-text-main);
+  --van-text-color-2: var(--color-text-sub);
+  --van-background: var(--color-bg);
+  --van-background-2: var(--color-card);
+  --van-border-color: rgba(198, 161, 91, 0.12);
+  --van-active-color: rgba(78, 125, 105, 0.08);
+  --van-radius-lg: var(--radius-card);
+  --van-button-primary-background: linear-gradient(135deg, var(--color-jade-deep) 0%, #2A5A45 50%, var(--color-gold) 120%);
+  --van-button-primary-border-color: transparent;
+  --van-nav-bar-background: transparent;
+  --van-nav-bar-title-text-color: var(--color-text-main);
+  --van-tabbar-background: rgba(247, 243, 234, 0.82);
+  --van-tabbar-item-active-color: var(--color-gold);
+  --van-tabbar-item-text-color: var(--color-text-sub);
+}
+
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes card-stagger {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes highlight-flash {
+  0% { box-shadow: 0 0 0 0 rgba(198, 161, 91, 0.5); }
+  70% { box-shadow: 0 0 0 8px rgba(198, 161, 91, 0); }
+  100% { box-shadow: var(--shadow-card); }
+}
+
+@keyframes shake-soft {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes spin-soft {
+  to { transform: rotate(360deg); }
+}
+
+.page-enter {
+  animation: page-enter var(--duration-normal) var(--ease-out) both;
+}
+
+.card-stagger {
+  animation: card-stagger var(--duration-normal) var(--ease-out) both;
+}
+
+.highlight-found {
+  animation: highlight-flash 1s var(--ease-out);
+}
+
+.shake-soft {
+  animation: shake-soft 0.4s var(--ease-out);
+}
+
+.fade-in {
+  animation: fade-in var(--duration-normal) var(--ease-out) both;
+}

@@ -1,0 +1,29 @@
+{
+  "name": "jade-accounting-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "和田玉镯子记账系统",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,green \"npm run dev -w @jade-account/server\" \"npm run dev -w @jade-account/web\"",
+    "dev:server": "npm run dev -w @jade-account/server",
+    "dev:web": "npm run dev -w @jade-account/web",
+    "dev:worker": "npm run dev -w @jade-account/worker",
+    "build": "npm run build -w @jade-account/shared && npm run build -w @jade-account/server && npm run build -w @jade-account/web && npm run build -w @jade-account/worker",
+    "start:prod": "npm run start -w @jade-account/server",
+    "db:generate": "npm run db:generate -w @jade-account/server",
+    "db:push": "npm run db:push -w @jade-account/server",
+    "db:seed": "npm run db:seed -w @jade-account/server",
+    "acceptance": "node scripts/auto-acceptance.mjs",
+    "acceptance:full": "node scripts/auto-acceptance.mjs full",
+    "acceptance:cleanup": "node scripts/acceptance-cleanup.mjs",
+    "worker:status": "npm run status -w @jade-account/worker"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "exceljs": "^4.4.0"
+  }
+}

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.db
+exports/
+tmp-uploads/
+data/
+apps/worker/logs/
+reports/
+.DS_Store

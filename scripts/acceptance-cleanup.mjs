@@ -1,0 +1,83 @@
+/**
+ * 清理 test_auto_check 验收测试数据
+ */
+import {
+  SERVER, login, fetchJson, authHeaders, ensureServerRunning, writeMarkdownReport,
+} from './lib/services.mjs'
+
+const report = {
+  sections: [
+    ['清理结果', 'cleanup'],
+    ['跳过的数据', 'skipped'],
+    ['复查结果', 'verify'],
+    ['失败原因', 'errors'],
+  ],
+  data: { cleanup: [], skipped: [], verify: [], errors: [] },
+}
+
+function log(section, msg, ok = true) {
+  report.data[section].push(`${ok ? '✓' : '✗'} ${msg}`)
+  console.log(`[${section}] ${ok ? '✓' : '✗'} ${msg}`)
+}
+
+async function main() {
+  console.log('\n========== 验收测试数据清理 ==========\n')
+
+  await ensureServerRunning((s, m, ok) => log('cleanup', m, ok !== false))
+
+  let token
+  try {
+    token = await login()
+  } catch (e) {
+    log('errors', e.message, false)
+    process.exit(1)
+  }
+
+  const summaryBefore = await fetchJson(`${SERVER}/api/expenses/summary?period=today`, { headers: authHeaders(token) })
+  const pendingBefore = summaryBefore.json.data?.pendingAmount || 0
+  log('cleanup', `清理前未报销金额: ${pendingBefore}`)
+
+  const cleanup = await fetchJson(`${SERVER}/api/maintenance/cleanup-test-data`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ force: process.env.NODE_ENV === 'production' }),
+  })
+
+  if (!cleanup.res.ok) {
+    log('errors', `清理 API 失败: ${cleanup.json.message || cleanup.text}`, false)
+    process.exit(1)
+  }
+
+  const data = cleanup.json.data
+  log('cleanup', `作废支出: ${data.expensesVoided.join(', ') || '无'}`)
+  log('cleanup', `退款销售: ${data.salesRefunded.join(', ') || '无'}`)
+  log('cleanup', `删除文件元数据: ${data.filesDeleted.join(', ') || '无'}`)
+  log('cleanup', `删除本地文件: ${data.localFilesDeleted.length} 个`)
+
+  for (const s of data.expensesSkipped || []) log('skipped', `支出 id=${s.id}: ${s.reason}`)
+  for (const s of data.salesSkipped || []) log('skipped', `销售 id=${s.id}: ${s.reason}`)
+  for (const s of data.filesSkipped || []) log('skipped', `文件 id=${s.id}: ${s.reason}`)
+  for (const f of data.localFilesFailed || []) log('errors', `本地文件 ${f.path}: ${f.reason}`, false)
+
+  const summaryAfter = await fetchJson(`${SERVER}/api/expenses/summary?period=today`, { headers: authHeaders(token) })
+  const pendingAfter = summaryAfter.json.data?.pendingAmount || 0
+  const noTestAmount = Math.abs(pendingAfter - Math.max(0, pendingBefore - 1.23)) < 0.02 || pendingAfter < pendingBefore
+  log('verify', `清理后未报销金额: ${pendingAfter}`, noTestAmount)
+
+  const testExpenses = await fetchJson(
+    `${SERVER}/api/expenses?reimbursementStatus=all&pageSize=100`,
+    { headers: authHeaders(token) },
+  )
+  const hasTest = testExpenses.json.data?.items?.some(
+    (e) => !e.isVoided && (e.remark?.includes('test_auto_check') || e.expenseSummary?.includes('test_auto_check')),
+  )
+  log('verify', `活跃支出中无 test_auto_check: ${!hasTest}`, !hasTest)
+
+  const reportPath = await writeMarkdownReport(report, 'cleanup')
+  console.log(`\n报告已写入: ${reportPath}\n`)
+}
+
+main().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})
