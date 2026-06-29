@@ -33,10 +33,13 @@
     "rotate:admin-password": "node scripts/rotate-admin-password.mjs",
     "acceptance:remote": "node scripts/remote-acceptance.mjs",
     "test:subpath": "node scripts/test-subpath-refresh.mjs",
-    "test:login": "node scripts/test-login.mjs"
+    "test:login": "node scripts/test-login.mjs",
+    "test:white-screen": "node scripts/test-white-screen.mjs",
+    "test:assets": "node scripts/check-assets-remote.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
-    "exceljs": "^4.4.0"
+    "exceljs": "^4.4.0",
+    "playwright": "^1.61.1"
   }
 }

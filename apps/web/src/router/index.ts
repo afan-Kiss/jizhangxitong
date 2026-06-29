@@ -25,7 +25,12 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (!auth.sessionReady) {
-    await auth.initSession()
+    try {
+      await auth.initSession()
+    } catch {
+      auth.logout()
+      auth.sessionReady = true
+    }
   }
 
   const token = auth.token

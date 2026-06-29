@@ -52,8 +52,9 @@ async function main() {
 
   run('npm run build -w @jade-account/shared')
   run('npm run build -w @jade-account/server')
+  const gitHash = execSync('git rev-parse --short HEAD', { cwd: ROOT, encoding: 'utf-8' }).trim()
   run('npm run build -w @jade-account/web', {
-    env: { ...process.env, VITE_APP_BASE: '/account/' },
+    env: { ...process.env, VITE_APP_BASE: '/account/', APP_VERSION: gitHash },
   })
   run('npm run build -w @jade-account/worker')
 
@@ -67,6 +68,13 @@ async function main() {
   const remoteUrl = RECOMMENDED_URL
   run(`node scripts/remote-acceptance.mjs`, {
     env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl, ACCEPTANCE_MODE: 'full' },
+  })
+
+  run('npm run test:white-screen', {
+    env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl },
+  })
+  run('npm run test:login', {
+    env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl },
   })
 }
 

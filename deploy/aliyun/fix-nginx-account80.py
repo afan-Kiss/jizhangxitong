@@ -38,6 +38,23 @@ JADE_BLOCK = f"""
         proxy_read_timeout 86400;
     }}
 
+    location /account/assets/ {{
+        proxy_pass http://127.0.0.1:4731/account/assets/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 120s;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }}
+
+    location = /account/index.html {{
+        proxy_pass http://127.0.0.1:4731/account/index.html;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }}
+
     location /account/ {{
         proxy_pass http://127.0.0.1:4731/account/;
         proxy_http_version 1.1;

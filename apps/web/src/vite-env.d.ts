@@ -1,10 +1,3 @@
 /// <reference types="vite/client" />
 
-interface ImportMetaEnv {
-  readonly BASE_URL: string
-  readonly VITE_APP_BASE?: string
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv
-}
+declare const __APP_VERSION__: string

@@ -65,10 +65,27 @@ function attachAccountWeb(app: express.Application) {
   }
 
   console.log(`[web] 托管 /account/ -> ${webDir}`)
-  app.use('/account/assets', express.static(path.join(webDir, 'assets'), { maxAge: '7d' }))
+  const assetsDir = path.join(webDir, 'assets')
+
+  app.use('/account/assets', (req, res) => {
+    const rel = req.path.replace(/^\/+/, '')
+    const safe = path.normalize(rel).replace(/^(\.\.(\/|\\|$))+/, '')
+    const filePath = path.join(assetsDir, safe)
+    if (!safe.startsWith('..') && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      res.set('Cache-Control', 'public, max-age=31536000, immutable')
+      return res.sendFile(filePath)
+    }
+    res.status(404).type('text/plain').send('asset not found')
+  })
+
   app.get(['/account', '/account/*'], (req, res) => {
     const rel = req.path.replace(/^\/account\/?/, '') || 'index.html'
     const safe = path.normalize(rel).replace(/^(\.\.(\/|\\|$))+/, '')
+
+    if (safe.startsWith('assets/') || safe.startsWith('assets\\')) {
+      return res.status(404).type('text/plain').send('asset not found')
+    }
+
     const filePath = path.join(webDir, safe)
     if (
       safe !== 'index.html'
@@ -78,6 +95,9 @@ function attachAccountWeb(app: express.Application) {
     ) {
       return res.sendFile(filePath)
     }
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+    res.set('Pragma', 'no-cache')
+    res.set('Expires', '0')
     return res.sendFile(indexFile)
   })
 }

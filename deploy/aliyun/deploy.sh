@@ -48,6 +48,7 @@ install_build() {
   log "copy web dist"
   rm -rf "$DEPLOY_DIR/web"/*
   cp -a "$DEPLOY_DIR/apps/web/dist/"* "$DEPLOY_DIR/web/"
+  log "web assets count: $(find "$DEPLOY_DIR/web/assets" -type f 2>/dev/null | wc -l)"
 }
 
 start_pm2() {
