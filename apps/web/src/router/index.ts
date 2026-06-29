@@ -1,10 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/login', component: () => import('../views/Login.vue'), meta: { public: true } },
     { path: '/', component: () => import('../views/Home.vue') },
+    { path: '/expenses', redirect: '/reimbursements' },
     { path: '/expense/create', component: () => import('../views/ExpenseCreate.vue') },
     { path: '/expense/:id', component: () => import('../views/ExpenseDetail.vue') },
     { path: '/expense/stats', component: () => import('../views/ExpenseStats.vue') },
@@ -16,6 +17,7 @@ const router = createRouter({
     { path: '/bracelets', component: () => import('../views/Bracelets.vue') },
     { path: '/bracelets/:code', component: () => import('../views/BraceletDetail.vue') },
     { path: '/settings', component: () => import('../views/Settings.vue') },
+    { path: '/trial-guide', component: () => import('../views/TrialGuide.vue') },
     { path: '/logs', component: () => import('../views/Logs.vue') },
   ],
 })

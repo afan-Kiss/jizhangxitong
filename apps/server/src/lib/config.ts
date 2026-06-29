@@ -19,6 +19,7 @@ export const config = {
   exportTokenTtlMinutes: Number(process.env.EXPORT_TOKEN_TTL_MINUTES || 30),
   workerRpcTimeoutMs: Number(process.env.WORKER_RPC_TIMEOUT_MS || 30000),
   databaseUrl: process.env.DATABASE_URL || '',
+  publicWebDir: process.env.PUBLIC_WEB_DIR || '',
 }
 
 export function validateProductionConfig(): string[] {
@@ -31,9 +32,10 @@ export function validateProductionConfig(): string[] {
   if (!config.workerWsToken || config.workerWsToken.length < 16) {
     warnings.push('生产环境必须设置 WORKER_WS_TOKEN')
   }
-  if (!config.databaseUrl || config.databaseUrl.startsWith('file:')) {
-    warnings.push('生产环境建议使用 MySQL/PostgreSQL，不要使用 SQLite file:')
+  if (!config.databaseUrl) {
+    warnings.push('生产环境必须设置 DATABASE_URL')
   }
+  // SQLite 过渡部署允许（用户明确要求先 SQLite 上线），不阻断启动
   return warnings
 }
 

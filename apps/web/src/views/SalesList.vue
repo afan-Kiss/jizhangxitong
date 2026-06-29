@@ -21,10 +21,20 @@ onMounted(async () => {
     </van-nav-bar>
     <div class="card">
       <div v-for="item in items" :key="item.id" class="list-item" @click="router.push(`/sales/${item.id}`)">
-        <div>{{ item.braceletCode }} · ¥{{ Number(item.saleAmount).toFixed(2) }}</div>
+        <div>
+          {{ item.braceletCode }} · ¥{{ Number(item.saleAmount).toFixed(2) }}
+          <span v-if="item.isTrialRun" class="trial-tag">试用</span>
+        </div>
         <div class="muted">{{ item.platform }} · {{ item.customerName || '-' }} · {{ item.status }}</div>
       </div>
       <div v-if="!items.length" class="muted">暂无销售记录</div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.trial-tag {
+  font-size: 10px; padding: 1px 5px; margin-left: 6px;
+  background: rgba(237,108,2,0.15); color: #ed6c02; border-radius: 4px;
+}
+</style>

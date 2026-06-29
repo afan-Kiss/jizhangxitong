@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma'
 import { generateNo, toNumber, startOfDay, endOfDay, startOfWeek, startOfMonth } from '../lib/utils'
 import { AuthRequest } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
+import { isTrialModeEnabled } from './trial-mode.service'
 
 export interface ExpenseFilter {
   startDate?: string
@@ -13,6 +14,8 @@ export interface ExpenseFilter {
   braceletCode?: string
   onlyWithBracelet?: boolean
   isVoided?: boolean
+  isTrialRun?: boolean
+  excludeTrial?: boolean
   needsAttachment?: boolean
   page?: number
   pageSize?: number
@@ -39,6 +42,8 @@ function buildWhere(filter: ExpenseFilter) {
   if (filter.braceletCode) where.braceletCode = { contains: filter.braceletCode }
   if (filter.onlyWithBracelet) where.braceletId = { not: null }
   if (filter.needsAttachment) where.needsAttachment = true
+  if (filter.isTrialRun !== undefined) where.isTrialRun = filter.isTrialRun
+  else if (filter.excludeTrial === true) where.isTrialRun = false
   return where
 }
 
@@ -119,6 +124,7 @@ export async function createExpense(
       reimbursementPerson: input.reimbursementPerson,
       reimbursementStatus,
       needsAttachment: input.needsAttachment || false,
+      isTrialRun: await isTrialModeEnabled(),
       createdBy: operator!.userId,
     },
   })

@@ -10,6 +10,7 @@ import { buildWhere, ExpenseFilter } from './expense.service'
 import { readFilesForExport } from './file.service'
 import { writeOperationLog } from './operation-log.service'
 import { AuthRequest } from '../middleware/auth'
+import { isTrialModeEnabled } from './trial-mode.service'
 
 interface ExportRow {
   isMain: boolean
@@ -53,7 +54,12 @@ function buildRemark(expense: {
 }
 
 export async function previewReimbursementExport(filter: ExpenseFilter) {
-  const where = buildWhere({ ...filter, isVoided: false })
+  const trialMode = await isTrialModeEnabled()
+  const where = buildWhere({
+    ...filter,
+    isVoided: false,
+    ...(trialMode ? { isTrialRun: true } : { excludeTrial: true }),
+  })
   const expenses = await prisma.expense.findMany({
     where,
     include: { attachments: { include: { file: true }, orderBy: { sortOrder: 'asc' } } },
@@ -85,18 +91,24 @@ export async function createReimbursementExport(
   operator: AuthRequest['user'],
 ) {
   const exportNo = generateNo('EXP')
+  const trialMode = await isTrialModeEnabled()
   const task = await prisma.exportTask.create({
     data: {
       exportNo,
       exportType: 'reimbursement_excel',
       filtersJson: JSON.stringify(filter),
       status: 'running',
+      isTrialRun: trialMode,
       createdBy: operator!.userId,
     },
   })
 
   try {
-    const where = buildWhere({ ...filter, isVoided: false })
+    const where = buildWhere({
+      ...filter,
+      isVoided: false,
+      ...(trialMode ? { isTrialRun: true } : { excludeTrial: true }),
+    })
     const expenses = await prisma.expense.findMany({
       where,
       include: { attachments: { include: { file: true }, orderBy: { sortOrder: 'asc' } } },

@@ -67,3 +67,5 @@ if (Test-Path $BackupRoot) {
 }
 
 Write-Host "完成。文件数=$fileCount 大小=$([math]::Round($totalSize/1MB,2)) MB"
+Set-Content -Path (Join-Path $PSScriptRoot '.last-backup-path.txt') -Value $dest -Encoding UTF8
+Write-Host "BACKUP_DEST=$dest"

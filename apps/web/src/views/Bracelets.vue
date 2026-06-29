@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import api, { braceletImageUrl } from '../api'
+import api from '../api'
 import { useAuthStore } from '../stores/auth'
 import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import BraceletCard from '../components/BraceletCard.vue'
+import BraceletIcon from '../components/BraceletIcon.vue'
+import WorkerStatus from '../components/WorkerStatus.vue'
 import ActionButton from '../components/ActionButton.vue'
 
 const router = useRouter()
@@ -17,6 +19,10 @@ const found = ref<any>(null)
 const searching = ref(false)
 const shake = ref(false)
 const highlight = ref(false)
+
+onMounted(async () => {
+  await auth.fetchWorkerStatus()
+})
 
 async function search() {
   if (!keyword.value.trim()) return
@@ -54,6 +60,8 @@ async function queryCode() {
 
 <template>
   <AppShell title="镯子查询">
+    <WorkerStatus :online="auth.workerOnline" compact />
+
     <div class="search-bar" :class="{ 'shake-soft': shake }">
       <van-search
         v-model="keyword"
@@ -98,6 +106,13 @@ async function queryCode() {
         />
       </div>
     </LuxuryCard>
+
+    <LuxuryCard v-else-if="!found && !searching && !keyword">
+      <div class="bracelets-empty">
+        <BraceletIcon :size="48" />
+        <p>输入或扫描镯子编号，从扫码枪同步和田玉镯子信息</p>
+      </div>
+    </LuxuryCard>
   </AppShell>
 </template>
 
@@ -128,4 +143,16 @@ async function queryCode() {
   background: var(--color-card) !important;
   border: var(--border-gold);
 }
+.bracelets-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--color-text-sub);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.bracelets-empty p { margin: 0; }
 </style>

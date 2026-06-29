@@ -1,14 +1,21 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
+import BraceletIcon from './BraceletIcon.vue'
 
 const route = useRoute()
+
 const tabs = [
-  { path: '/', label: '首页', icon: 'home-o' },
-  { path: '/expense/create', label: '记支出', icon: 'balance-pay' },
-  { path: '/sales', label: '销售', icon: 'shopping-cart-o' },
-  { path: '/bracelets', label: '镯子', icon: 'gem-o' },
-  { path: '/settings', label: '我的', icon: 'user-o' },
+  { path: '/', label: '首页', icon: 'home-o', custom: false },
+  { path: '/expense/create', label: '记支出', icon: 'balance-list-o', custom: false },
+  { path: '/sales', label: '销售', icon: 'orders-o', custom: false },
+  { path: '/bracelets', label: '镯子', icon: '', custom: true },
+  { path: '/settings', label: '我的', icon: 'user-o', custom: false },
 ]
+
+function isActive(tab: { path: string }) {
+  if (tab.path === '/') return route.path === '/'
+  return route.path === tab.path || route.path.startsWith(tab.path + '/')
+}
 </script>
 
 <template>
@@ -18,9 +25,10 @@ const tabs = [
       :key="tab.path"
       :to="tab.path"
       class="luxury-tabbar__item"
-      :class="{ 'luxury-tabbar__item--active': route.path === tab.path || (tab.path !== '/' && route.path.startsWith(tab.path)) }"
+      :class="{ 'luxury-tabbar__item--active': isActive(tab) }"
     >
-      <van-icon :name="tab.icon" size="22" />
+      <BraceletIcon v-if="tab.custom" :size="22" :active="isActive(tab)" />
+      <van-icon v-else :name="tab.icon" size="22" />
       <span>{{ tab.label }}</span>
     </router-link>
   </nav>

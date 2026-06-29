@@ -94,6 +94,7 @@ model Expense {
   reimbursementStatus  String              @default("pending")
   needsAttachment      Boolean             @default(false)
   isVoided             Boolean             @default(false)
+  isTrialRun           Boolean             @default(false)
   voidReason           String?
   voidedAt             DateTime?
   voidedBy             Int?
@@ -156,6 +157,7 @@ model Sale {
   finalProfit             Decimal
   soldAt                  DateTime
   status                  String    @default("sold")
+  isTrialRun              Boolean   @default(false)
   createdBy               Int
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
@@ -236,6 +238,7 @@ model ExportTask {
   exportType        String
   filtersJson       String
   status            String    @default("pending")
+  isTrialRun        Boolean   @default(false)
   filePath          String?
   downloadToken     String?
   downloadExpiresAt DateTime?

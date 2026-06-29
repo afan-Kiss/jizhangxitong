@@ -20,7 +20,20 @@
     "acceptance": "node scripts/auto-acceptance.mjs",
     "acceptance:full": "node scripts/auto-acceptance.mjs full",
     "acceptance:cleanup": "node scripts/acceptance-cleanup.mjs",
-    "worker:status": "npm run status -w @jade-account/worker"
+    "worker:status": "npm run status -w @jade-account/worker",
+    "setup:secrets": "node scripts/setup-secrets.mjs",
+    "setup:admin": "node scripts/setup-admin.mjs",
+    "set:admin-password": "node scripts/set-admin-password.mjs",
+    "db:prepare-prod": "node scripts/db-prepare-prod.mjs",
+    "health-check": "node scripts/system-health-check.mjs",
+    "check:autostart": "node scripts/check-autostart.mjs",
+    "check:backup": "node scripts/check-backup-status.mjs",
+    "trial:prep": "node scripts/trial-prep.mjs",
+    "trial:run": "node scripts/trial-run.mjs",
+    "trial:cleanup": "node scripts/trial-cleanup.mjs",
+    "deploy:aliyun": "node scripts/deploy-aliyun.mjs",
+    "acceptance:remote": "node scripts/remote-acceptance.mjs",
+    "test:subpath": "node scripts/test-subpath-refresh.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

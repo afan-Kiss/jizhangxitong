@@ -3,6 +3,7 @@ import { generateNo, toNumber } from '../lib/utils'
 import { getSettingNumber } from './settings.service'
 import { AuthRequest } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
+import { isTrialModeEnabled } from './trial-mode.service'
 
 export async function calculateSaleCost(braceletId: number) {
   const bracelet = await prisma.bracelet.findUnique({ where: { id: braceletId } })
@@ -83,6 +84,7 @@ export async function createSale(
       finalProfit: grossProfit,
       soldAt: new Date(input.soldAt),
       status: 'sold',
+      isTrialRun: await isTrialModeEnabled(),
       createdBy: operator!.userId,
     },
   })

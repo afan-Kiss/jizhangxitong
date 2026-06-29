@@ -36,7 +36,7 @@ const emit = defineEmits<{ back: [] }>()
   padding-bottom: env(safe-area-inset-bottom);
 }
 .app-shell--fixed-bottom {
-  padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
 }
 .app-shell__body {
   padding: 0 16px 16px;
@@ -47,9 +47,10 @@ const emit = defineEmits<{ back: [] }>()
   right: 0;
   bottom: 0;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, transparent 0%, rgba(247, 243, 234, 0.95) 24%);
+  background: linear-gradient(180deg, transparent 0%, rgba(247, 243, 234, 0.98) 20%);
   backdrop-filter: var(--blur-glass);
-  z-index: 10;
+  z-index: 90;
+  box-shadow: 0 -4px 24px rgba(16, 22, 20, 0.06);
 }
 .app-shell--no-tab .app-shell__footer {
   padding-bottom: calc(12px + env(safe-area-inset-bottom));

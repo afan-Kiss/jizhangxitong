@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import api from '../api'
+import api, { withBase } from '../api'
 import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import ExportProgress from '../components/ExportProgress.vue'
@@ -84,7 +84,7 @@ function delay(ms: number) {
 
 function download() {
   if (exportResult.value?.downloadUrl) {
-    window.open(exportResult.value.downloadUrl, '_blank')
+    window.open(withBase(exportResult.value.downloadUrl), '_blank')
   }
 }
 
@@ -127,9 +127,11 @@ onMounted(onPreview)
 
     <template #footer>
       <div class="export-footer">
-        <ActionButton variant="secondary" @click="onPreview">刷新预览</ActionButton>
-        <ActionButton :loading="exporting" @click="onExport">导出 Excel</ActionButton>
-        <ActionButton v-if="exportResult" variant="ghost" @click="download">下载</ActionButton>
+        <ActionButton :loading="exporting" size="lg" @click="onExport">导出 Excel 报销表</ActionButton>
+        <div class="export-footer__secondary">
+          <ActionButton variant="secondary" @click="onPreview">刷新预览</ActionButton>
+          <ActionButton v-if="exportResult" variant="ghost" @click="download">下载文件</ActionButton>
+        </div>
       </div>
     </template>
   </AppShell>
@@ -138,8 +140,13 @@ onMounted(onPreview)
 <style scoped>
 .export-footer {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 10px;
 }
-.export-footer .action-btn { flex: 1; min-width: 100px; }
+.export-footer .action-btn { width: 100%; }
+.export-footer__secondary {
+  display: flex;
+  gap: 8px;
+}
+.export-footer__secondary .action-btn { flex: 1; min-width: 0; }
 </style>

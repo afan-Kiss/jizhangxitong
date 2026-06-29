@@ -7,4 +7,6 @@ tmp-uploads/
 data/
 apps/worker/logs/
 reports/
+secrets/
 .DS_Store
+scripts/windows/.last-backup-path.txt

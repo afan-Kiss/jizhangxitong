@@ -78,7 +78,7 @@ function remove(idx: number) {
         <button class="image-uploader__remove" type="button" @click="remove(modelValue.indexOf(item))">×</button>
       </div>
       <label v-for="slot in slots" :key="slot.type" class="image-uploader__slot">
-        <input type="file" accept="image/*" hidden @change="handlePick(slot.type, $event)" />
+        <input type="file" accept="image/*" capture="environment" hidden @change="handlePick(slot.type, $event)" />
         <span v-if="uploading === slot.type" class="image-uploader__loading">
           <span class="image-uploader__ring" />
         </span>

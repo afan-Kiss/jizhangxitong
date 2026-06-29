@@ -31,11 +31,21 @@ export function authHeaders(token) {
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 }
 
+export async function getAdminPassword() {
+  try {
+    const text = await fs.readFile(path.join(ROOT, 'secrets/initial-admin-password.txt'), 'utf-8')
+    const m = text.match(/密码:\s*(.+)/)
+    if (m?.[1]?.trim()) return m[1].trim()
+  } catch { /* default */ }
+  return 'admin123'
+}
+
 export async function login() {
+  const password = await getAdminPassword()
   const { res, json } = await fetchJson(`${SERVER}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    body: JSON.stringify({ username: 'admin', password }),
   })
   if (!res.ok || !json.data?.token) throw new Error(`登录失败: ${JSON.stringify(json)}`)
   return json.data.token

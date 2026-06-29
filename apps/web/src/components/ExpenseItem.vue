@@ -7,13 +7,17 @@ defineProps<{
   braceletCode?: string
   imageCount?: number
   occurredAt?: string
+  isTrialRun?: boolean
 }>()
 </script>
 
 <template>
   <div class="expense-item">
     <div class="expense-item__main">
-      <div class="expense-item__type">{{ type }}</div>
+      <div class="expense-item__type">
+        {{ type }}
+        <span v-if="isTrialRun" class="trial-tag">试用</span>
+      </div>
       <div class="expense-item__amount money">¥{{ amount.toFixed(2) }}</div>
     </div>
     <div class="expense-item__meta muted">
@@ -42,6 +46,11 @@ defineProps<{
   font-size: 15px;
   font-weight: 500;
   color: var(--color-text-main);
+  display: flex; align-items: center; gap: 6px;
+}
+.trial-tag {
+  font-size: 10px; padding: 1px 6px; border-radius: 4px;
+  background: rgba(237, 108, 2, 0.15); color: #ed6c02; font-weight: 500;
 }
 .expense-item__amount {
   font-size: 17px;

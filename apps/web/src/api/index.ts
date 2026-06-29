@@ -1,7 +1,9 @@
 import axios from 'axios'
 import { showToast } from 'vant'
+import { basePath, loginPath, withBase } from '../utils/base-path'
 
-const api = axios.create({ baseURL: '/api', timeout: 60000 })
+const apiBase = `${basePath}/api`
+const api = axios.create({ baseURL: apiBase, timeout: 60000 })
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
@@ -16,7 +18,7 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem('token')
       if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login'
+        window.location.href = loginPath()
       }
     } else {
       showToast(msg)
@@ -37,15 +39,17 @@ export async function uploadFile(file: File, fileType: string) {
 
 export function fileViewUrl(fileId: number) {
   const token = localStorage.getItem('token')
-  return `/api/files/${fileId}/view?token=${token}`
+  return withBase(`/api/files/${fileId}/view?token=${token}`)
 }
 
 export function fileThumbUrl(fileId: number) {
   const token = localStorage.getItem('token')
-  return `/api/files/${fileId}/thumb?token=${token}`
+  return withBase(`/api/files/${fileId}/thumb?token=${token}`)
 }
 
 export function braceletImageUrl(braceletId: number) {
   const token = localStorage.getItem('token')
-  return `/api/bracelets/detail/${braceletId}/image?token=${token}`
+  return withBase(`/api/bracelets/detail/${braceletId}/image?token=${token}`)
 }
+
+export { withBase, loginPath }
