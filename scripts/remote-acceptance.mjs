@@ -7,6 +7,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs/promises'
 import { RECOMMENDED_URL } from './lib/deploy-env.mjs'
+import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(__dirname, '..')
@@ -23,6 +24,7 @@ async function readDeployUrl() {
 }
 
 async function main() {
+  installScriptTimeout('acceptance:remote', TIMEOUTS.remoteAcceptance)
   const server = process.env.ACCEPTANCE_SERVER || await readDeployUrl()
   console.log(`远程验收目标: ${server}`)
 
@@ -36,7 +38,21 @@ async function main() {
     },
     shell: true,
   })
-  child.on('exit', (code) => process.exit(code ?? 1))
+
+  const killer = setTimeout(() => {
+    console.error(`\nFAIL — acceptance:remote 子进程超时 (${TIMEOUTS.remoteAcceptance / 1000}s)`)
+    try { child.kill('SIGTERM') } catch { /* ignore */ }
+    setTimeout(() => { try { child.kill('SIGKILL') } catch { /* ignore */ } }, 3000)
+  }, TIMEOUTS.remoteAcceptance)
+  killer.unref()
+
+  child.on('exit', (code) => {
+    clearTimeout(killer)
+    process.exit(code ?? 1)
+  })
 }
 
-main()
+main().catch((e) => {
+  console.error(e)
+  process.exit(1)
+})

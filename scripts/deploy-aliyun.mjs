@@ -8,6 +8,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { loadDeployEnv, RECOMMENDED_URL } from './lib/deploy-env.mjs'
 import { fetchJson, login, sleep } from './lib/services.mjs'
+import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(__dirname, '..')
@@ -51,7 +52,7 @@ async function verifyWorkerRemote(baseUrl) {
 
     let localStatus = {}
     try {
-      const out = execSync('npm run worker:status', { cwd: ROOT, encoding: 'utf-8' })
+      const out = execSync('npm run worker:status', { cwd: ROOT, encoding: 'utf-8', timeout: 30000 })
       const i = out.indexOf('{')
       if (i >= 0) localStatus = JSON.parse(out.slice(i))
     } catch { /* ignore */ }
@@ -70,21 +71,25 @@ async function verifyWorkerRemote(baseUrl) {
 }
 
 async function main() {
+  installScriptTimeout('deploy:aliyun', TIMEOUTS.deploy)
+  run('node scripts/guard-no-networkidle.mjs', { timeout: 10000 })
+
   loadDeployEnv()
   if (!process.env.SSH_PASS) {
     console.error('缺少 SSH_PASS 环境变量，无法 SSH 部署阿里云。')
     process.exit(1)
   }
 
-  run('npm run build -w @jade-account/shared')
-  run('npm run build -w @jade-account/server')
+  run('npm run build -w @jade-account/shared', { timeout: 300000 })
+  run('npm run build -w @jade-account/server', { timeout: 300000 })
   const gitHash = execSync('git rev-parse --short HEAD', { cwd: ROOT, encoding: 'utf-8' }).trim()
   run('npm run build -w @jade-account/web', {
     env: { ...process.env, VITE_APP_BASE: '/account/', APP_VERSION: gitHash },
+    timeout: 300000,
   })
-  run('npm run build -w @jade-account/worker')
+  run('npm run build -w @jade-account/worker', { timeout: 300000 })
 
-  run(`python "${DEPLOY_PY}"`, { env: { ...process.env } })
+  run(`python "${DEPLOY_PY}"`, { env: { ...process.env }, timeout: 900000 })
 
   await restartWorker()
   await sleep(5000)
@@ -94,13 +99,15 @@ async function main() {
 
   run(`node scripts/remote-acceptance.mjs`, {
     env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl, ACCEPTANCE_MODE: 'full' },
+    timeout: TIMEOUTS.remoteAcceptance + 30000,
   })
 
   const testEnv = { ...process.env, ACCEPTANCE_SERVER: remoteUrl }
-  run('npm run test:white-screen', { env: testEnv, timeout: 180000 })
-  run('npm run test:responsive', { env: testEnv, timeout: 300000 })
-  run('npm run test:login', { env: testEnv, timeout: 60000 })
-  run('npm run test:worker-online', { env: testEnv, timeout: 120000 })
+  run('npm run test:white-screen', { env: testEnv, timeout: TIMEOUTS.whiteScreen + 120000 })
+  run('npm run test:responsive', { env: testEnv, timeout: TIMEOUTS.responsive + 120000 })
+  run('npm run test:login', { env: testEnv, timeout: TIMEOUTS.login + 30000 })
+  run('npm run test:subpath', { env: testEnv, timeout: TIMEOUTS.subpath + 30000 })
+  run('npm run test:worker-online', { env: testEnv, timeout: TIMEOUTS.workerOnline + 60000 })
 
   console.log('\n=== 部署 Worker 报告 ===')
   console.log(JSON.stringify(workerReport, null, 2))

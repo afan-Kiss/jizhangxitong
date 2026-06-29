@@ -4,6 +4,7 @@
 import {
   SERVER, login, fetchJson, authHeaders, ensureServerRunning, writeMarkdownReport,
 } from './lib/services.mjs'
+import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
 
 const report = {
   sections: [
@@ -21,6 +22,7 @@ function log(section, msg, ok = true) {
 }
 
 async function main() {
+  installScriptTimeout('acceptance:cleanup', TIMEOUTS.acceptanceCleanup)
   console.log('\n========== 验收测试数据清理 ==========\n')
 
   await ensureServerRunning((s, m, ok) => log('cleanup', m, ok !== false))

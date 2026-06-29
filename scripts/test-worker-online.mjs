@@ -16,6 +16,7 @@ import {
   getAdminPassword,
   ensureScannerRunning,
 } from './lib/services.mjs'
+import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const WORKER_ENV = path.join(ROOT, 'apps/worker/.env')
@@ -83,7 +84,7 @@ function testWsHandshake(url, token, timeoutMs = 10000) {
 }
 
 async function runWorkerStatus() {
-  const out = execSync('npm run worker:status', { cwd: ROOT, encoding: 'utf-8' })
+  const out = execSync('npm run worker:status', { cwd: ROOT, encoding: 'utf-8', timeout: 30000 })
   const jsonStart = out.indexOf('{')
   if (jsonStart < 0) throw new Error('worker:status 无 JSON 输出')
   let depth = 0
@@ -124,6 +125,7 @@ async function ensureWorkerProcess(logFn) {
 }
 
 async function main() {
+  installScriptTimeout('test:worker-online', TIMEOUTS.workerOnline)
   console.log('=== test:worker-online ===\n')
 
   // 1. .env 存在且可读

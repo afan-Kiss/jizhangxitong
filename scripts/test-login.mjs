@@ -6,6 +6,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { RECOMMENDED_URL } from './lib/deploy-env.mjs'
+import { installScriptTimeout, TIMEOUTS, fetchWithTimeout } from './lib/script-timeout.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(__dirname, '..')
@@ -21,7 +22,7 @@ function ok(name, pass, detail = '') {
 }
 
 async function fetchJson(url, opts = {}) {
-  const res = await fetch(url, opts)
+  const res = await fetchWithTimeout(url, opts, 30000)
   const text = await res.text()
   let json
   try { json = JSON.parse(text) } catch { json = { raw: text } }
@@ -34,11 +35,13 @@ function readAdminPassword() {
   return fs.readFileSync(file, 'utf-8').match(/密码:\s*(.+)/)?.[1]?.trim() || ''
 }
 
+installScriptTimeout('test:login', TIMEOUTS.login)
+
 async function main() {
   console.log(`\n========== 登录专项验收 (${SERVER}) ==========\n`)
 
   // 1. SPA 页面
-  const loginPage = await fetch(`${SERVER}/login`)
+  const loginPage = await fetchWithTimeout(`${SERVER}/login`, {}, 30000)
   const loginHtml = await loginPage.text()
   ok('打开 /account/login 返回 SPA', loginPage.status === 200 && loginHtml.includes('id="app"'))
   ok('登录页含 viewport（手机端）', loginHtml.includes('viewport'))
@@ -104,7 +107,7 @@ async function main() {
   ok('auth.initSession 存在', authTs.includes('initSession'))
 
   // 7. 首页 SPA（需登录后由 acceptance:full 覆盖；此处只验公开页）
-  const homePublic = await fetch(`${SERVER}/`)
+  const homePublic = await fetchWithTimeout(`${SERVER}/`, {}, 30000)
   ok('首页 SPA 可访问', homePublic.status === 200)
 
   console.log(`\n${failed ? 'FAIL' : 'PASS'} — ${results.length - failed}/${results.length} 通过\n`)

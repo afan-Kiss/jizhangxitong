@@ -37,7 +37,9 @@
     "test:white-screen": "node scripts/test-white-screen.mjs",
     "test:responsive": "node scripts/test-responsive.mjs",
     "test:worker-online": "node scripts/test-worker-online.mjs",
-    "test:assets": "node scripts/check-assets-remote.mjs"
+    "test:assets": "node scripts/check-assets-remote.mjs",
+    "cleanup:stuck-tests": "node scripts/cleanup-stuck-tests.mjs",
+    "guard:no-networkidle": "node scripts/guard-no-networkidle.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

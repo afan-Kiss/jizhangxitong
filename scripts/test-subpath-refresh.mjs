@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /** 验证 /account/ 子路径（仅推荐 HTTP IP 入口） */
 import { RECOMMENDED_URL } from './lib/deploy-env.mjs'
+import { installScriptTimeout, TIMEOUTS, fetchWithTimeout } from './lib/script-timeout.mjs'
+
+installScriptTimeout('test:subpath', TIMEOUTS.subpath)
 
 const BASE = RECOMMENDED_URL
 
@@ -10,13 +13,13 @@ let failed = 0
 const paths = ['', 'login', 'expenses', 'bracelets', 'settings']
 for (const p of paths) {
   const url = `${BASE.replace(/\/$/, '')}/${p}`.replace(/([^:]\/)\/+/g, '$1')
-  const r = await fetch(url)
+  const r = await fetchWithTimeout(url, {}, 30000)
   const t = await r.text()
   const ok = r.status === 200 && (t.includes('和田玉') || t.includes('id="app"')) && !t.includes('Welcome to nginx')
   console.log(`${url} -> ${r.status} ${ok ? 'OK' : 'FAIL'}`)
   if (!ok) failed++
 }
-const health = await fetch(`${BASE.replace(/\/$/, '')}/api/health`)
+const health = await fetchWithTimeout(`${BASE.replace(/\/$/, '')}/api/health`, {}, 30000)
 const hj = await health.json().catch(() => ({}))
 console.log(`health: ${health.status} ${hj.message || ''}`)
 console.log('\n域名 https://xiangyuzhubao.xyz/account/ 待备案/正式证书完成后启用\n')

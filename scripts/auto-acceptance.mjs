@@ -11,6 +11,7 @@ import {
   ensureServerRunning, ensureWorkerRunning, ensureScannerRunning,
   writeMarkdownReport, sleep,
 } from './lib/services.mjs'
+import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
 
 const MODE = process.argv[2] === 'full' || process.env.ACCEPTANCE_MODE === 'full' ? 'full' : 'basic'
 
@@ -214,6 +215,7 @@ async function checkScanner() {
 }
 
 async function main() {
+  installScriptTimeout(`acceptance:${MODE}`, MODE === 'full' ? TIMEOUTS.acceptanceFull : TIMEOUTS.acceptanceBasic)
   console.log(`\n========== 验收 (${MODE}) ==========\n`)
 
   await ensureServerRunning((s, m, ok) => log('startup', m, ok !== false))

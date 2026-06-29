@@ -2,9 +2,15 @@
 /**
  * Playwright 测试公共：超时、浏览器生命周期
  */
+import { installScriptTimeout as installTimeout, DEFAULT_SCRIPT_TIMEOUT_MS } from './script-timeout.mjs'
+
 export const PAGE_TIMEOUT_MS = Number(process.env.PW_PAGE_TIMEOUT_MS || 30000)
-export const SCRIPT_TIMEOUT_MS = Number(process.env.PW_SCRIPT_TIMEOUT_MS || 120000)
+export const SCRIPT_TIMEOUT_MS = Number(process.env.PW_SCRIPT_TIMEOUT_MS || DEFAULT_SCRIPT_TIMEOUT_MS)
 export const VIEWPORT_TIMEOUT_MS = Number(process.env.PW_VIEWPORT_TIMEOUT_MS || 30000)
+
+export function installScriptTimeout(label, ms = SCRIPT_TIMEOUT_MS) {
+  return installTimeout(label, ms)
+}
 
 export const FAIL_PATTERNS = [
   /Failed to fetch dynamically imported module/i,
@@ -14,15 +20,6 @@ export const FAIL_PATTERNS = [
   /Cannot read properties of undefined/i,
   /Importing a module script failed/i,
 ]
-
-export function installScriptTimeout(label, ms = SCRIPT_TIMEOUT_MS) {
-  const timer = setTimeout(() => {
-    console.error(`\nFAIL — ${label} 总超时 (${ms / 1000}s)，强制退出`)
-    process.exit(1)
-  }, ms)
-  timer.unref()
-  return timer
-}
 
 export async function launchBrowser(chromium, ms = 45000) {
   const opts = { headless: true, timeout: ms }
