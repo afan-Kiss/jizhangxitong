@@ -1,0 +1,117 @@
+#!/usr/bin/env node
+/**
+ * 登录专项验收：API + 前端逻辑 + 页面结构
+ */
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+import { RECOMMENDED_URL } from './lib/deploy-env.mjs'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const ROOT = path.join(__dirname, '..')
+const SERVER = (process.env.ACCEPTANCE_SERVER || RECOMMENDED_URL).replace(/\/$/, '')
+
+const results = []
+let failed = 0
+
+function ok(name, pass, detail = '') {
+  results.push({ name, pass, detail })
+  console.log(`${pass ? '✓' : '✗'} ${name}${detail ? ` — ${detail}` : ''}`)
+  if (!pass) failed++
+}
+
+async function fetchJson(url, opts = {}) {
+  const res = await fetch(url, opts)
+  const text = await res.text()
+  let json
+  try { json = JSON.parse(text) } catch { json = { raw: text } }
+  return { res, json, text }
+}
+
+function readAdminPassword() {
+  const file = path.join(ROOT, 'secrets/initial-admin-password.txt')
+  if (!fs.existsSync(file)) return ''
+  return fs.readFileSync(file, 'utf-8').match(/密码:\s*(.+)/)?.[1]?.trim() || ''
+}
+
+async function main() {
+  console.log(`\n========== 登录专项验收 (${SERVER}) ==========\n`)
+
+  // 1. SPA 页面
+  const loginPage = await fetch(`${SERVER}/login`)
+  const loginHtml = await loginPage.text()
+  ok('打开 /account/login 返回 SPA', loginPage.status === 200 && loginHtml.includes('id="app"'))
+  ok('登录页含 viewport（手机端）', loginHtml.includes('viewport'))
+
+  // 2. 前端空表单校验
+  function validateLoginForm(username, password) {
+    if (!username.trim() || !password) return '请输入用户名和密码'
+    return null
+  }
+  ok('空用户名/空密码前端提示', validateLoginForm('', '') === '请输入用户名和密码')
+  ok('空密码前端提示', validateLoginForm('admin', '') === '请输入用户名和密码')
+
+  // 3. 错误密码 API
+  const bad = await fetchJson(`${SERVER}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'admin', password: 'wrong-password-xyz' }),
+  })
+  ok('错误密码返回 401', bad.res.status === 401)
+  ok('错误密码有明确 message', bad.json.message === '用户名或密码错误', bad.json.message || '')
+
+  // 4. 正确密码登录 + /me
+  const pwd = readAdminPassword()
+  if (!pwd) {
+    ok('读取本地 admin 密码', false, 'secrets/initial-admin-password.txt 不存在')
+  } else {
+    const good = await fetchJson(`${SERVER}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: pwd }),
+    })
+    ok('正确密码登录成功', good.res.ok && good.json.success && !!good.json.data?.token)
+    const token = good.json.data?.token
+    if (token) {
+      const me = await fetchJson(`${SERVER}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      ok('登录后 /auth/me 成功', me.res.ok && me.json.success && !!me.json.data?.user)
+    }
+
+    // 5. 错误 token
+    const badMe = await fetchJson(`${SERVER}/api/auth/me`, {
+      headers: { Authorization: 'Bearer invalid-token-xyz' },
+    })
+    ok('错误 token /auth/me 返回 401', badMe.res.status === 401)
+  }
+
+  // 6. 源码结构检查（底部导航 / 登录页）
+  const appVue = fs.readFileSync(path.join(ROOT, 'apps/web/src/App.vue'), 'utf-8')
+  ok('App.vue hideTab 使用 computed', appVue.includes('computed') && appVue.includes('hideTab'))
+  ok('登录页路由隐藏底部导航', appVue.includes("route.path === '/login'"))
+
+  const loginVue = fs.readFileSync(path.join(ROOT, 'apps/web/src/views/Login.vue'), 'utf-8')
+  ok('Login.vue 无空 catch', !loginVue.includes('catch { /* */ }'))
+  ok('Login.vue 密码默认空', loginVue.includes("ref('')") && !loginVue.includes("ref('admin123')"))
+  ok('Login.vue loading 文案', loginVue.includes('正在进入...'))
+  ok('Login.vue Enter 登录', loginVue.includes('@keyup.enter'))
+
+  const apiTs = fs.readFileSync(path.join(ROOT, 'apps/web/src/api/index.ts'), 'utf-8')
+  ok('401 登录页不全局跳转', apiTs.includes('isLoginRoute') && apiTs.includes('isLoginRequest'))
+
+  const authTs = fs.readFileSync(path.join(ROOT, 'apps/web/src/stores/auth.ts'), 'utf-8')
+  ok('auth.initSession 存在', authTs.includes('initSession'))
+
+  // 7. 首页 SPA（需登录后由 acceptance:full 覆盖；此处只验公开页）
+  const homePublic = await fetch(`${SERVER}/`)
+  ok('首页 SPA 可访问', homePublic.status === 200)
+
+  console.log(`\n${failed ? 'FAIL' : 'PASS'} — ${results.length - failed}/${results.length} 通过\n`)
+  process.exit(failed ? 1 : 0)
+}
+
+main().catch((e) => {
+  console.error(e)
+  process.exit(1)
+})

@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
+import { computed } from 'vue'
+import { RouterView, useRoute } from 'vue-router'
 import TabBar from './components/TabBar.vue'
-import { useRoute } from 'vue-router'
 
 const route = useRoute()
-const hideTab = route.path === '/login'
+
+const hideTab = computed(() =>
+  route.path === '/login'
   || /^\/expense\/\d+/.test(route.path)
   || /^\/sales\/\d+/.test(route.path)
   || route.path === '/sales/create'
   || route.path === '/expense/create'
-  || route.path === '/expense/export'
+  || route.path === '/expense/export',
+)
 </script>
 
 <template>

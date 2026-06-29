@@ -7,6 +7,7 @@ import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import ImageUploader from '../components/ImageUploader.vue'
 import ActionButton from '../components/ActionButton.vue'
+import { resolveApiErrorMessage } from '../utils/api-errors'
 
 const router = useRouter()
 const settings = ref<any>({})
@@ -45,6 +46,11 @@ async function onSubmit() {
     showToast('请填写必填项')
     return
   }
+  const amount = Number(form.value.amount)
+  if (Number.isNaN(amount) || amount <= 0) {
+    showToast('支出金额必须大于 0')
+    return
+  }
   let needsAttachment = false
   if (!uploadedFiles.value.length) {
     try {
@@ -62,13 +68,15 @@ async function onSubmit() {
   try {
     const res = await api.post('/expenses', {
       ...form.value,
-      amount: Number(form.value.amount),
+      amount,
       attachments: uploadedFiles.value.map((f) => ({ fileId: f.fileId, fileType: f.fileType })),
       needsAttachment,
       reimbursementStatus: form.value.paySource === '员工垫付' ? form.value.reimbursementStatus : 'not_required',
     })
     showToast('保存成功')
     router.push(`/expense/${res.data.data.id}`)
+  } catch (err: unknown) {
+    showToast(resolveApiErrorMessage(err))
   } finally {
     loading.value = false
   }

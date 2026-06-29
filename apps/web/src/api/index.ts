@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { showToast } from 'vant'
 import { basePath, loginPath, withBase } from '../utils/base-path'
+import { isLoginRoute, resolveApiErrorMessage } from '../utils/api-errors'
 
 const apiBase = `${basePath}/api`
 const api = axios.create({ baseURL: apiBase, timeout: 60000 })
@@ -14,20 +15,29 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    const msg = err.response?.data?.message || err.message
+    const msg = resolveApiErrorMessage(err)
+    ;(err as { userMessage?: string }).userMessage = msg
+
     if (err.response?.status === 401) {
-      localStorage.removeItem('token')
-      if (!window.location.pathname.includes('/login')) {
+      const onLoginPage = isLoginRoute()
+      const isLoginRequest = err.config?.url?.includes('/auth/login')
+      if (!isLoginRequest) {
+        localStorage.removeItem('token')
+      }
+      if (!onLoginPage && !isLoginRequest) {
         window.location.href = loginPath()
       }
-    } else {
+      // 登录页错误密码：由 Login.vue 展示，避免重复 toast
+    } else if (!isLoginRoute()) {
       showToast(msg)
     }
+
     return Promise.reject(err)
   },
 )
 
 export default api
+export { resolveApiErrorMessage }
 
 export async function uploadFile(file: File, fileType: string) {
   const form = new FormData()

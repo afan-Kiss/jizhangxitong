@@ -32,7 +32,8 @@
     "rotate:worker-token": "node scripts/rotate-worker-token.mjs",
     "rotate:admin-password": "node scripts/rotate-admin-password.mjs",
     "acceptance:remote": "node scripts/remote-acceptance.mjs",
-    "test:subpath": "node scripts/test-subpath-refresh.mjs"
+    "test:subpath": "node scripts/test-subpath-refresh.mjs",
+    "test:login": "node scripts/test-login.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

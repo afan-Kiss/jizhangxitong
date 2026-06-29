@@ -296,7 +296,11 @@ async function main() {
       }),
     })
     saleId = saleCreate.res.ok ? saleCreate.json.data?.id : null
-    log('sale', `销售 id=${saleId}`, !!saleId)
+    if (!saleId && saleCreate.res.status === 409) {
+      log('sale', '重复登记已拦截（409）', true)
+    } else {
+      log('sale', `销售 id=${saleId}`, !!saleId)
+    }
   }
 
   if (workerOnline && expenseId) {

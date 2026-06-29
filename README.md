@@ -33,7 +33,11 @@ npm run db:push
 npm run db:seed
 ```
 
-默认账号：`admin` / `admin123` — **仅开发环境首次 seed 临时账号，生产部署会自动生成强密码，切勿在线上使用默认密码。**
+**登录账号说明：**
+
+- 开发环境首次 `db:seed` 可能创建临时账号 `admin`（密码见 seed 输出），**仅用于本地调试**。
+- 真实使用请以当前环境实际账号密码为准（生产部署后会自动生成强密码，保存在本机 `secrets/initial-admin-password.txt`，勿提交 Git）。
+- 忘记密码时，在本机运行 `npm run rotate:admin-password` 或 `npm run setup:admin` 重置，**不要让员工使用 seed 默认密码登录线上**。
 
 ### 3. 启动阿里云服务端 + 前端
 
