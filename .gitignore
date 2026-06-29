@@ -1,12 +1,15 @@
 node_modules/
 dist/
 .env
+*.env
+deploy.env
 *.db
 exports/
 tmp-uploads/
 data/
 apps/worker/logs/
 reports/
+reports/*password*
 secrets/
 .DS_Store
 scripts/windows/.last-backup-path.txt

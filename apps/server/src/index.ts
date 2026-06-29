@@ -1,12 +1,31 @@
+import './lib/load-env'
 import http from 'http'
-import path from 'path'
-import dotenv from 'dotenv'
 import { createApp } from './app'
 import { config, validateDefaultAdminPassword, validateProductionConfig } from './lib/config'
+import { prisma } from './lib/prisma'
 import { workerHub } from './websocket/worker-hub'
 import { ensureDirs } from './services/file.service'
+import { cleanupLegacyTrialData } from './services/trial-legacy-cleanup'
 
-dotenv.config({ path: path.join(__dirname, '../.env') })
+process.on('uncaughtException', (err) => {
+  console.error('[fatal] uncaughtException:', err)
+  process.exit(1)
+})
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[fatal] unhandledRejection:', reason)
+  process.exit(1)
+})
+
+async function initDatabase() {
+  try {
+    await prisma.$queryRawUnsafe('PRAGMA journal_mode=WAL')
+    await prisma.$queryRawUnsafe('PRAGMA busy_timeout=5000')
+    console.log('[db] SQLite WAL 模式已启用')
+  } catch (err) {
+    console.warn('[db] WAL 设置跳过:', (err as Error).message)
+  }
+}
 
 async function main() {
   const prodWarnings = validateProductionConfig()
@@ -25,6 +44,8 @@ async function main() {
     console.warn(`[开发警告] ${adminWarn}`)
   }
 
+  await initDatabase()
+  await cleanupLegacyTrialData()
   await ensureDirs()
   const app = createApp()
   const server = http.createServer(app)

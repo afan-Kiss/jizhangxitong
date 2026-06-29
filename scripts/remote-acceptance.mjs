@@ -6,6 +6,7 @@ import { spawn } from 'child_process'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs/promises'
+import { RECOMMENDED_URL } from './lib/deploy-env.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(__dirname, '..')
@@ -15,9 +16,9 @@ async function readDeployUrl() {
     const info = JSON.parse(
       await fs.readFile(path.join(ROOT, 'deploy/aliyun/last-deploy-info.json'), 'utf-8'),
     )
-    return info.url
+    return info.recommended || info.url || RECOMMENDED_URL
   } catch {
-    return process.env.ACCEPTANCE_SERVER || `https://xiangyuzhubao.xyz/account/`
+    return process.env.ACCEPTANCE_SERVER || RECOMMENDED_URL
   }
 }
 

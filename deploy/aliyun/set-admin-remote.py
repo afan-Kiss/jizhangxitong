@@ -8,7 +8,6 @@ from pathlib import Path
 import paramiko
 
 HOST = os.environ.get("DEPLOY_HOST", "8.137.126.18")
-PASSWORD = os.environ.get("ADMIN_PASSWORD", "fanfan9724")
 DEPLOY_DIR = "/www/wwwroot/jade-accounting"
 REMOTE_SCRIPT = "/tmp/jade-set-admin.js"
 
@@ -26,6 +25,11 @@ def load_ssh() -> str:
 
 
 def main() -> None:
+    password = os.environ.get("ADMIN_PASSWORD", "")
+    if not password:
+        print("缺少 ADMIN_PASSWORD", file=sys.stderr)
+        sys.exit(1)
+
     ssh = load_ssh()
     if not ssh:
         print("Missing SSH_PASS", file=sys.stderr)
@@ -36,7 +40,7 @@ const bcrypt = require('bcryptjs');
 const {{ PrismaClient }} = require('@prisma/client');
 const p = new PrismaClient();
 (async () => {{
-  const hash = await bcrypt.hash('{PASSWORD.replace("\\\\", "\\\\\\\\").replace("'", "\\\\'")}', 10);
+  const hash = await bcrypt.hash('{password.replace("\\\\", "\\\\\\\\").replace("'", "\\\\'")}', 10);
   await p.user.update({{ where: {{ username: 'admin' }}, data: {{ password: hash }} }});
   console.log('admin password updated');
   await p.$disconnect();

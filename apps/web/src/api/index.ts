@@ -37,19 +37,38 @@ export async function uploadFile(file: File, fileType: string) {
   return res.data.data
 }
 
-export function fileViewUrl(fileId: number) {
-  const token = localStorage.getItem('token')
-  return withBase(`/api/files/${fileId}/view?token=${token}`)
+const accessTokenCache = new Map<number, { token: string; expiresAt: number }>()
+
+export async function getFileAccessUrl(fileId: number, kind: 'view' | 'thumb' = 'view') {
+  const cached = accessTokenCache.get(fileId)
+  if (cached && cached.expiresAt > Date.now() + 30_000) {
+    return withBase(`/api/files/${fileId}/${kind}?accessToken=${encodeURIComponent(cached.token)}`)
+  }
+  const res = await api.post(`/files/${fileId}/access-token`)
+  const { token, expiresAt } = res.data.data
+  accessTokenCache.set(fileId, { token, expiresAt: new Date(expiresAt).getTime() })
+  return withBase(`/api/files/${fileId}/${kind}?accessToken=${encodeURIComponent(token)}`)
 }
 
-export function fileThumbUrl(fileId: number) {
-  const token = localStorage.getItem('token')
-  return withBase(`/api/files/${fileId}/thumb?token=${token}`)
+export async function fileViewUrl(fileId: number) {
+  return getFileAccessUrl(fileId, 'view')
 }
 
-export function braceletImageUrl(braceletId: number) {
-  const token = localStorage.getItem('token')
-  return withBase(`/api/bracelets/detail/${braceletId}/image?token=${token}`)
+export async function fileThumbUrl(fileId: number) {
+  return getFileAccessUrl(fileId, 'thumb')
+}
+
+const braceletTokenCache = new Map<number, { token: string; expiresAt: number }>()
+
+export async function braceletImageUrl(braceletId: number) {
+  const cached = braceletTokenCache.get(braceletId)
+  if (cached && cached.expiresAt > Date.now() + 30_000) {
+    return withBase(`/api/bracelets/detail/${braceletId}/image?accessToken=${encodeURIComponent(cached.token)}`)
+  }
+  const res = await api.post(`/bracelets/detail/${braceletId}/image-access-token`)
+  const { token, expiresAt } = res.data.data
+  braceletTokenCache.set(braceletId, { token, expiresAt: new Date(expiresAt).getTime() })
+  return withBase(`/api/bracelets/detail/${braceletId}/image?accessToken=${encodeURIComponent(token)}`)
 }
 
 export { withBase, loginPath }

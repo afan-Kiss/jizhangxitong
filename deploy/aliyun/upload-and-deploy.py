@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import re
-import secrets
 import sys
 import tempfile
 import zipfile
@@ -12,17 +11,22 @@ from pathlib import Path
 
 import paramiko
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from env_utils import build_server_env, parse_env_text
+
 ROOT = Path(__file__).resolve().parents[2]
 HOST = os.environ.get("DEPLOY_HOST", "8.137.126.18")
 USER = os.environ.get("DEPLOY_USER", "root")
 PASSWORD = os.environ.get("SSH_PASS", "")
 DEPLOY_DIR = "/www/wwwroot/jade-accounting"
-PUBLIC_HTTP_PORT = os.environ.get("JADE_PUBLIC_PORT", "443")
 PUBLIC_PATH = os.environ.get("JADE_PUBLIC_PATH", "/account/")
-PUBLIC_SCHEME = os.environ.get("JADE_PUBLIC_SCHEME", "https")
+# 当前推荐：HTTP + IP（自签名 HTTPS 域名不作为默认入口）
+PUBLIC_SCHEME = os.environ.get("JADE_PUBLIC_SCHEME", "http")
+PUBLIC_HOST = os.environ.get("JADE_PUBLIC_HOST", HOST)
 PUBLIC_DOMAIN = os.environ.get("JADE_PUBLIC_DOMAIN", "xiangyuzhubao.xyz")
-PUBLIC_HOST = os.environ.get("JADE_PUBLIC_HOST", PUBLIC_DOMAIN)
 PUBLIC_URL = f"{PUBLIC_SCHEME}://{PUBLIC_HOST}{PUBLIC_PATH if PUBLIC_PATH.endswith('/') else PUBLIC_PATH + '/'}"
+WS_URL = f"ws://{HOST}{PUBLIC_PATH.rstrip('/')}/ws/worker"
+REMOTE_ENV = f"{DEPLOY_DIR}/apps/server/.env"
 
 SKIP_DIRS = {"node_modules", ".git", "reports", "secrets", ".cursor"}
 SKIP_PARTS = {"apps/worker/logs", "apps/server/exports", "apps/server/tmp-uploads"}
@@ -65,6 +69,11 @@ def run(client: paramiko.SSHClient, cmd: str, timeout: int = 3600) -> int:
     return code
 
 
+def read_remote_env(client: paramiko.SSHClient) -> dict[str, str]:
+    _, stdout, _ = client.exec_command(f"cat {REMOTE_ENV} 2>/dev/null || true", timeout=30)
+    return parse_env_text(stdout.read().decode("utf-8", errors="replace"))
+
+
 def should_skip(rel: str) -> bool:
     parts = rel.replace("\\", "/").split("/")
     if parts[0] in SKIP_DIRS:
@@ -95,45 +104,11 @@ def build_zip(zip_path: Path) -> int:
     return count
 
 
-def build_env() -> str:
-    jwt = secrets.token_hex(32)
-    worker_token = secrets.token_hex(32)
-    origins = f"https://{PUBLIC_DOMAIN},https://www.{PUBLIC_DOMAIN},https://{HOST},http://{HOST}"
-    ws_scheme = "wss" if PUBLIC_SCHEME == "https" else "ws"
-    return f"""NODE_ENV=production
-SERVER_PORT=4731
-PORT=4731
-DATABASE_URL="file:./data/accounting.db"
-JWT_SECRET="{jwt}"
-JWT_EXPIRES_IN=7d
-WORKER_WS_TOKEN="{worker_token}"
-CORS_ORIGIN="{origins}"
-LOCAL_WORKER_REQUIRED=true
-EXPORT_DIR="/www/wwwroot/jade-accounting/exports"
-EXPORT_TMP_DIR="/www/wwwroot/jade-accounting/exports"
-TEMP_UPLOAD_DIR="/www/wwwroot/jade-accounting/apps/server/tmp-uploads"
-EXPORT_TOKEN_TTL_MINUTES=30
-WORKER_RPC_TIMEOUT_MS=30000
-PUBLIC_WEB_DIR="/www/wwwroot/jade-accounting/web"
-"""
-
-
-def sftp_put(client: paramiko.SSHClient, local: Path, remote: str) -> None:
-    print(f"Upload {local.name} -> {remote}")
-    sftp = client.open_sftp()
-    try:
-        sftp.put(str(local), remote)
-    finally:
-        sftp.close()
-
-
-def write_worker_env_local(ws_url: str, worker_token: str) -> None:
+def write_worker_env_local(worker_token: str) -> None:
     worker_env = ROOT / "apps/worker/.env"
-    lines = []
-    if worker_env.exists():
-        lines = worker_env.read_text(encoding="utf-8").splitlines()
+    lines = worker_env.read_text(encoding="utf-8").splitlines() if worker_env.exists() else []
     overrides = {
-        "SERVER_WS_URL": ws_url,
+        "SERVER_WS_URL": WS_URL,
         "WORKER_WS_TOKEN": worker_token,
         "SCANNER_API_URL": "http://127.0.0.1:7789",
         "FILE_BASE_DIR": "D:/jewelry-account-files",
@@ -155,16 +130,52 @@ def write_worker_env_local(ws_url: str, worker_token: str) -> None:
         if k not in seen:
             out.append(f"{k}={v}")
     worker_env.write_text("\n".join(out) + "\n", encoding="utf-8")
-    print(f"Updated local worker .env -> {ws_url}")
+    print(f"本地 Worker 已同步 -> {WS_URL}")
+
+
+def sync_local_token_from_remote(client: paramiko.SSHClient) -> str:
+    remote = read_remote_env(client)
+    token = remote.get("WORKER_WS_TOKEN", "")
+    local_env = ROOT / "apps/worker/.env"
+    local_token = ""
+    if local_env.exists():
+        local = parse_env_text(local_env.read_text(encoding="utf-8"))
+        local_token = local.get("WORKER_WS_TOKEN", "")
+    if token and token != local_token:
+        print(f"[token] 检测到本地与远程不一致，已从远程同步（未轮换）")
+        write_worker_env_local(token)
+    elif token:
+        write_worker_env_local(token)
+    else:
+        print("[token] 警告: 远程 WORKER_WS_TOKEN 为空，请执行 npm run rotate:worker-token", file=sys.stderr)
+    return token
+
+
+def sftp_put(client: paramiko.SSHClient, local: Path, remote: str) -> None:
+    print(f"Upload {local.name} -> {remote}")
+    sftp = client.open_sftp()
+    try:
+        sftp.put(str(local), remote)
+    finally:
+        sftp.close()
 
 
 def main() -> None:
-    env_content = build_env()
-    worker_token = re.search(r'WORKER_WS_TOKEN="([^"]+)"', env_content).group(1)
-    ws_url = f"{ws_scheme}://{PUBLIC_HOST}{PUBLIC_PATH.rstrip('/')}/ws/worker"
-
     client = connect()
     try:
+        existing = read_remote_env(client)
+        env_content, _, worker_token = build_server_env(
+            existing,
+            host=HOST,
+            public_domain=PUBLIC_DOMAIN,
+            force_rotate_worker=False,
+            force_rotate_jwt=False,
+        )
+        if existing.get("WORKER_WS_TOKEN") and existing["WORKER_WS_TOKEN"] == worker_token:
+            print("[deploy] 保留现有 WORKER_WS_TOKEN（未轮换）")
+        else:
+            print("[deploy] 使用新生成的 WORKER_WS_TOKEN（原 token 缺失或过弱）")
+
         with tempfile.TemporaryDirectory() as td:
             zip_path = Path(td) / "jade-accounting.zip"
             env_path = Path(td) / "server.env"
@@ -207,33 +218,30 @@ chmod +x {DEPLOY_DIR}/deploy/aliyun/*.sh 2>/dev/null || true
         if code != 0:
             sys.exit(code)
 
-        run(client, f"curl -fsS http://127.0.0.1:4731/api/health")
-        run(client, f"curl -fsS -o /dev/null -w '%{{http_code}}' http://127.0.0.1:4732/account/")
+        run(client, "curl -fsS http://127.0.0.1:4731/api/health")
         run(client, "export NVM_DIR=/root/.nvm && . /root/.nvm/nvm.sh 2>/dev/null; pm2 status")
 
-        # 80 端口 /account 反代（不影响主播分析系统根路径）
         apply_py = ROOT / "deploy/aliyun/fix-nginx-account80.py"
         if apply_py.exists():
             import subprocess
             subprocess.run([sys.executable, str(apply_py)], check=False, env={**os.environ, **{"SSH_PASS": load_ssh_pass()}})
-        https_py = ROOT / "deploy/aliyun/enable-https-selfsigned.py"
-        if https_py.exists() and PUBLIC_SCHEME == "https":
-            subprocess.run([sys.executable, str(https_py)], check=False, env={**os.environ, **{"SSH_PASS": load_ssh_pass()}})
 
         run(client, f"curl -fsS -o /dev/null -w '%{{http_code}}' http://127.0.0.1{PUBLIC_PATH}")
+
+        sync_local_token_from_remote(client)
 
     finally:
         client.close()
 
-    write_worker_env_local(ws_url, worker_token)
-
-    # 保存部署信息供验收
     info = ROOT / "deploy/aliyun/last-deploy-info.json"
     info.write_text(
-        f'{{"url":"{PUBLIC_URL}","ws":"{ws_url}","host":"{HOST}","port":"{PUBLIC_HTTP_PORT}","path":"{PUBLIC_PATH}"}}',
+        f'{{"url":"{PUBLIC_URL}","ws":"{WS_URL}","host":"{HOST}","recommended":"http://{HOST}/account/","domainNote":"xiangyuzhubao.xyz 待备案/正式证书完成后启用"}}',
         encoding="utf-8",
     )
-    print(f"\n=== 部署完成 ===\n手机访问: {PUBLIC_URL}\nWorker WS: {ws_url}\n")
+    print(f"\n=== 部署完成 ===")
+    print(f"推荐手机访问: http://{HOST}/account/")
+    print(f"Worker WS: {WS_URL}")
+    print(f"域名 HTTPS: 待备案/正式证书完成后启用（当前不推荐自签名入口）\n")
 
 
 if __name__ == "__main__":

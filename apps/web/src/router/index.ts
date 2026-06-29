@@ -17,7 +17,6 @@ const router = createRouter({
     { path: '/bracelets', component: () => import('../views/Bracelets.vue') },
     { path: '/bracelets/:code', component: () => import('../views/BraceletDetail.vue') },
     { path: '/settings', component: () => import('../views/Settings.vue') },
-    { path: '/trial-guide', component: () => import('../views/TrialGuide.vue') },
     { path: '/logs', component: () => import('../views/Logs.vue') },
   ],
 })

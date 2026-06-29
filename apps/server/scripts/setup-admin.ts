@@ -59,8 +59,7 @@ async function main() {
   await fs.writeFile(markerFile, new Date().toISOString(), 'utf-8')
 
   console.log('已生成新 admin 密码并写入 secrets/initial-admin-password.txt')
-  console.log(`新密码（仅显示一次）: ${newPassword}`)
-  console.log('旧密码 admin123 已失效')
+  console.log('旧密码 admin123 已失效（如仍可用请立即检查）')
 }
 
 main()

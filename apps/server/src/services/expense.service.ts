@@ -2,7 +2,9 @@ import { prisma } from '../lib/prisma'
 import { generateNo, toNumber, startOfDay, endOfDay, startOfWeek, startOfMonth } from '../lib/utils'
 import { AuthRequest } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
-import { isTrialModeEnabled } from './trial-mode.service'
+import { clampPage, clampPageSize } from '../lib/pagination'
+import { resolveBraceletBinding } from '../lib/bracelet-bind'
+import { sanitizeFile } from '../lib/serialize'
 
 export interface ExpenseFilter {
   startDate?: string
@@ -42,14 +44,14 @@ function buildWhere(filter: ExpenseFilter) {
   if (filter.braceletCode) where.braceletCode = { contains: filter.braceletCode }
   if (filter.onlyWithBracelet) where.braceletId = { not: null }
   if (filter.needsAttachment) where.needsAttachment = true
-  if (filter.isTrialRun !== undefined) where.isTrialRun = filter.isTrialRun
-  else if (filter.excludeTrial === true) where.isTrialRun = false
+  // 正式业务始终排除遗留试用数据
+  where.isTrialRun = false
   return where
 }
 
 export async function listExpenses(filter: ExpenseFilter) {
-  const page = filter.page || 1
-  const pageSize = filter.pageSize || 20
+  const page = clampPage(filter.page)
+  const pageSize = clampPageSize(filter.pageSize)
   const where = buildWhere(filter)
   const [items, total] = await Promise.all([
     prisma.expense.findMany({
@@ -61,7 +63,14 @@ export async function listExpenses(filter: ExpenseFilter) {
     }),
     prisma.expense.count({ where }),
   ])
-  return { items, total, page, pageSize }
+  const sanitized = items.map((e) => ({
+    ...e,
+    attachments: e.attachments.map((a) => ({
+      ...a,
+      file: a.file ? sanitizeFile(a.file) : a.file,
+    })),
+  }))
+  return { items: sanitized, total, page, pageSize }
 }
 
 export async function getExpense(id: number) {
@@ -94,14 +103,13 @@ export async function createExpense(
   },
   operator: AuthRequest['user'],
 ) {
-  let braceletId = input.braceletId
-  let braceletCode = input.braceletCode?.trim() || null
-  if (braceletCode && !braceletId) {
-    const b = await prisma.bracelet.findUnique({ where: { braceletCode } })
-    if (b) {
-      braceletId = b.id
-      braceletCode = b.braceletCode
-    }
+  if (!input.amount || input.amount <= 0) throw new Error('金额必须大于 0')
+
+  const binding = await resolveBraceletBinding(input.braceletCode, input.braceletId, operator)
+  const braceletId = binding.braceletId
+  const braceletCode = binding.braceletCode
+  if (input.braceletCode?.trim() && !braceletId) {
+    throw new Error('扫码枪系统未找到这只镯子，请确认编号是否扫错。')
   }
 
   let reimbursementStatus = input.reimbursementStatus || 'pending'
@@ -124,7 +132,7 @@ export async function createExpense(
       reimbursementPerson: input.reimbursementPerson,
       reimbursementStatus,
       needsAttachment: input.needsAttachment || false,
-      isTrialRun: await isTrialModeEnabled(),
+      isTrialRun: false,
       createdBy: operator!.userId,
     },
   })
@@ -183,10 +191,14 @@ export async function updateExpense(
 
   const data: Record<string, unknown> = { ...input }
   if (input.occurredAt) data.occurredAt = new Date(input.occurredAt)
-  if (input.braceletCode) {
-    const b = await prisma.bracelet.findUnique({ where: { braceletCode: input.braceletCode.trim() } })
-    data.braceletId = b?.id
-    data.braceletCode = b?.braceletCode || input.braceletCode.trim()
+  if (input.amount !== undefined && input.amount <= 0) throw new Error('金额必须大于 0')
+  if (input.braceletCode !== undefined) {
+    const binding = await resolveBraceletBinding(input.braceletCode, undefined, operator)
+    if (input.braceletCode.trim() && !binding.braceletId) {
+      throw new Error('扫码枪系统未找到这只镯子，请确认编号是否扫错。')
+    }
+    data.braceletId = binding.braceletId
+    data.braceletCode = binding.braceletCode
   }
 
   const expense = await prisma.expense.update({ where: { id }, data })
@@ -334,7 +346,7 @@ export async function getExpenseSummary(period?: string, startDate?: string, end
       start = startOfDay(now)
   }
 
-  const baseWhere = { isVoided: false, occurredAt: { gte: start, lte: end } }
+  const baseWhere = { isVoided: false, isTrialRun: false, occurredAt: { gte: start, lte: end } }
 
   const expenses = await prisma.expense.findMany({ where: baseWhere })
   const totalAmount = expenses.reduce((s, e) => s + toNumber(e.amount), 0)
@@ -355,13 +367,13 @@ export async function getExpenseSummary(period?: string, startDate?: string, end
   const compensationAmount = (byType['客户补偿'] || 0) + (byType['售后补偿'] || 0)
 
   const pendingExpenses = await prisma.expense.findMany({
-    where: { isVoided: false, reimbursementStatus: 'pending', paySource: '员工垫付' },
+    where: { isVoided: false, isTrialRun: false, reimbursementStatus: 'pending', paySource: '员工垫付' },
   })
   const pendingAmount = pendingExpenses.reduce((s, e) => s + toNumber(e.amount), 0)
   const pendingCount = pendingExpenses.length
 
   const needsAttachment = await prisma.expense.count({
-    where: { isVoided: false, needsAttachment: true },
+    where: { isVoided: false, isTrialRun: false, needsAttachment: true },
   })
 
   return {
@@ -382,6 +394,7 @@ export async function listPendingReimbursements() {
   return prisma.expense.findMany({
     where: {
       isVoided: false,
+      isTrialRun: false,
       paySource: '员工垫付',
       reimbursementStatus: 'pending',
     },

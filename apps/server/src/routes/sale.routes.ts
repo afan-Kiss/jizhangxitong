@@ -31,8 +31,17 @@ saleRouter.get('/:id', requirePermission('sale:view'), async (req, res) => {
 })
 
 saleRouter.post('/', requirePermission('sale:create'), async (req: AuthRequest, res) => {
-  const sale = await createSale(req.body, req.user!)
-  res.json({ success: true, data: sale })
+  try {
+    const sale = await createSale(req.body, req.user!)
+    res.json({ success: true, data: sale })
+  } catch (err) {
+    const e = err as Error & { code?: string; statusCode?: number }
+    res.status(e.statusCode || 400).json({
+      success: false,
+      code: e.code,
+      message: e.message,
+    })
+  }
 })
 
 saleRouter.post('/:id/refund', requirePermission('sale:refund'), async (req: AuthRequest, res) => {

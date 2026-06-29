@@ -7,6 +7,9 @@ module.exports = {
       instances: 1,
       autorestart: true,
       max_memory_restart: '512M',
+      restart_delay: 3000,
+      merge_logs: true,
+      time: true,
       env: {
         NODE_ENV: 'production',
         SERVER_PORT: 4731,

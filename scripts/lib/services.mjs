@@ -7,9 +7,11 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import net from 'net'
 
+import { sanitizeReportLine } from './deploy-env.mjs'
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export const ROOT = path.join(__dirname, '..', '..')
-export const SERVER = process.env.ACCEPTANCE_SERVER || 'http://localhost:3001'
+export const SERVER = (process.env.ACCEPTANCE_SERVER || 'http://127.0.0.1:3001').replace(/\/$/, '')
 export const SCANNER = process.env.SCANNER_API_URL || 'http://127.0.0.1:7789'
 export const SCANNER_ROOT = process.env.SCANNER_PROJECT_ROOT || path.join(ROOT, '..', '扫码枪登记出入库系统')
 
@@ -91,19 +93,35 @@ export async function waitForHttp(url, maxSec = 30, label = url) {
 }
 
 export async function ensureServerRunning(logFn) {
-  try {
-    const h = await fetchJson(`${SERVER}/api/health`)
-    if (h.res.ok) {
-      logFn('startup', `服务端已运行 ${SERVER}`)
-      return
-    }
-  } catch { /* start */ }
+  const serverUrl = SERVER.replace(/\/$/, '')
+  for (let i = 0; i < 5; i++) {
+    try {
+      const h = await fetchJson(`${serverUrl}/api/health`)
+      if (h.res.ok) {
+        logFn('startup', `服务端已运行 ${SERVER}`)
+        return
+      }
+    } catch { /* retry */ }
+    await sleep(1000)
+  }
+
+  const isRemote = !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/i.test(serverUrl)
+  if (isRemote) {
+    throw new Error(`远程服务端未就绪: ${serverUrl}/api/health`)
+  }
 
   const port = Number(new URL(SERVER).port || 3001)
   const open = await isPortOpen(port)
   if (open) {
     const owner = await getPortOwner(port)
-    logFn('startup', `端口 ${port} 被占用 pid=${owner?.pid || '?'}，可能非本服务`, false)
+    logFn('startup', `端口 ${port} 被占用 pid=${owner?.pid || '?'}，等待健康检查...`)
+    try {
+      await waitForHttp(`${SERVER}/api/health`, 15, '记账服务端')
+      logFn('startup', `服务端已运行 ${SERVER}`)
+      return
+    } catch {
+      logFn('startup', `端口 ${port} 被占用但健康检查失败`, false)
+    }
   }
 
   logFn('startup', '自动启动服务端...')
@@ -207,7 +225,7 @@ export async function writeMarkdownReport(report, mode) {
     lines.push('')
     const items = report.data[key] || []
     if (!items.length) lines.push('- (无)')
-    else items.forEach((l) => lines.push(`- ${l}`))
+    else items.forEach((l) => lines.push(`- ${sanitizeReportLine(l)}`))
     lines.push('')
   }
   await fs.writeFile(file, lines.join('\n'), 'utf-8')

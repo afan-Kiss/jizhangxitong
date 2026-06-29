@@ -1,6 +1,6 @@
 /**
  * 设置 admin 密码（本地或指定 ADMIN_PASSWORD）
- * 用法: ADMIN_PASSWORD=fanfan9724 node scripts/set-admin-password.mjs
+ * 用法: ADMIN_PASSWORD=your-secret node scripts/set-admin-password.mjs
  */
 import bcrypt from 'bcryptjs'
 import fs from 'fs/promises'

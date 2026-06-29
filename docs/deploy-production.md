@@ -26,11 +26,14 @@ EXPORT_TMP_DIR="/var/jade-account/exports"
 Worker 本地 `.env`（`apps/worker/.env`）：
 
 ```env
-SERVER_WS_URL=wss://your-domain.com/ws/worker
+# 当前推荐（HTTP IP）
+SERVER_WS_URL=ws://8.137.126.18/account/ws/worker
 WORKER_WS_TOKEN="与服务端相同"
 SCANNER_API_URL=http://127.0.0.1:7789
 FILE_BASE_DIR=D:/jewelry-account-files
 ```
+
+域名 `xiangyuzhubao.xyz` HTTPS 待备案/正式证书完成后启用。
 
 ## 构建与启动
 

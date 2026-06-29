@@ -64,36 +64,8 @@ start_pm2() {
 }
 
 nginx_setup() {
-  local conf_src="$DEPLOY_DIR/deploy/aliyun/nginx-jade-accounting.conf"
-  local conf_dst="/www/server/panel/vhost/nginx/jade-accounting.conf"
-  if [[ ! -f "$conf_src" ]]; then
-    log "WARN: nginx config not found, skip"
-    return 0
-  fi
-  if [[ -d /www/server/panel/vhost/nginx ]]; then
-    cp -a "$conf_dst" "/www/backup/nginx-jade-accounting-$(date +%Y%m%d-%H%M%S).conf.bak" 2>/dev/null || true
-    cp "$conf_src" "$conf_dst"
-    log "nginx config -> $conf_dst"
-  fi
-  mkdir -p /etc/aa_nginx/conf.d /www/backup
-  cp -a /etc/aa_nginx/conf.d/jade-accounting.conf "/www/backup/nginx-jade-accounting-conf.d-$(date +%Y%m%d-%H%M%S).bak" 2>/dev/null || true
-  cp "$conf_src" /etc/aa_nginx/conf.d/jade-accounting.conf
-  log "nginx config -> /etc/aa_nginx/conf.d/jade-accounting.conf"
-  local nginx_bin=""
-  if command -v aa_nginx >/dev/null 2>&1; then nginx_bin=aa_nginx
-  elif [[ -x /usr/sbin/aa_nginx ]]; then nginx_bin=/usr/sbin/aa_nginx
-  elif command -v nginx >/dev/null 2>&1; then nginx_bin=nginx
-  fi
-  if [[ -z "$nginx_bin" ]]; then
-    log "WARN: nginx binary not found, skip reload"
-    return 0
-  fi
-  if $nginx_bin -t; then
-    $nginx_bin -s reload || true
-    log "nginx reloaded via $nginx_bin"
-  else
-    fail "nginx -t failed"
-  fi
+  log "nginx: 80 端口 /account/ 由 fix-nginx-account80.py 配置（不部署自签名 SSL 独立站点）"
+  return 0
 }
 
 wait_health() {
@@ -108,20 +80,6 @@ wait_health() {
   fail "health check failed on :${PUBLIC_PORT}"
 }
 
-enable_trial_mode() {
-  log "enable trial_mode_enabled"
-  cd "$DEPLOY_DIR"
-  node -e "
-const { PrismaClient } = require('@prisma/client');
-const p = new PrismaClient();
-p.systemSetting.upsert({
-  where: { settingKey: 'trial_mode_enabled' },
-  create: { settingKey: 'trial_mode_enabled', settingValue: 'true', valueType: 'string' },
-  update: { settingValue: 'true' },
-}).then(() => p.\$disconnect()).catch(e => { console.error(e); process.exit(1); });
-" || log "WARN: trial mode upsert skipped"
-}
-
 main() {
   log "DEPLOY_DIR=$DEPLOY_DIR"
   prepare_dirs
@@ -129,10 +87,9 @@ main() {
   start_pm2
   wait_health
   nginx_setup
-  enable_trial_mode
   log "部署完成"
-  log "手机访问: http://${PUBLIC_IP}:${PUBLIC_HTTP_PORT}/"
-  log "或: http://account.xiangyuzhubao.xyz/ (需 DNS)"
+  log "推荐手机访问: http://8.137.126.18/account/"
+  log "域名 HTTPS: 待备案/正式证书完成后启用"
   log "API: http://127.0.0.1:${PUBLIC_PORT}/api/health"
 }
 

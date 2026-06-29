@@ -3,7 +3,8 @@ import { generateNo, toNumber } from '../lib/utils'
 import { getSettingNumber } from './settings.service'
 import { AuthRequest } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
-import { isTrialModeEnabled } from './trial-mode.service'
+import { resolveBraceletBinding } from '../lib/bracelet-bind'
+import { clampPage, clampPageSize } from '../lib/pagination'
 
 export async function calculateSaleCost(braceletId: number) {
   const bracelet = await prisma.bracelet.findUnique({ where: { id: braceletId } })
@@ -46,19 +47,30 @@ export async function createSale(
   },
   operator: AuthRequest['user'],
 ) {
-  let braceletId = input.braceletId
-  const code = input.braceletCode.trim()
+  if (!input.saleAmount || input.saleAmount <= 0) throw new Error('销售金额必须大于 0')
+
+  const binding = await resolveBraceletBinding(input.braceletCode, input.braceletId, operator)
+  const braceletId = binding.braceletId
+  const code = binding.braceletCode || input.braceletCode.trim()
   if (!braceletId) {
-    const b = await prisma.bracelet.findUnique({ where: { braceletCode: code } })
-    if (!b) throw new Error('镯子不存在，请先同步镯子')
-    braceletId = b.id
+    throw new Error('扫码枪系统未找到这只镯子，请确认编号是否扫错。')
+  }
+
+  const existingSold = await prisma.sale.findFirst({
+    where: { braceletId, status: 'sold' },
+  })
+  if (existingSold) {
+    const err = new Error('这只镯子已经登记销售，不能重复卖。')
+    ;(err as Error & { code: string; statusCode: number }).code = 'SALE_DUPLICATE'
+    ;(err as Error & { statusCode: number }).statusCode = 409
+    throw err
   }
 
   const cost = await calculateSaleCost(braceletId)
   const grossProfit = input.saleAmount - cost.totalCost
-  const deposit = input.depositAmount || 0
-  const finalPayment = input.finalPaymentAmount || input.saleAmount
-  const unpaid = input.unpaidAmount || 0
+  const deposit = input.depositAmount ?? 0
+  const finalPayment = input.finalPaymentAmount ?? input.saleAmount
+  const unpaid = input.unpaidAmount ?? 0
 
   const sale = await prisma.sale.create({
     data: {
@@ -84,7 +96,7 @@ export async function createSale(
       finalProfit: grossProfit,
       soldAt: new Date(input.soldAt),
       status: 'sold',
-      isTrialRun: await isTrialModeEnabled(),
+      isTrialRun: false,
       createdBy: operator!.userId,
     },
   })
@@ -145,9 +157,9 @@ export async function listSales(filter: {
   braceletCode?: string
   status?: string
 }) {
-  const page = filter.page || 1
-  const pageSize = filter.pageSize || 20
-  const where: Record<string, unknown> = {}
+  const page = clampPage(filter.page)
+  const pageSize = clampPageSize(filter.pageSize)
+  const where: Record<string, unknown> = { isTrialRun: false }
   if (filter.platform) where.platform = filter.platform
   if (filter.braceletCode) where.braceletCode = { contains: filter.braceletCode }
   if (filter.status) where.status = filter.status

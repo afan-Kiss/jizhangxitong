@@ -82,13 +82,23 @@ expenseRouter.get('/:id', requirePermission('expense:view'), async (req, res) =>
 })
 
 expenseRouter.post('/', requirePermission('expense:create'), async (req: AuthRequest, res) => {
-  const expense = await createExpense(req.body, req.user!)
-  res.json({ success: true, data: expense })
+  try {
+    const expense = await createExpense(req.body, req.user!)
+    res.json({ success: true, data: expense })
+  } catch (err) {
+    const e = err as Error & { code?: string }
+    res.status(400).json({ success: false, code: e.code, message: e.message })
+  }
 })
 
 expenseRouter.patch('/:id', requirePermission('expense:update'), async (req: AuthRequest, res) => {
-  const expense = await updateExpense(Number(req.params.id), req.body, req.user!)
-  res.json({ success: true, data: expense })
+  try {
+    const expense = await updateExpense(Number(req.params.id), req.body, req.user!)
+    res.json({ success: true, data: expense })
+  } catch (err) {
+    const e = err as Error & { code?: string }
+    res.status(400).json({ success: false, code: e.code, message: e.message })
+  }
 })
 
 expenseRouter.post('/:id/void', requirePermission('expense:void'), async (req: AuthRequest, res) => {

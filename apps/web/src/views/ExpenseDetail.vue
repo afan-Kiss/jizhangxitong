@@ -9,10 +9,14 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const expense = ref<any>(null)
+const thumbUrls = ref<Record<number, string>>({})
 
 onMounted(async () => {
   const res = await api.get(`/expenses/${route.params.id}`)
   expense.value = res.data.data
+  for (const att of expense.value.attachments || []) {
+    thumbUrls.value[att.fileId] = await fileThumbUrl(att.fileId)
+  }
 })
 
 async function voidExpense() {
@@ -53,7 +57,7 @@ async function updateReimbursement(status: string) {
       <h4>凭证图片</h4>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <img v-for="att in expense.attachments" :key="att.id"
-          :src="fileThumbUrl(att.fileId)" style="width:80px;height:80px;object-fit:cover;border-radius:6px;" />
+          :src="thumbUrls[att.fileId]" style="width:80px;height:80px;object-fit:cover;border-radius:6px;" />
       </div>
       <div v-if="!expense.attachments?.length" class="muted">暂无凭证</div>
     </div>

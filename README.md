@@ -33,7 +33,7 @@ npm run db:push
 npm run db:seed
 ```
 
-默认账号：`admin` / `admin123`
+默认账号：`admin` / `admin123` — **仅开发环境首次 seed 临时账号，生产部署会自动生成强密码，切勿在线上使用默认密码。**
 
 ### 3. 启动阿里云服务端 + 前端
 
@@ -55,7 +55,7 @@ Worker 环境变量：
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| SERVER_WS_URL | 记账服务端 WebSocket | ws://localhost:3001/ws/worker |
+| SERVER_WS_URL | 记账服务端 WebSocket | 生产: ws://8.137.126.18/account/ws/worker |
 | SCANNER_API_URL | 扫码枪系统地址（Worker 本地 fallback） | http://127.0.0.1:7789 |
 | FILE_BASE_DIR | 本地图片存储目录 | D:/jewelry-account-files |
 
@@ -309,8 +309,33 @@ Worker 通过 WebSocket 连接 `ws://服务端/ws/worker`，支持：
 
 ## 部署说明（阿里云）
 
-1. 将 `apps/server` 部署到阿里云服务器
-2. 配置 `DATABASE_URL`（可用 MySQL/PostgreSQL，修改 prisma schema provider）
-3. 配置域名和 HTTPS
-4. Worker 的 `SERVER_WS_URL` 改为 `wss://your-domain/ws/worker`
-5. 前端 `vite build` 后部署静态文件或使用 Node 托管
+**当前推荐手机访问：** http://8.137.126.18/account/
+
+**Worker 连接：** `ws://8.137.126.18/account/ws/worker`（写入 `apps/worker/.env` 的 `SERVER_WS_URL`）
+
+**域名 HTTPS：** `xiangyuzhubao.xyz` 待备案/正式证书完成后启用，当前不推荐自签名 HTTPS 入口。
+
+### 一键部署
+
+```bash
+npm run deploy:aliyun
+```
+
+普通部署**不会**轮换 `WORKER_WS_TOKEN`。仅在 token 缺失或过弱时自动生成。
+
+### 运维命令
+
+| 命令 | 说明 |
+|------|------|
+| `npm run deploy:aliyun` | 构建并部署到阿里云 |
+| `npm run rotate:worker-token` | 显式轮换 Worker 连接令牌 |
+| `npm run rotate:admin-password` | 轮换 admin 密码（写入 secrets/，控制台不显示明文） |
+| `npm run acceptance:remote` | 远程验收 |
+| `npm run acceptance:cleanup` | 清理 test_auto_check 测试数据 |
+
+### 部署步骤概要
+
+1. 将 `apps/server` 部署到阿里云服务器（`npm run deploy:aliyun` 自动完成）
+2. 配置 `DATABASE_URL`（当前 SQLite，可后续迁移 MySQL）
+3. 本地 Worker 的 `SERVER_WS_URL` 指向 `ws://8.137.126.18/account/ws/worker`
+4. 前端生产构建使用 `VITE_APP_BASE=/account/`

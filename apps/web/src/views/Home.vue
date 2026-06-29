@@ -18,14 +18,6 @@ const pendingAmount = ref(0)
 const pendingCount = ref(0)
 const recentExpenses = ref<any[]>([])
 const recentLogs = ref<any[]>([])
-const trialModeEnabled = ref(false)
-
-async function loadTrialStatus() {
-  try {
-    const res = await api.get('/trial/status')
-    trialModeEnabled.value = res.data.data.enabled
-  } catch { trialModeEnabled.value = false }
-}
 
 function formatLog(log: any): string {
   const name = log.operatorName || '有人'
@@ -36,8 +28,6 @@ function formatLog(log: any): string {
     create_sale: '登记销售',
     sync_bracelet: '同步镯子',
     export_reimbursement_excel: '导出报销表',
-    cleanup_trial_data: '清理试用数据',
-    promote_trial_to_formal: '试用转正式',
   }
   const action = actionMap[log.action] || log.action
   const code = log.targetCode ? `，${log.targetCode}` : ''
@@ -47,7 +37,6 @@ function formatLog(log: any): string {
 onMounted(async () => {
   await auth.fetchMe()
   await auth.fetchWorkerStatus()
-  await loadTrialStatus()
   const [today, week, month, expenses, logs] = await Promise.all([
     api.get('/expenses/summary?period=today'),
     api.get('/expenses/summary?period=week'),
@@ -74,9 +63,6 @@ function exportThisMonth() {
 
 <template>
   <div class="home page-enter">
-    <div v-if="trialModeEnabled" class="trial-banner" @click="router.push('/trial-guide')">
-      <span class="trial-banner__text">试用模式 · 数据可清理</span>
-    </div>
     <header class="home__header">
       <h1 class="home__title">经营总览</h1>
       <WorkerStatus :online="auth.workerOnline" compact />
@@ -139,7 +125,6 @@ function exportThisMonth() {
           :pay-source="item.paySource"
           :bracelet-code="item.braceletCode"
           :occurred-at="item.occurredAt"
-          :is-trial-run="item.isTrialRun"
         />
       </div>
     </LuxuryCard>
@@ -201,19 +186,4 @@ function exportThisMonth() {
 .home__log:last-child { border-bottom: none; }
 .home__pending { cursor: pointer; }
 .home__expense-row { cursor: pointer; }
-.trial-banner {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  margin: -4px 0 10px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: linear-gradient(90deg, rgba(237,108,2,0.1), rgba(198,161,91,0.12));
-  border: 1px solid rgba(237,108,2,0.2);
-  color: #b85a00;
-  font-size: 12px;
-  text-align: center;
-  cursor: pointer;
-}
-.trial-banner__text { display: block; }
 </style>

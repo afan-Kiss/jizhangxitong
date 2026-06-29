@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '../lib/prisma'
 import { signToken } from '../lib/jwt'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { sanitizeUser } from '../lib/serialize'
 
 export const authRouter = Router()
 
@@ -40,7 +41,7 @@ authRouter.get('/me', authMiddleware, async (req: AuthRequest, res) => {
   res.json({
     success: true,
     data: {
-      user,
+      user: sanitizeUser(user),
       permissions: req.user!.permissions,
     },
   })

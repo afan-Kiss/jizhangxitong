@@ -27,7 +27,7 @@ onMounted(async () => {
     const d = await api.get(`/bracelets/detail/${b.id}`)
     detail.value = d.data.data
     if (detail.value.bracelet.hasImage) {
-      imageUrl.value = braceletImageUrl(detail.value.bracelet.id)
+      imageUrl.value = await braceletImageUrl(detail.value.bracelet.id)
     }
   } catch (err: any) {
     showToast(err.response?.data?.message || '加载失败')

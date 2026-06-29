@@ -15,7 +15,7 @@ import {
   settingsRouter,
 } from './routes/settings.routes'
 import { maintenanceRouter } from './routes/maintenance.routes'
-import { trialRouter } from './routes/trial.routes'
+import { getSystemStatus } from './services/system-status.service'
 
 export function createApp() {
   const app = express()
@@ -24,6 +24,11 @@ export function createApp() {
 
   app.get('/api/health', (_req, res) => {
     res.json({ success: true, message: '和田玉镯子记账系统运行中' })
+  })
+
+  app.get('/api/system/status', async (_req, res) => {
+    const data = await getSystemStatus()
+    res.json({ success: true, data })
   })
 
   app.use('/api/auth', authRouter)
@@ -37,7 +42,6 @@ export function createApp() {
   app.use('/api/operation-logs', logRouter)
   app.use('/api/permissions', permissionRouter)
   app.use('/api/maintenance', maintenanceRouter)
-  app.use('/api/trial', trialRouter)
 
   attachAccountWeb(app)
 

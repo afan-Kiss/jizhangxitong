@@ -28,10 +28,9 @@
     "health-check": "node scripts/system-health-check.mjs",
     "check:autostart": "node scripts/check-autostart.mjs",
     "check:backup": "node scripts/check-backup-status.mjs",
-    "trial:prep": "node scripts/trial-prep.mjs",
-    "trial:run": "node scripts/trial-run.mjs",
-    "trial:cleanup": "node scripts/trial-cleanup.mjs",
     "deploy:aliyun": "node scripts/deploy-aliyun.mjs",
+    "rotate:worker-token": "node scripts/rotate-worker-token.mjs",
+    "rotate:admin-password": "node scripts/rotate-admin-password.mjs",
     "acceptance:remote": "node scripts/remote-acceptance.mjs",
     "test:subpath": "node scripts/test-subpath-refresh.mjs"
   },

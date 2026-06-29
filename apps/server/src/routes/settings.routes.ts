@@ -4,6 +4,7 @@ import { getConfigOptions, getSettings, updateSetting } from '../services/settin
 import { writeOperationLog } from '../services/operation-log.service'
 import { prisma } from '../lib/prisma'
 import { PERMISSIONS, PERMISSION_LABELS } from '@jade-account/shared'
+import { sanitizeUser, sanitizeUsers } from '../lib/serialize'
 
 export const settingsRouter = Router()
 settingsRouter.use(authMiddleware)
@@ -60,10 +61,21 @@ permissionRouter.get('/roles', requirePermission('permission:manage'), async (_r
   const roles = await prisma.role.findMany({
     include: {
       rolePermissions: { include: { permission: true } },
-      userRoles: { include: { user: true } },
+      userRoles: {
+        include: {
+          user: true,
+        },
+      },
     },
   })
-  res.json({ success: true, data: roles })
+  const data = roles.map((role) => ({
+    ...role,
+    userRoles: role.userRoles.map((ur) => ({
+      ...ur,
+      user: sanitizeUser(ur.user),
+    })),
+  }))
+  res.json({ success: true, data })
 })
 
 permissionRouter.post('/roles', requirePermission('permission:manage'), async (req: AuthRequest, res) => {
@@ -135,7 +147,7 @@ permissionRouter.get('/users', requirePermission('permission:manage'), async (_r
   const users = await prisma.user.findMany({
     include: { userRoles: { include: { role: true } } },
   })
-  res.json({ success: true, data: users })
+  res.json({ success: true, data: sanitizeUsers(users) })
 })
 
 export async function seedPermissions() {

@@ -40,7 +40,7 @@ async function main() {
   const cleanup = await fetchJson(`${SERVER}/api/maintenance/cleanup-test-data`, {
     method: 'POST',
     headers: authHeaders(token),
-    body: JSON.stringify({ force: process.env.NODE_ENV === 'production' }),
+    body: JSON.stringify({ force: true }),
   })
 
   if (!cleanup.res.ok) {

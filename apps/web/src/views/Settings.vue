@@ -15,34 +15,6 @@ const auth = useAuthStore()
 const canManagePermission = computed(() => auth.hasPermission('permission:manage'))
 const settings = ref<any>({})
 const workerStatus = ref<any>({})
-const trialPreview = ref<any>(null)
-
-async function loadTrial() {
-  const res = await api.get('/trial/status')
-  trialPreview.value = res.data.data.preview
-}
-
-async function toggleTrialMode() {
-  const next = settings.value.trial_mode_enabled === 'true' ? 'false' : 'true'
-  await api.patch('/settings/trial_mode_enabled', { value: next })
-  settings.value.trial_mode_enabled = next
-  showToast(next === 'true' ? '已开启试用模式' : '已关闭试用模式')
-  await loadTrial()
-}
-
-async function cleanupTrial() {
-  if (!confirm('确定清理所有试用数据？支出将作废、销售将退款，不删本地图片。')) return
-  const res = await api.post('/trial/cleanup')
-  showToast(`已清理 ${res.data.data.expensesVoided.length} 笔支出`)
-  await loadTrial()
-}
-
-async function promoteTrial() {
-  if (!confirm('确定将全部试用数据转为正式？')) return
-  const res = await api.post('/trial/promote', { all: true })
-  showToast(`已转正式：${res.data.data.expenseCount} 笔支出`)
-  await loadTrial()
-}
 
 onMounted(async () => {
   await auth.fetchMe()
@@ -53,7 +25,6 @@ onMounted(async () => {
   ])
   settings.value = settingsRes.data.data.settings
   workerStatus.value = workerRes.data.data
-  await loadTrial()
 })
 
 async function saveSetting(key: string, label: string) {
@@ -106,24 +77,6 @@ function logout() {
       <van-cell title="顺丰快递费" :value="`¥${settings.default_sf_express_fee}`" is-link @click="saveSetting('default_sf_express_fee', '快递费')" />
     </LuxuryCard>
 
-    <LuxuryCard gold>
-      <div class="section-title">试用模式</div>
-      <van-cell title="开启试用模式">
-        <template #value>
-          <van-switch :model-value="settings.trial_mode_enabled === 'true'" size="20" @update:model-value="toggleTrialMode" />
-        </template>
-      </van-cell>
-      <van-cell title="试用流程说明" is-link @click="router.push('/trial-guide')" />
-      <div v-if="trialPreview" class="trial-stats muted">
-        待处理试用：{{ trialPreview.expenseCount }} 笔支出 ¥{{ trialPreview.expenseAmount?.toFixed?.(2) || trialPreview.expenseAmount }}，
-        {{ trialPreview.saleCount }} 笔销售
-      </div>
-      <div class="trial-btns">
-        <van-button size="small" type="warning" plain @click="cleanupTrial">清理试用数据</van-button>
-        <van-button size="small" type="primary" plain @click="promoteTrial">试用转正式</van-button>
-      </div>
-    </LuxuryCard>
-
     <LuxuryCard>
       <van-cell title="操作日志" is-link @click="router.push('/logs')" />
       <van-cell title="未报销列表" is-link @click="router.push('/reimbursements')" />
@@ -149,8 +102,6 @@ function logout() {
   font-size: 15px;
 }
 .logout-btn:active { transform: scale(0.97); }
-.trial-stats { padding: 8px 16px; font-size: 13px; }
-.trial-btns { display: flex; gap: 8px; padding: 8px 16px 12px; }
 .mobile-tip {
   margin: 0;
   padding: 0 16px 14px;

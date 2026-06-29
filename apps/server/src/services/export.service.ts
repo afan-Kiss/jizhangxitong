@@ -7,10 +7,34 @@ import { prisma } from '../lib/prisma'
 import { config } from '../lib/config'
 import { formatDateMD, generateNo, toNumber } from '../lib/utils'
 import { buildWhere, ExpenseFilter } from './expense.service'
-import { readFilesForExport } from './file.service'
+import { readSingleFileForExport } from './file.service'
 import { writeOperationLog } from './operation-log.service'
 import { AuthRequest } from '../middleware/auth'
-import { isTrialModeEnabled } from './trial-mode.service'
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+function validateExportDates(filter: ExpenseFilter) {
+  if (filter.startDate && !DATE_RE.test(filter.startDate)) {
+    throw new Error('startDate 格式必须为 yyyy-mm-dd')
+  }
+  if (filter.endDate && !DATE_RE.test(filter.endDate)) {
+    throw new Error('endDate 格式必须为 yyyy-mm-dd')
+  }
+}
+
+function sanitizeExportFileName(startDate: string, endDate: string) {
+  const safe = (s: string) => s.replace(/[^0-9-]/g, '').slice(0, 10) || 'unknown'
+  return `和田玉报销明细_${safe(startDate)}_${safe(endDate)}.xlsx`
+}
+
+function assertExportPath(filePath: string) {
+  const exportRoot = path.resolve(config.exportDir)
+  const resolved = path.resolve(filePath)
+  if (!resolved.startsWith(exportRoot + path.sep) && resolved !== exportRoot) {
+    throw new Error('非法导出路径')
+  }
+  return resolved
+}
 
 interface ExportRow {
   isMain: boolean
@@ -54,12 +78,8 @@ function buildRemark(expense: {
 }
 
 export async function previewReimbursementExport(filter: ExpenseFilter) {
-  const trialMode = await isTrialModeEnabled()
-  const where = buildWhere({
-    ...filter,
-    isVoided: false,
-    ...(trialMode ? { isTrialRun: true } : { excludeTrial: true }),
-  })
+  validateExportDates(filter)
+  const where = buildWhere({ ...filter, isVoided: false })
   const expenses = await prisma.expense.findMany({
     where,
     include: { attachments: { include: { file: true }, orderBy: { sortOrder: 'asc' } } },
@@ -90,38 +110,40 @@ export async function createReimbursementExport(
   filter: ExpenseFilter,
   operator: AuthRequest['user'],
 ) {
+  validateExportDates(filter)
   const exportNo = generateNo('EXP')
-  const trialMode = await isTrialModeEnabled()
   const task = await prisma.exportTask.create({
     data: {
       exportNo,
       exportType: 'reimbursement_excel',
       filtersJson: JSON.stringify(filter),
       status: 'running',
-      isTrialRun: trialMode,
+      isTrialRun: false,
       createdBy: operator!.userId,
     },
   })
 
   try {
-    const where = buildWhere({
-      ...filter,
-      isVoided: false,
-      ...(trialMode ? { isTrialRun: true } : { excludeTrial: true }),
-    })
+    const where = buildWhere({ ...filter, isVoided: false })
     const expenses = await prisma.expense.findMany({
       where,
       include: { attachments: { include: { file: true }, orderBy: { sortOrder: 'asc' } } },
       orderBy: { occurredAt: 'asc' },
     })
 
+    const creatorIds = [...new Set(expenses.map((e) => e.createdBy))]
+    const creators = await prisma.user.findMany({
+      where: { id: { in: creatorIds } },
+      select: { id: true, name: true },
+    })
+    const creatorMap = new Map(creators.map((c) => [c.id, c.name]))
+
     const rows: ExportRow[] = []
     let seq = 1
     const fileIds: number[] = []
 
     for (const expense of expenses) {
-      const creator = await prisma.user.findUnique({ where: { id: expense.createdBy } })
-      const person = expense.reimbursementPerson || creator?.name || ''
+      const person = expense.reimbursementPerson || creatorMap.get(expense.createdBy) || ''
       const dateStr = formatDateMD(expense.occurredAt)
       const summary = buildSummary(expense)
       const attachments = expense.attachments
@@ -179,14 +201,26 @@ export async function createReimbursementExport(
 
     const uniqueFileIds = [...new Set(fileIds)]
     const fileMap = new Map<number, { buffer: Buffer; mimeType: string }>()
+    const fileReadFailed = new Set<number>()
 
-    if (uniqueFileIds.length > 0) {
-      const files = await readFilesForExport(uniqueFileIds)
-      for (const f of files) {
-        fileMap.set(f.fileId, {
-          buffer: Buffer.from(f.buffer, 'base64'),
-          mimeType: f.mimeType,
-        })
+    for (const fid of uniqueFileIds) {
+      try {
+        const img = await readSingleFileForExport(fid)
+        if (img) {
+          fileMap.set(fid, { buffer: img.buffer, mimeType: img.mimeType })
+        } else {
+          fileReadFailed.add(fid)
+        }
+      } catch {
+        fileReadFailed.add(fid)
+        await writeOperationLog({
+          module: 'export',
+          action: 'export_image_read_failed',
+          targetType: 'file',
+          targetId: fid,
+          afterJson: { exportTaskId: task.id },
+          operator,
+        }).catch(() => {})
       }
     }
 
@@ -239,8 +273,12 @@ export async function createReimbursementExport(
           tl: { col: 6, row: rowIndex - 1 },
           ext: { width: 150, height: 100 },
         })
+      } else if (row.fileId && fileReadFailed.has(row.fileId)) {
+        excelRow.getCell(7).value = '图片读取失败'
       } else if (row.isMain) {
         excelRow.getCell(7).value = '缺少付款截图'
+      } else if (row.fileId) {
+        excelRow.getCell(7).value = '图片读取失败'
       }
 
       for (let c = 1; c <= 8; c++) {
@@ -280,8 +318,8 @@ export async function createReimbursementExport(
 
     const startDate = filter.startDate || 'unknown'
     const endDate = filter.endDate || 'unknown'
-    const fileName = `和田玉报销明细_${startDate}_${endDate}.xlsx`
-    const filePath = path.join(config.exportDir, fileName)
+    const fileName = sanitizeExportFileName(startDate, endDate)
+    const filePath = assertExportPath(path.join(config.exportDir, fileName))
     await fs.mkdir(config.exportDir, { recursive: true })
     await workbook.xlsx.writeFile(filePath)
 
@@ -334,10 +372,19 @@ export async function getExportTask(id: number) {
 
 export async function downloadExport(id: number, token: string) {
   const task = await prisma.exportTask.findUnique({ where: { id } })
-  if (!task || task.downloadToken !== token) throw new Error('下载链接无效')
-  if (!task.downloadExpiresAt || task.downloadExpiresAt < new Date()) throw new Error('下载链接已过期')
+  if (!task || task.downloadToken !== token) {
+    const err = new Error('下载链接无效')
+    ;(err as Error & { statusCode: number }).statusCode = 403
+    throw err
+  }
+  if (!task.downloadExpiresAt || task.downloadExpiresAt < new Date()) {
+    const err = new Error('下载链接已过期')
+    ;(err as Error & { statusCode: number }).statusCode = 403
+    throw err
+  }
   if (!task.filePath) throw new Error('文件不存在')
-  const buffer = await fs.readFile(task.filePath)
-  const fileName = path.basename(task.filePath)
+  const safePath = assertExportPath(task.filePath)
+  const buffer = await fs.readFile(safePath)
+  const fileName = path.basename(safePath)
   return { buffer, fileName }
 }

@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authMiddleware, requirePermission, AuthRequest } from '../middleware/auth'
+import { authMiddleware, requirePermission, AuthRequest, getUserPermissions } from '../middleware/auth'
 import { verifyToken } from '../lib/jwt'
 import { workerHub } from '../websocket/worker-hub'
 import {
@@ -12,6 +12,7 @@ import {
 } from '../services/bracelet.service'
 import { createCostAdjustment } from '../services/sale.service'
 import { ERROR_CODES } from '@jade-account/shared'
+import { createBraceletImageAccessToken, verifyBraceletImageAccessToken } from '../lib/file-access-token'
 
 export const braceletRouter = Router()
 braceletRouter.use(authMiddleware)
@@ -21,15 +22,41 @@ braceletRouter.get('/search', requirePermission('bracelet:view'), async (req, re
   res.json({ success: true, data: items })
 })
 
+braceletRouter.post('/detail/:id/image-access-token', requirePermission('bracelet:view'), async (req: AuthRequest, res) => {
+  const braceletId = Number(req.params.id)
+  const token = createBraceletImageAccessToken(req.user!.userId, braceletId)
+  res.json({ success: true, data: token })
+})
+
 braceletRouter.get('/detail/:id/image', async (req, res) => {
   try {
-    const token = req.headers.authorization?.slice(7) || String(req.query.token || '')
-    if (!token) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
+    const braceletId = Number(req.params.id)
+    const accessToken = String(req.query.accessToken || '')
+    if (accessToken) {
+      const payload = verifyBraceletImageAccessToken(accessToken)
+      if (payload.braceletId !== braceletId) {
+        res.status(403).json({ success: false, message: '无效的文件访问令牌' })
+        return
+      }
+      const perms = await getUserPermissions(payload.userId)
+      if (!perms.includes('bracelet:view')) {
+        res.status(403).json({ success: false, message: '无权限查看此图片' })
+        return
+      }
+    } else {
+      const header = req.headers.authorization
+      if (!header?.startsWith('Bearer ')) {
+        res.status(401).json({ success: false, message: '未登录' })
+        return
+      }
+      const payload = verifyToken(header.slice(7))
+      const perms = await getUserPermissions(payload.userId)
+      if (!perms.includes('bracelet:view')) {
+        res.status(403).json({ success: false, message: '无权限查看此图片' })
+        return
+      }
     }
-    verifyToken(token)
-    const file = await getBraceletImage(Number(req.params.id))
+    const file = await getBraceletImage(braceletId)
     res.setHeader('Content-Type', file.mimeType)
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.originalName)}"`)
     res.send(file.buffer)
