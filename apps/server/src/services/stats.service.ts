@@ -1,89 +1,24 @@
+import { getExpenseSummary } from './expense.service'
+import { prisma } from '../lib/prisma'
+import { startOfDay, endOfDay, startOfMonth } from '../lib/utils'
 import {
-  isEffectiveSale,
+  calculateProfit,
+  calculateEffectiveSales,
+  PROFIT_DEDUCT_EXPENSE_INCLUDE,
+  EFFECTIVE_SALES_RULE_HINT,
+} from '../finance/core-ledger'
+
+export {
+  saleProfitRow,
+  calculateProfit,
+  calculateEffectiveSales,
+  PROFIT_DEDUCT_EXPENSE_INCLUDE,
   EFFECTIVE_SALES_RULE_HINT,
   isConfirmedRefund,
-  PROFIT_DEDUCTING_EXPENSE_TYPES,
-  isProfitDeductingExpense,
-} from '@jade-account/shared'
-import { prisma } from '../lib/prisma'
-import { toNumber, startOfDay, endOfDay, startOfMonth } from '../lib/utils'
-import { getExpenseSummary } from './expense.service'
+} from '../finance/core-ledger'
 
-export const PROFIT_DEDUCT_EXPENSE_INCLUDE = {
-  where: {
-    isVoided: false,
-    OR: [
-      { expenseType: { in: [...PROFIT_DEDUCTING_EXPENSE_TYPES] } },
-      {
-        businessType: {
-          in: ['customer_refund', 'customer_compensation', 'after_sale_compensation', 'platform_fee'],
-        },
-      },
-    ],
-  },
-}
-
-/** @deprecated use PROFIT_DEDUCT_EXPENSE_INCLUDE */
-export const COMPENSATION_EXPENSE_INCLUDE = PROFIT_DEDUCT_EXPENSE_INCLUDE
-
-function resolveCustomerPaymentDeductions(sale: {
-  compensationAmount?: unknown
-  expenses?: {
-    expenseType: string
-    amount: unknown
-    isVoided?: boolean
-    businessType?: string | null
-    saleId?: number | null
-  }[]
-}): number {
-  if (sale.expenses?.length) {
-    return sale.expenses
-      .filter((e) => !e.isVoided && isProfitDeductingExpense(e))
-      .reduce((s, e) => s + toNumber(e.amount as string | number), 0)
-  }
-  return toNumber(sale.compensationAmount as string | number)
-}
-
-function confirmedRefundSum(refunds?: { refundAmount: unknown; status?: string | null }[]): number {
-  return (refunds || [])
-    .filter((r) => isConfirmedRefund(r.status))
-    .reduce((s, r) => s + toNumber(r.refundAmount as string | number), 0)
-}
-
-function saleProfitRow(sale: {
-  saleAmount: unknown
-  totalCostSnapshot: unknown
-  grossProfit: unknown
-  finalProfit: unknown
-  compensationAmount?: unknown
-  status: string
-  refunds?: { refundAmount: unknown; status?: string | null }[]
-  expenses?: {
-    expenseType: string
-    amount: unknown
-    isVoided?: boolean
-    businessType?: string | null
-    saleId?: number | null
-  }[]
-}) {
-  const refundSum = confirmedRefundSum(sale.refunds)
-  const saleAmount = toNumber(sale.saleAmount as string | number)
-  const cost = toNumber(sale.totalCostSnapshot as string | number)
-  const gross = toNumber(sale.grossProfit as string | number)
-  const customerPaymentDeduction = resolveCustomerPaymentDeductions(sale)
-  const profit = gross - refundSum - customerPaymentDeduction
-  const margin = saleAmount > 0 ? (profit / saleAmount) * 100 : 0
-  return {
-    saleAmount,
-    cost,
-    grossProfit: gross,
-    refundAmount: refundSum,
-    compensationAmount: customerPaymentDeduction,
-    customerPaymentDeduction,
-    profit,
-    profitMargin: Math.round(margin * 100) / 100,
-  }
-}
+/** @deprecated alias */
+export { PROFIT_DEDUCT_EXPENSE_INCLUDE as COMPENSATION_EXPENSE_INCLUDE } from '../finance/core-ledger'
 
 export async function getHomeDashboard() {
   const expenseToday = await getExpenseSummary('today')
@@ -106,9 +41,9 @@ export async function getHomeDashboard() {
   let todaySaleAmount = 0
   let todayProfit = 0
   for (const s of todaySales) {
-    const row = saleProfitRow(s)
-    todaySaleAmount += row.saleAmount
-    todayProfit += row.profit
+    const fin = calculateProfit(s)
+    todaySaleAmount += fin.income
+    todayProfit += fin.netProfit
   }
 
   return {
@@ -161,22 +96,18 @@ export async function getSalesSummary(period?: string, startDate?: string, endDa
   let totalCost = 0
   let totalProfit = 0
   let totalRefund = 0
-  let effectiveSaleAmount = 0
-  let effectiveOrderCount = 0
 
   for (const s of sales) {
-    const row = saleProfitRow(s)
+    const fin = calculateProfit(s)
     if (s.status === 'sold') {
-      totalSaleAmount += row.saleAmount
-      totalCost += row.cost
-      totalProfit += row.profit
-      totalRefund += row.refundAmount
-    }
-    if (isEffectiveSale(s.status, s.afterSaleStatus)) {
-      effectiveSaleAmount += row.saleAmount - row.refundAmount
-      effectiveOrderCount += 1
+      totalSaleAmount += fin.income
+      totalCost += fin.cost
+      totalProfit += fin.netProfit
+      totalRefund += fin.refund
     }
   }
+
+  const effective = calculateEffectiveSales(sales)
 
   return {
     period: { start, end },
@@ -184,8 +115,8 @@ export async function getSalesSummary(period?: string, startDate?: string, endDa
     totalCost,
     totalProfit,
     totalRefund,
-    effectiveSaleAmount,
-    effectiveOrderCount,
+    effectiveSaleAmount: effective.effectiveSaleAmount,
+    effectiveOrderCount: effective.effectiveOrderCount,
     ruleHint: EFFECTIVE_SALES_RULE_HINT,
   }
 }
@@ -212,5 +143,3 @@ export async function getMonthlyReport(year: number, month: number) {
     ruleHint: EFFECTIVE_SALES_RULE_HINT,
   }
 }
-
-export { saleProfitRow, EFFECTIVE_SALES_RULE_HINT, isConfirmedRefund }

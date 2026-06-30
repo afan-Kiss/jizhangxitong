@@ -4,8 +4,8 @@ import { toNumber } from '../lib/utils'
 import { AuthRequest } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
 import { findBraceletByExactCode, presentBracelet } from './bracelet.service'
-import { calculateSaleCost } from './sale.service'
-import { saleProfitRow, PROFIT_DEDUCT_EXPENSE_INCLUDE } from './stats.service'
+import { calculateSaleCost } from '../finance/core-ledger'
+import { saleProfitRow, PROFIT_DEDUCT_EXPENSE_INCLUDE } from '../finance/core-ledger'
 
 function buildGoodsProfitHint(saleStatus: string, profit: number): string {
   if (saleStatus === 'refunded') return '这件已经退款，利润按退款后计算'

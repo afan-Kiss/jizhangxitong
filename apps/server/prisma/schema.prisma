@@ -256,6 +256,29 @@ model LocalWorkerConnection {
   updatedAt     DateTime @updatedAt
 }
 
+/// 财务分录表 — 所有金额追溯与重算的唯一数据来源
+model FinanceLedger {
+  id           Int      @id @default(autoincrement())
+  entryType    String
+  refType      String
+  refId        String
+  saleId       Int?
+  braceletId   Int?
+  expenseId    Int?
+  category     String
+  amount       Decimal
+  occurredAt   DateTime
+  metadataJson String?
+  createdAt    DateTime @default(now())
+
+  @@index([saleId])
+  @@index([braceletId])
+  @@index([expenseId])
+  @@index([refType, refId])
+  @@index([category])
+  @@index([occurredAt])
+}
+
 model ExportTask {
   id                Int       @id @default(autoincrement())
   exportNo          String    @unique

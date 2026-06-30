@@ -19,7 +19,7 @@ import {
   presentGoods,
   refreshBraceletCostTotal,
 } from './goods.service'
-import { calculateSaleCost } from './sale.service'
+import { calculateSaleCost, calculateProfit, syncSaleLedger } from '../finance/core-ledger'
 
 export type ScanSource = 'scanner' | 'manual' | 'paste'
 
@@ -417,13 +417,20 @@ export async function bindOrderToGoods(
         totalCostSnapshot: cost.totalCost,
         grossProfit: -cost.totalCost,
         compensationAmount: 0,
-        finalProfit: -cost.totalCost,
+        finalProfit: calculateProfit({
+          saleAmount: 0,
+          totalCostSnapshot: cost.totalCost,
+          grossProfit: -cost.totalCost,
+          refunds: [],
+          expenses: [],
+        }).netProfit,
         soldAt: new Date(),
         status: 'customer_hold',
         isTrialRun: false,
         createdBy: operator!.userId,
       },
     })
+    await syncSaleLedger(newSale.id)
 
     await prisma.scanOrderDraft.delete({ where: { id: draft.id } })
 
@@ -471,9 +478,16 @@ export async function bindOrderToGoods(
         costAdjustmentSnapshot: cost.costAdjustment,
         totalCostSnapshot: cost.totalCost,
         grossProfit: toNumber(sale.saleAmount) - cost.totalCost,
-        finalProfit: toNumber(sale.saleAmount) - cost.totalCost,
+        finalProfit: calculateProfit({
+          saleAmount: sale.saleAmount,
+          totalCostSnapshot: cost.totalCost,
+          grossProfit: toNumber(sale.saleAmount) - cost.totalCost,
+          refunds: [],
+          expenses: [],
+        }).netProfit,
       },
     })
+    await syncSaleLedger(sale.id)
     const orphanExpenses = await prisma.expense.count({ where: { braceletId: placeholderId } })
     const orphanSales = await prisma.sale.count({ where: { braceletId: placeholderId, id: { not: sale.id } } })
     if (orphanExpenses === 0 && orphanSales === 0) {
@@ -726,13 +740,20 @@ export async function createSimpleOrderFromScan(
       totalCostSnapshot: cost.totalCost,
       grossProfit: saleAmount - cost.totalCost,
       compensationAmount: 0,
-      finalProfit: saleAmount - cost.totalCost,
+      finalProfit: calculateProfit({
+        saleAmount,
+        totalCostSnapshot: cost.totalCost,
+        grossProfit: saleAmount - cost.totalCost,
+        refunds: [],
+        expenses: [],
+      }).netProfit,
       soldAt: new Date(),
       status: saleAmount > 0 ? 'sold' : 'customer_hold',
       isTrialRun: false,
       createdBy: operator!.userId,
     },
   })
+  await syncSaleLedger(sale.id)
 
   await recordScan({
     scanCode: orderNo,

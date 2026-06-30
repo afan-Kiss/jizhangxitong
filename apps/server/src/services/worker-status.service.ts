@@ -14,12 +14,14 @@ export type WorkerOfflineReason =
 export async function getWorkerStatusDetail() {
   const scannerSettings = await getScannerSettings()
   const hubDetail = workerHub.getConnectionDetail()
-  const conn = await prisma.localWorkerConnection.findFirst({
-    orderBy: { lastSeenAt: 'desc' },
-  })
+  const conn = hubDetail.socketOpen && hubDetail.workerId
+    ? await prisma.localWorkerConnection.findUnique({ where: { workerId: hubDetail.workerId } })
+    : null
 
   const serverNow = new Date()
-  const lastSeenAt = hubDetail.lastHeartbeatAt || conn?.lastSeenAt || null
+  const lastSeenAt = hubDetail.socketOpen
+    ? (hubDetail.lastHeartbeatAt || conn?.lastSeenAt || null)
+    : null
   const secondsSinceLastSeen = lastSeenAt
     ? Math.floor((serverNow.getTime() - lastSeenAt.getTime()) / 1000)
     : null
@@ -54,9 +56,9 @@ export async function getWorkerStatusDetail() {
     online,
     reason,
     message,
-    workerId: hubDetail.workerId || conn?.workerId || null,
-    workerName: hubDetail.workerName || conn?.workerName || null,
-    lastSeenAt: lastSeenAt?.toISOString() || conn?.lastSeenAt?.toISOString() || null,
+    workerId: hubDetail.socketOpen ? hubDetail.workerId : null,
+    workerName: hubDetail.socketOpen ? hubDetail.workerName : null,
+    lastSeenAt: lastSeenAt?.toISOString() || null,
     lastHeartbeatAt: hubDetail.lastHeartbeatAt?.toISOString() || null,
     connectedAt: hubDetail.connectedAt?.toISOString() || null,
     serverNow: serverNow.toISOString(),

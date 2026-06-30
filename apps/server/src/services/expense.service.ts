@@ -16,6 +16,7 @@ import { sanitizeFile } from '../lib/serialize'
 import { refreshBraceletCostTotal } from './goods.service'
 import { getQianfanOrderUrlTemplate, isQianfanOrderLinkEnabled } from './settings.service'
 import { getSale } from './sale.service'
+import { calculateExpenseImpact, syncExpenseLedger } from '../finance/core-ledger'
 
 export interface ExpenseFilter {
   startDate?: string
@@ -197,7 +198,7 @@ export async function getExpense(id: number) {
     ...expense,
     qianfanOrderUrl,
     qianfanOrderLinkEnabled: await isQianfanOrderLinkEnabled(),
-    affectsProfit: isProfitDeductingExpense(expense),
+    affectsProfit: calculateExpenseImpact(expense).affectsProfit,
   }
 }
 
@@ -341,6 +342,7 @@ export async function createExpense(
     operator,
   })
 
+  await syncExpenseLedger(expense.id)
   return getExpense(expense.id)
 }
 
@@ -421,6 +423,7 @@ export async function linkExpense(
     operator,
   })
 
+  await syncExpenseLedger(id)
   return getExpense(id)
 }
 
@@ -530,6 +533,7 @@ export async function updateExpense(
     operator,
   })
 
+  await syncExpenseLedger(id)
   return getExpense(id)
 }
 
@@ -550,7 +554,8 @@ export async function voidExpense(id: number, voidReason: string, operator: Auth
   if (before.braceletId) {
     await refreshBraceletCostTotal(before.braceletId)
   }
-  if (before.saleId) await getSale(before.saleId)
+
+  await syncExpenseLedger(id)
 
   await writeOperationLog({
     module: 'expense',

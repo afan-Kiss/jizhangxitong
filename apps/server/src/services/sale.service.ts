@@ -1,36 +1,20 @@
 import { prisma } from '../lib/prisma'
 import { generateNo, toNumber } from '../lib/utils'
-import { getSettingNumber } from './settings.service'
 import { AuthRequest } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
 import { resolveBraceletBinding } from '../lib/bracelet-bind'
 import { clampPage, clampPageSize } from '../lib/pagination'
 import { startOfDay, endOfDay } from '../lib/utils'
-import { saleProfitRow, PROFIT_DEDUCT_EXPENSE_INCLUDE } from './stats.service'
+import {
+  saleProfitRow,
+  calculateProfit,
+  calculateSaleCost,
+  syncSaleLedger,
+  syncRefundLedger,
+  PROFIT_DEDUCT_EXPENSE_INCLUDE,
+} from '../finance/core-ledger'
 
-export async function calculateSaleCost(braceletId: number) {
-  const bracelet = await prisma.bracelet.findUnique({ where: { id: braceletId } })
-  if (!bracelet) throw new Error('镯子不存在')
-
-  const inboundCost = toNumber(bracelet.inboundCost)
-  const certificateFee = await getSettingNumber('default_certificate_fee', 3)
-  const packageFee = await getSettingNumber('default_package_fee', 10)
-  const expressFee = await getSettingNumber('default_sf_express_fee', 18)
-
-  const adjustments = await prisma.costAdjustment.findMany({ where: { braceletId } })
-  const costAdjustment = adjustments.reduce((s, a) => s + toNumber(a.amount), 0)
-
-  const totalCost = inboundCost + certificateFee + packageFee + expressFee + costAdjustment
-
-  return {
-    inboundCost,
-    certificateFee,
-    packageFee,
-    expressFee,
-    costAdjustment,
-    totalCost,
-  }
-}
+export { calculateSaleCost } from '../finance/core-ledger'
 
 export async function createSale(
   input: {
@@ -71,6 +55,13 @@ export async function createSale(
 
   const cost = await calculateSaleCost(braceletId)
   const grossProfit = input.saleAmount - cost.totalCost
+  const initialProfit = calculateProfit({
+    saleAmount: input.saleAmount,
+    totalCostSnapshot: cost.totalCost,
+    grossProfit,
+    refunds: [],
+    expenses: [],
+  })
   const deposit = input.depositAmount ?? 0
   const finalPayment = input.finalPaymentAmount ?? input.saleAmount
   const unpaid = input.unpaidAmount ?? 0
@@ -97,7 +88,7 @@ export async function createSale(
       totalCostSnapshot: cost.totalCost,
       grossProfit,
       compensationAmount: 0,
-      finalProfit: grossProfit,
+      finalProfit: initialProfit.netProfit,
       soldAt: new Date(input.soldAt),
       status: 'sold',
       isTrialRun: false,
@@ -120,6 +111,7 @@ export async function createSale(
     operator,
   })
 
+  await syncSaleLedger(sale.id)
   return getSale(sale.id)
 }
 
@@ -146,15 +138,19 @@ export async function getSale(id: number) {
     profitRow.compensationAmount !== toNumber(sale.compensationAmount)
     || profitRow.profit !== toNumber(sale.finalProfit)
   ) {
-    await prisma.sale.update({
+    await syncSaleLedger(id)
+    const refreshed = await prisma.sale.findUnique({
       where: { id },
-      data: {
-        compensationAmount: profitRow.compensationAmount,
-        finalProfit: profitRow.profit,
+      include: {
+        bracelet: true,
+        expenses: { where: { isVoided: false }, include: { attachments: { include: { file: true } } } },
+        refunds: true,
       },
     })
-    sale.compensationAmount = profitRow.compensationAmount as unknown as typeof sale.compensationAmount
-    sale.finalProfit = profitRow.profit as unknown as typeof sale.finalProfit
+    if (refreshed) {
+      const row = saleProfitRow({ ...refreshed, expenses: refreshed.expenses })
+      return { ...refreshed, ...row, finalProfit: row.profit }
+    }
   }
 
   return {
@@ -255,6 +251,7 @@ export async function refundSale(
     operator,
   })
 
+  await syncRefundLedger(refund.id)
   return { sale: await getSale(saleId), refund }
 }
 

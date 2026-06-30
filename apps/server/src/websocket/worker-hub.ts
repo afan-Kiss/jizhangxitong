@@ -104,6 +104,10 @@ class WorkerHub {
           this.lastHeartbeatAt = this.connectedAt
           const baseInfo = msg.localBaseInfo as Record<string, unknown> | undefined
           this.lastRegisteredWsUrl = typeof baseInfo?.serverWsUrl === 'string' ? baseInfo.serverWsUrl : null
+          await prisma.localWorkerConnection.updateMany({
+            where: { workerId: { not: msg.workerId } },
+            data: { status: 'offline' },
+          })
           await prisma.localWorkerConnection.upsert({
             where: { workerId: msg.workerId },
             create: {
@@ -126,6 +130,10 @@ class WorkerHub {
           return
         }
         if (msg.type === 'heartbeat') {
+          if (this.workerId && msg.workerId !== this.workerId) {
+            socket.close(4003, 'stale worker heartbeat')
+            return
+          }
           this.lastHeartbeatAt = new Date()
           if (typeof msg.scannerAvailable === 'boolean') {
             this.scannerAvailable = msg.scannerAvailable

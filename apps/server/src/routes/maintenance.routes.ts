@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { authMiddleware, requirePermission, AuthRequest } from '../middleware/auth'
 import { cleanupAcceptanceTestData } from '../services/cleanup.service'
+import { rebuildLedger } from '../finance/core-ledger'
 import { config } from '../lib/config'
 
 export const maintenanceRouter = Router()
@@ -14,5 +15,10 @@ maintenanceRouter.post('/cleanup-test-data', requirePermission('permission:manag
     })
   }
   const result = await cleanupAcceptanceTestData(req.user!)
+  res.json({ success: true, data: result })
+})
+
+maintenanceRouter.post('/rebuild-ledger', requirePermission('permission:manage'), async (_req, res) => {
+  const result = await rebuildLedger()
   res.json({ success: true, data: result })
 })
