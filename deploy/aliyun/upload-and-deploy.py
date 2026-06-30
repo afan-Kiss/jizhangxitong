@@ -196,9 +196,16 @@ def main() -> None:
             env_path.write_text(env_content, encoding="utf-8")
 
             run(client, f"mkdir -p {DEPLOY_DIR} /www/backup /tmp/jade-upload")
-            if run(client, f"test -d {DEPLOY_DIR} && ls -A {DEPLOY_DIR} | head -1") == 0:
+            server_had_content = run(
+                client,
+                f"test -d {DEPLOY_DIR} && ls -A {DEPLOY_DIR} 2>/dev/null | head -1",
+            ) == 0
+            if server_had_content:
                 ts = __import__("datetime").datetime.now().strftime("%Y%m%d-%H%M%S")
                 run(client, f"cp -a {DEPLOY_DIR} /www/backup/jade-accounting-{ts}")
+                print("[deploy] 服务器已有部署目录，已备份旧版本")
+            else:
+                print("[deploy] 服务器部署目录为空或不存在，将全新部署")
 
             sftp_put(client, zip_path, "/tmp/jade-upload/jade-accounting.zip")
             sftp_put(client, env_path, "/tmp/jade-upload/server.env")
@@ -207,6 +214,9 @@ def main() -> None:
             skip_seed = "1" if db.exists() else "0"
             if db.exists():
                 sftp_put(client, db, "/tmp/jade-upload/accounting.db")
+                print(f"[deploy] 上传本地数据库 ({db.stat().st_size} bytes)")
+            else:
+                print("[deploy] 本地无 accounting.db，服务器将按 schema 初始化新库")
 
             pwd_file = ROOT / "secrets/initial-admin-password.txt"
             if pwd_file.exists():
@@ -231,7 +241,16 @@ chmod +x {DEPLOY_DIR}/deploy/aliyun/*.sh 2>/dev/null || true
         if code != 0:
             sys.exit(code)
 
-        run(client, "curl -fsS http://127.0.0.1:4731/api/health")
+        health_out = run(client, "curl -fsS http://127.0.0.1:4731/api/health")
+        if app_version and health_out == 0:
+            ver_check = run(
+                client,
+                f"curl -fsS http://127.0.0.1:4731/api/health | grep -q '{app_version}'",
+            )
+            if ver_check != 0:
+                print(f"[deploy][WARN] /api/health.version 与 APP_VERSION={app_version} 不一致", file=sys.stderr)
+            else:
+                print(f"[deploy] /api/health.version OK: {app_version}")
         run(client, "export NVM_DIR=/root/.nvm && . /root/.nvm/nvm.sh 2>/dev/null; pm2 status")
 
         apply_py = ROOT / "deploy/aliyun/fix-nginx-account80.py"

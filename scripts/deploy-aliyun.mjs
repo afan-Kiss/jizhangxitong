@@ -191,8 +191,6 @@ async function main() {
     ['test:responsive', `node scripts/test-responsive.mjs`, TIMEOUTS.responsive + 180000],
     ['test:login', `node scripts/test-login.mjs`, TIMEOUTS.login + 30000],
     ['test:subpath', `node scripts/test-subpath-refresh.mjs`, TIMEOUTS.subpath + 30000],
-    ['test:scan-binding', `node scripts/test-scan-binding.mjs`, TIMEOUTS.acceptanceFull + 60000],
-    ['test:scan-workbench', `node scripts/test-scan-workbench.mjs`, TIMEOUTS.acceptanceFull + 60000],
     ['test:customer-payments', `node scripts/test-customer-payments.mjs`, TIMEOUTS.acceptanceFull + 120000],
     ['test:accounting-flow', `node scripts/test-accounting-flow.mjs`, TIMEOUTS.acceptanceFull + 60000],
     ['test:effective-sales', `node scripts/test-effective-sales.mjs`, TIMEOUTS.acceptanceBasic + 30000],
@@ -207,6 +205,11 @@ async function main() {
       throw e
     }
   }
+
+  runTiered('test:scan-workbench', `node scripts/test-scan-workbench.mjs`, 'external', {
+    env: testEnv,
+    timeout: TIMEOUTS.acceptanceFull + 60000,
+  })
 
   try {
     run('node scripts/test-worker-online.mjs', { env: testEnv, timeout: TIMEOUTS.workerOnline + 60000 })

@@ -15,17 +15,46 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "缺少命令: $1"
 }
 
+ensure_node() {
+  export NVM_DIR="${NVM_DIR:-/root/.nvm}"
+  # shellcheck disable=SC1091
+  if [ -s "$NVM_DIR/nvm.sh" ]; then
+    . "$NVM_DIR/nvm.sh"
+    nvm use 20 2>/dev/null || nvm use node 2>/dev/null || true
+  fi
+  require_cmd node
+  require_cmd npm
+}
+
+ensure_pm2() {
+  if ! command -v pm2 >/dev/null 2>&1; then
+    log "pm2 未安装，正在 npm install -g pm2..."
+    npm install -g pm2
+  fi
+  require_cmd pm2
+}
+
 prepare_dirs() {
   mkdir -p "$DEPLOY_DIR/logs" "$DEPLOY_DIR/exports" "$DEPLOY_DIR/web"
   mkdir -p "$DEPLOY_DIR/apps/server/prisma/data"
+  mkdir -p "$DEPLOY_DIR/apps/server/data"
   mkdir -p "$DEPLOY_DIR/apps/server/exports"
   mkdir -p "$DEPLOY_DIR/apps/server/tmp-uploads"
 }
 
+init_database_note() {
+  local db_file="$DEPLOY_DIR/apps/server/prisma/data/accounting.db"
+  if [[ ! -f "$db_file" ]]; then
+    log "服务器数据库文件不存在，将按 schema 初始化新库（db push + seed）"
+    export SKIP_SEED=0
+  else
+    log "使用现有/已上传数据库: $db_file"
+  fi
+}
+
 install_build() {
   cd "$DEPLOY_DIR"
-  require_cmd node
-  require_cmd npm
+  ensure_node
   log "Node $(node -v)"
   log "npm ci"
   npm ci
@@ -52,16 +81,19 @@ install_build() {
 }
 
 start_pm2() {
-  require_cmd pm2
-  export NVM_DIR="${NVM_DIR:-/root/.nvm}"
-  # shellcheck disable=SC1091
-  if [ -s "$NVM_DIR/nvm.sh" ]; then . "$NVM_DIR/nvm.sh"; fi
+  ensure_node
+  ensure_pm2
   cd "$DEPLOY_DIR"
   cp -f deploy/aliyun/ecosystem.config.cjs ecosystem.config.cjs
-  pm2 delete "$APP_NAME" 2>/dev/null || true
-  pm2 start ecosystem.config.cjs
+  if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
+    log "pm2 restart $APP_NAME"
+    pm2 restart ecosystem.config.cjs --update-env
+  else
+    log "pm2 start $APP_NAME（首次或进程不存在）"
+    pm2 start ecosystem.config.cjs
+  fi
   pm2 save
-  log "pm2 started $APP_NAME"
+  log "pm2 online: $APP_NAME"
 }
 
 nginx_setup() {
@@ -84,6 +116,7 @@ wait_health() {
 main() {
   log "DEPLOY_DIR=$DEPLOY_DIR"
   prepare_dirs
+  init_database_note
   install_build
   start_pm2
   wait_health

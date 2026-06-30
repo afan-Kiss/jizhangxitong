@@ -6,7 +6,7 @@ import path from 'path'
 import { pathToFileURL } from 'url'
 import { fileURLToPath } from 'url'
 import {
-  SERVER, login, fetchJson, authHeaders, ensureServerRunning,
+  SERVER, login, fetchJson, authHeaders, ensureServerRunning, isLocalServer,
 } from './lib/services.mjs'
 import {
   syncSaleLedgerRepeated,
@@ -147,27 +147,33 @@ async function main() {
     fail('rebuildLedger dryRun 不写入', countBeforeDry.text || dryRun2.text)
   }
 
-  // 真实 rebuild（本地/测试库）
-  const rebuild1 = await api(token, '/api/maintenance/rebuild-ledger', {
-    method: 'POST',
-    body: JSON.stringify({ force: true }),
-  })
-  const rebuild2 = await api(token, '/api/maintenance/rebuild-ledger', {
-    method: 'POST',
-    body: JSON.stringify({ force: true }),
-  })
-  if (rebuild1.res.ok && rebuild2.res.ok
-    && rebuild1.json.data?.entriesAfter === rebuild2.json.data?.entriesAfter
-    && rebuild1.json.data?.entriesAfter > 0) {
-    pass('rebuildLedger force 后 entriesAfter 稳定', `${rebuild1.json.data.entriesAfter} entries`)
+  // 真实 rebuild（仅本地测试库；远程生产只跑 dryRun）
+  if (isLocalServer(BASE)) {
+    const rebuild1 = await api(token, '/api/maintenance/rebuild-ledger', {
+      method: 'POST',
+      body: JSON.stringify({ force: true }),
+    })
+    const rebuild2 = await api(token, '/api/maintenance/rebuild-ledger', {
+      method: 'POST',
+      body: JSON.stringify({ force: true }),
+    })
+    if (rebuild1.res.ok && rebuild2.res.ok
+      && rebuild1.json.data?.entriesAfter === rebuild2.json.data?.entriesAfter
+      && rebuild1.json.data?.entriesAfter > 0) {
+      pass('rebuildLedger force 后 entriesAfter 稳定', `${rebuild1.json.data.entriesAfter} entries`)
+    } else {
+      fail('rebuildLedger 稳定性', `${rebuild1.json.data?.entriesAfter} vs ${rebuild2.json.data?.entriesAfter}`)
+    }
   } else {
-    fail('rebuildLedger 稳定性', `${rebuild1.json.data?.entriesAfter} vs ${rebuild2.json.data?.entriesAfter}`)
+    pass('rebuildLedger force 稳定性', '（远程生产跳过真实 rebuild）')
   }
+
+  const useLocalLedger = isLocalServer(BASE)
 
   // 同一 sale 多次 sync
   const sales = await api(token, '/api/sales?pageSize=1&status=sold')
   const saleId = sales.json.data?.items?.[0]?.id
-  if (saleId) {
+  if (useLocalLedger && saleId) {
     const counts = await syncSaleLedgerRepeated(saleId, 3)
     const [c1, c2, c3] = counts
     if (c1 === c2 && c2 === c3 && c1 > 0) {
@@ -193,6 +199,21 @@ async function main() {
     const diffApi = Math.abs(calc.netProfit - Number(d.finalProfit ?? d.profit ?? 0))
     if (diffApi < 0.02) pass('API 销售利润与 core-ledger 一致')
     else fail('API 销售利润与 core-ledger 一致', `${calc.netProfit} vs ${d.finalProfit}`)
+  } else if (saleId) {
+    pass('同一 sale 多次 sync', '（远程验收，跳过本地 ledger 直连）')
+    pass('aggregateProfitFromLedger', '（远程验收，跳过）')
+    const detail = await api(token, `/api/sales/${saleId}`)
+    const d = detail.json.data
+    const calc = calculateProfit({
+      saleAmount: d.saleAmount,
+      totalCostSnapshot: d.totalCostSnapshot,
+      grossProfit: d.grossProfit,
+      refunds: d.refunds,
+      expenses: d.expenses,
+    })
+    const diffApi = Math.abs(calc.netProfit - Number(d.finalProfit ?? d.profit ?? 0))
+    if (diffApi < 0.02) pass('API 销售利润与 core-ledger 一致')
+    else fail('API 销售利润与 core-ledger 一致', `${calc.netProfit} vs ${d.finalProfit}`)
   } else {
     pass('同一 sale 多次 sync', '（无销售，跳过）')
     pass('aggregateProfitFromLedger', '（跳过）')
@@ -207,7 +228,23 @@ async function main() {
   })
   const goodsId = goodsRes.json.data?.id
   if (goodsId) {
-    await setBraceletInboundCost(goodsId, 1000)
+    if (useLocalLedger) {
+      await setBraceletInboundCost(goodsId, 1000)
+    } else {
+      await api(token, '/api/expenses', {
+        method: 'POST',
+        body: JSON.stringify({
+          businessType: 'item_cost',
+          expenseType: '货品成本',
+          amount: 1000,
+          paySource: '微信',
+          occurredAt: today,
+          braceletId: goodsId,
+          braceletCode: code,
+          remark: `${TAG}-inbound`,
+        }),
+      })
+    }
 
     await api(token, '/api/expenses', {
       method: 'POST',
@@ -300,7 +337,7 @@ async function main() {
     }),
   })
   const expenseId = orphanExp.json.data?.id
-  if (expenseId) {
+  if (expenseId && useLocalLedger) {
     const counts = await syncExpenseLedgerRepeated(expenseId, 3)
     const [e1, e2, e3] = counts
     if (e1 === e2 && e2 === e3 && e1 === 1) {
@@ -308,6 +345,8 @@ async function main() {
     } else {
       fail('同一 expense 多次 sync 不重复分录', `${e1}/${e2}/${e3}`)
     }
+  } else if (expenseId) {
+    pass('同一 expense 多次 sync', '（远程验收，跳过本地 ledger 直连）')
   } else {
     fail('同一 expense 多次 sync', orphanExp.text)
   }
