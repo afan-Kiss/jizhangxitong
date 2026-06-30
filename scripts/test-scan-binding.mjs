@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 /**
- * 扫码绑定一期验收
+ * 扫码绑定一期验收（ hardened ）
  */
-import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { chromium } from 'playwright'
@@ -19,10 +18,8 @@ import {
 import { installScriptTimeout as scriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const ROOT = path.join(__dirname, '..')
 const BASE = (process.env.ACCEPTANCE_SERVER || SERVER || RECOMMENDED_URL).replace(/\/$/, '')
 
-/** 前端页面基址（生产在 /account/ 子路径） */
 function accountWebBase() {
   if (/\/account$/i.test(BASE)) return BASE
   if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(BASE)) return `${BASE}/account`
@@ -71,10 +68,11 @@ async function testDetectRules() {
 
 async function testApiFlow(token) {
   console.log('\n--- API 流程 ---')
+  const ts = Date.now()
 
   const unknown = await api(token, '/api/scan/recognize', {
     method: 'POST',
-    body: JSON.stringify({ code: 'UNKNOWN-TEST-001', source: 'manual' }),
+    body: JSON.stringify({ code: `UNKNOWN-TEST-${ts}`, source: 'manual' }),
   })
   if (unknown.res.ok && unknown.json.data?.scanType === 'unknown') {
     pass('unknown 编码不报错')
@@ -82,37 +80,42 @@ async function testApiFlow(token) {
     fail('unknown 编码不报错', unknown.text)
   }
 
-  const goodsCode = `HTY-TEST-${Date.now()}`
-  const create = await api(token, '/api/goods', {
-    method: 'POST',
-    body: JSON.stringify({ code: goodsCode, category: '和田玉', name: '测试货品' }),
-  })
-  if (!create.res.ok) {
-    fail('新建货品并绑定扫码码', create.text)
-    return
+  const goodsA = `HTY-A-${ts}`
+  const goodsB = `HTY-B-${ts}`
+  for (const [code, label] of [[goodsA, 'A'], [goodsB, 'B']]) {
+    const create = await api(token, '/api/goods', {
+      method: 'POST',
+      body: JSON.stringify({ code, category: '和田玉', name: `测试货品${label}` }),
+    })
+    if (!create.res.ok) {
+      fail(`新建货品 ${label}`, create.text)
+      return
+    }
   }
   pass('新建货品并绑定扫码码')
-  const goodsId = create.json.data.id
+
+  const goodsAId = (await api(token, `/api/goods/by-code/${encodeURIComponent(goodsA)}`)).json.data.id
+  const goodsBId = (await api(token, `/api/goods/by-code/${encodeURIComponent(goodsB)}`)).json.data.id
 
   const rec = await api(token, '/api/scan/recognize', {
     method: 'POST',
-    body: JSON.stringify({ code: goodsCode, source: 'manual' }),
+    body: JSON.stringify({ code: goodsA, source: 'manual' }),
   })
-  if (rec.res.ok && rec.json.data?.matched && rec.json.data?.goods?.id === goodsId) {
+  if (rec.res.ok && rec.json.data?.matched && rec.json.data?.goods?.id === goodsAId) {
     pass('货品码识别 PASS')
   } else {
     fail('货品码识别 PASS', rec.text)
   }
 
-  const orderNo = `P${Date.now()}9988776655`
-  const order = await api(token, '/api/scan/orders/simple', {
+  const orderNo = `P${ts}9988776655`
+  const orderWithGoods = await api(token, '/api/scan/orders/simple', {
     method: 'POST',
-    body: JSON.stringify({ orderNo, goodsId, saleAmount: 100 }),
+    body: JSON.stringify({ orderNo, goodsId: goodsAId, saleAmount: 100 }),
   })
-  if (order.res.ok && order.json.data?.orderNo === orderNo) {
+  if (orderWithGoods.res.ok && orderWithGoods.json.data?.orderNo === orderNo) {
     pass('订单绑定货品 PASS')
   } else {
-    fail('订单绑定货品 PASS', order.text)
+    fail('订单绑定货品 PASS', orderWithGoods.text)
   }
 
   const orderRec = await api(token, '/api/scan/recognize', {
@@ -125,13 +128,13 @@ async function testApiFlow(token) {
     fail('订单号识别 PASS', orderRec.text)
   }
 
-  const logistics = `SF${Date.now()}`.slice(0, 14)
+  const logistics = `SF${ts}`.slice(0, 14)
   await api(token, '/api/scan/bind', {
     method: 'POST',
     body: JSON.stringify({
       scanCode: logistics,
       scanType: 'logistics_no',
-      orderId: order.json.data.id,
+      orderId: orderWithGoods.json.data.id,
       source: 'manual',
     }),
   })
@@ -139,27 +142,103 @@ async function testApiFlow(token) {
     method: 'POST',
     body: JSON.stringify({ code: logistics, source: 'manual' }),
   })
-  if (logRec.res.ok && logRec.json.data?.scanType === 'logistics_no') {
+  if (logRec.res.ok && logRec.json.data?.matched) {
     pass('物流单号识别 PASS')
   } else {
     fail('物流单号识别 PASS', logRec.text)
   }
 
-  const recent = await api(token, '/api/scan/recent?limit=5')
-  if (recent.res.ok && Array.isArray(recent.json.data) && recent.json.data.length > 0) {
+  // 纯数字物流单号兜底
+  const numericLogistics = `${ts}1234567890`.slice(0, 14)
+  const numericOrderNo = `P${ts}1122334455`
+  const saleForNumeric = await api(token, '/api/scan/orders/simple', {
+    method: 'POST',
+    body: JSON.stringify({ orderNo: numericOrderNo, goodsId: goodsBId, logisticsNo: numericLogistics }),
+  })
+  if (!saleForNumeric.res.ok) {
+    fail('创建纯数字物流订单', saleForNumeric.text)
+  } else {
+    const numRec = await api(token, '/api/scan/recognize', {
+      method: 'POST',
+      body: JSON.stringify({ code: numericLogistics, source: 'manual' }),
+    })
+    if (numRec.res.ok && numRec.json.data?.matched && numRec.json.data?.order?.logisticsNo === numericLogistics) {
+      pass('纯数字物流单号兜底匹配 PASS')
+    } else {
+      fail('纯数字物流单号兜底匹配 PASS', numRec.text)
+    }
+  }
+
+  // 无货品订单 → 不产生 PENDING 假货品
+  const draftOrderNo = `P${ts}5566778899`
+  const draft = await api(token, '/api/scan/orders/simple', {
+    method: 'POST',
+    body: JSON.stringify({ orderNo: draftOrderNo }),
+  })
+  if (draft.res.ok && draft.json.data?.isDraft) {
+    pass('创建无货品订单不会产生 PENDING 假货品')
+  } else {
+    fail('创建无货品订单不会产生 PENDING 假货品', draft.text)
+  }
+  const pendingLookup = await api(token, `/api/goods/by-code/${encodeURIComponent(`PENDING-${draftOrderNo.slice(-8)}`)}`)
+  if (pendingLookup.res.status === 404) {
+    pass('无 PENDING 占位货品写入 Bracelet 表')
+  } else {
+    fail('无 PENDING 占位货品写入 Bracelet 表', pendingLookup.text)
+  }
+
+  // 扫订单后绑定已有货品
+  const bindDraft = await api(token, '/api/scan/orders/bind-goods', {
+    method: 'POST',
+    body: JSON.stringify({ orderNo: draftOrderNo, goodsId: goodsBId }),
+  })
+  if (bindDraft.res.ok && bindDraft.json.data?.order?.braceletCode === goodsB) {
+    pass('扫订单后绑定已有货品 PASS')
+  } else {
+    fail('扫订单后绑定已有货品 PASS', bindDraft.text)
+  }
+
+  // unknown 绑定已有货品
+  const unknownCode = `CUSTOM-${ts}`
+  await api(token, '/api/scan/recognize', {
+    method: 'POST',
+    body: JSON.stringify({ code: unknownCode, source: 'manual' }),
+  })
+  const bindUnknown = await api(token, '/api/scan/bind', {
+    method: 'POST',
+    body: JSON.stringify({ scanCode: unknownCode, scanType: 'unknown', goodsId: goodsAId }),
+  })
+  if (bindUnknown.res.ok && bindUnknown.json.data?.goods?.id === goodsAId) {
+    pass('扫 unknown 后绑定已有货品 PASS')
+  } else {
+    fail('扫 unknown 后绑定已有货品 PASS', bindUnknown.text)
+  }
+
+  const recent = await api(token, '/api/scan/recent?limit=10')
+  const statuses = recent.json.data?.map((r) => r.status) || []
+  const hasRecognized = statuses.includes('recognized')
+  const hasBound = statuses.includes('bound')
+  const hasPending = statuses.includes('pending')
+  if (recent.res.ok && hasRecognized && (hasBound || hasPending)) {
+    pass('最近扫码记录能区分只是扫过/已绑定/待绑定')
+  } else {
+    fail('最近扫码记录能区分只是扫过/已绑定/待绑定', JSON.stringify(statuses))
+  }
+  if (recent.res.ok && recent.json.data?.some((r) => r.statusLabel)) {
     pass('最近扫码记录接口 PASS')
   } else {
     fail('最近扫码记录接口 PASS', recent.text)
   }
 
+  // 支出改绑 A → B
   const exp = await api(token, '/api/expenses', {
     method: 'POST',
     body: JSON.stringify({
-      amount: 12.34,
+      amount: 20,
       expenseType: '其他支出',
       paySource: '老板付款',
       occurredAt: new Date().toISOString(),
-      expenseSummary: 'scan-binding-test',
+      expenseSummary: 'scan-binding-rebind-test',
     }),
   })
   if (!exp.res.ok) {
@@ -167,19 +246,24 @@ async function testApiFlow(token) {
     return
   }
   const expenseId = exp.json.data.id
-  const bindExp = await api(token, `/api/scan/expenses/${expenseId}/bind-goods`, {
+  await api(token, `/api/scan/expenses/${expenseId}/bind-goods`, {
     method: 'POST',
-    body: JSON.stringify({ goodsId }),
+    body: JSON.stringify({ goodsId: goodsAId }),
   })
-  if (!bindExp.res.ok) {
-    fail('支出绑定货品', bindExp.text)
-    return
-  }
-  const cost = await api(token, `/api/goods/${goodsId}`)
-  if (cost.res.ok && Number(cost.json.data.costTotal) >= 12.34) {
-    pass('支出绑定货品后 cost_total 更新 PASS')
+  const costA1 = Number((await api(token, `/api/goods/${goodsAId}`)).json.data.costTotal)
+  const costB0 = Number((await api(token, `/api/goods/${goodsBId}`)).json.data.costTotal)
+
+  await api(token, `/api/scan/expenses/${expenseId}/bind-goods`, {
+    method: 'POST',
+    body: JSON.stringify({ goodsId: goodsBId }),
+  })
+  const costA2 = Number((await api(token, `/api/goods/${goodsAId}`)).json.data.costTotal)
+  const costB1 = Number((await api(token, `/api/goods/${goodsBId}`)).json.data.costTotal)
+
+  if (costA2 < costA1 && costB1 >= costB0 + 20) {
+    pass('支出从 A 改绑 B 后 A/B costTotal 都正确刷新 PASS')
   } else {
-    fail('支出绑定货品后 cost_total 更新 PASS', cost.text)
+    fail('支出从 A 改绑 B 后 A/B costTotal 都正确刷新 PASS', `A:${costA1}->${costA2} B:${costB0}->${costB1}`)
   }
 
   await api(token, `/api/expenses/${expenseId}/void`, {
@@ -189,7 +273,7 @@ async function testApiFlow(token) {
 }
 
 async function testUi() {
-  console.log('\n--- 页面白屏 ---')
+  console.log('\n--- 页面验收 ---')
   const password = await getAdminPassword()
 
   let browser
@@ -209,15 +293,33 @@ async function testUi() {
       const hasPage = await page.locator('[data-testid="scan-binding-page"]').isVisible()
       const hasInput = await page.locator('[data-testid="scan-input"]').isVisible()
       const text = await page.evaluate(() => document.body.innerText)
+      const scrollW = await page.evaluate(() => document.documentElement.scrollWidth)
+      const clientW = await page.evaluate(() => document.documentElement.clientWidth)
+      const noHScroll = scrollW <= clientW + 2
+
       if (hasPage && hasInput && text.includes('扫码绑定中心')) {
-        pass(`${name}扫码绑定页面无白屏 PASS`)
+        pass(`${name} /scan 路由页面正常`)
       } else {
-        fail(`${name}扫码绑定页面无白屏 PASS`, `url=${page.url()} hasPage=${hasPage}`)
+        fail(`${name} /scan 路由页面正常`, `url=${page.url()}`)
+      }
+      if (name === '手机端' && noHScroll) {
+        pass('手机端扫码页面无横向滚动 PASS')
+      } else if (name === '手机端') {
+        fail('手机端扫码页面无横向滚动 PASS', `scroll=${scrollW} client=${clientW}`)
       }
       await ctx.close()
     }
   } finally {
     if (browser) await browser.close().catch(() => {})
+  }
+}
+
+async function testWorkerOnline(token) {
+  const st = await api(token, '/api/local-worker/status')
+  if (st.res.ok && st.json.data?.online === true) {
+    pass('Worker online=true')
+  } else {
+    fail('Worker online=true', st.text)
   }
 }
 
@@ -229,6 +331,7 @@ async function main() {
   const token = await login()
   await testApiFlow(token)
   await testUi()
+  await testWorkerOnline(token)
 
   try {
     const scanner = await fetch(`${process.env.SCANNER_API_URL || 'http://127.0.0.1:7789'}/api/health`)

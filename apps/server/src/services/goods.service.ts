@@ -64,6 +64,7 @@ export async function createGoodsFromScan(
 ) {
   const code = input.code.trim().toUpperCase()
   if (!code) throw new Error('货品编码不能为空')
+  if (/^PENDING-/i.test(code)) throw new Error('不能使用占位编码创建货品')
 
   const existing = await findBraceletByExactCode(code)
   if (existing) throw new Error('这个编码已经有货品了')

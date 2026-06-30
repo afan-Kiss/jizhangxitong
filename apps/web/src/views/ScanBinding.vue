@@ -15,6 +15,8 @@ const loading = ref(false)
 const result = ref<any>(null)
 const recent = ref<any[]>([])
 const bindOrderNo = ref('')
+const bindGoodsCode = ref('')
+const bindUnknownOrderNo = ref('')
 const inputRef = ref<HTMLInputElement | null>(null)
 
 async function loadRecent() {
@@ -36,6 +38,9 @@ async function recognize(source: 'scanner' | 'manual' | 'paste' = 'manual') {
   try {
     const res = await api.post('/scan/recognize', { code, source })
     result.value = res.data.data
+    bindGoodsCode.value = ''
+    bindOrderNo.value = ''
+    bindUnknownOrderNo.value = ''
     await loadRecent()
   } catch (err: any) {
     showToast(err.userMessage || err.response?.data?.message || '识别失败')
@@ -73,8 +78,8 @@ async function createSimpleOrder() {
   try {
     const body: Record<string, unknown> = { orderNo }
     if (result.value?.goods?.id) body.goodsId = result.value.goods.id
-    await api.post('/scan/orders/simple', body)
-    showToast('订单已创建')
+    const res = await api.post('/scan/orders/simple', body)
+    showToast(res.data.message || '订单已保存')
     await recognize('manual')
   } catch (err: any) {
     showToast(err.userMessage || err.response?.data?.message || '创建订单失败')
@@ -83,8 +88,9 @@ async function createSimpleOrder() {
   }
 }
 
-async function bindOrderToGoods() {
-  const orderNo = bindOrderNo.value.trim() || result.value?.normalizedCode
+/** 扫到货品后，绑定到指定订单号 */
+async function bindGoodsToOrder() {
+  const orderNo = bindOrderNo.value.trim()
   const goodsId = result.value?.goods?.id
   if (!orderNo || !goodsId) {
     showToast('请先识别货品，并填写订单号')
@@ -92,12 +98,113 @@ async function bindOrderToGoods() {
   }
   loading.value = true
   try {
-    await api.post('/scan/orders/simple', { orderNo, goodsId })
+    await api.post('/scan/orders/bind-goods', { orderNo, goodsId })
     showToast('已绑定订单')
     bindOrderNo.value = ''
     await recognize('manual')
   } catch (err: any) {
-    showToast(err.userMessage || err.response?.data?.message || '绑定失败')
+    showToast(err.userMessage || err.response?.data?.message || '绑定失败，请重新扫码试试')
+  } finally {
+    loading.value = false
+  }
+}
+
+/** 扫到订单（未绑货品）后，输入货品码绑定 */
+async function bindOrderWithGoodsCode() {
+  const code = bindGoodsCode.value.trim()
+  if (!code) {
+    showToast('请输入货品码')
+    return
+  }
+  loading.value = true
+  try {
+    const lookup = await api.get(`/goods/by-code/${encodeURIComponent(code)}`)
+    if (!lookup.data?.data?.id) {
+      showToast('没找到这个货品')
+      return
+    }
+    const body: Record<string, unknown> = {
+      goodsId: lookup.data.data.id,
+      goodsCode: code,
+      scanCode: result.value?.normalizedCode,
+    }
+    if (result.value?.order?.id) body.orderId = result.value.order.id
+    else if (result.value?.order?.draftId) body.draftId = result.value.order.draftId
+    else body.orderNo = result.value?.normalizedCode
+
+    await api.post('/scan/orders/bind-goods', body)
+    showToast('已绑定货品')
+    bindGoodsCode.value = ''
+    await recognize('manual')
+  } catch (err: any) {
+    const msg = err.response?.data?.message
+    showToast(msg || err.userMessage || '绑定失败，请重新扫码试试')
+  } finally {
+    loading.value = false
+  }
+}
+
+/** unknown 编码绑定到已有货品 */
+async function bindUnknownToGoods() {
+  const code = bindGoodsCode.value.trim()
+  if (!code) {
+    showToast('请输入货品码')
+    return
+  }
+  loading.value = true
+  try {
+    const lookup = await api.get(`/goods/by-code/${encodeURIComponent(code)}`)
+    if (!lookup.data?.data?.id) {
+      showToast('没找到这个货品')
+      return
+    }
+    await api.post('/scan/bind', {
+      scanCode: result.value.normalizedCode,
+      scanType: result.value.scanType,
+      goodsId: lookup.data.data.id,
+      source: 'manual',
+    })
+    showToast('已绑定到货品')
+    bindGoodsCode.value = ''
+    await recognize('manual')
+  } catch (err: any) {
+    showToast(err.response?.data?.message || err.userMessage || '绑定失败，请重新扫码试试')
+  } finally {
+    loading.value = false
+  }
+}
+
+/** unknown 编码绑定到订单 */
+async function bindUnknownToOrder() {
+  const orderNo = bindUnknownOrderNo.value.trim()
+  const goodsCode = bindGoodsCode.value.trim()
+  if (!orderNo) {
+    showToast('请输入订单号')
+    return
+  }
+  loading.value = true
+  try {
+    if (goodsCode) {
+      const lookup = await api.get(`/goods/by-code/${encodeURIComponent(goodsCode)}`)
+      if (!lookup.data?.data?.id) {
+        showToast('没找到这个货品')
+        return
+      }
+      await api.post('/scan/orders/bind-goods', {
+        orderNo,
+        goodsId: lookup.data.data.id,
+        scanCode: result.value?.normalizedCode,
+      })
+      showToast('已绑定订单')
+    } else {
+      await api.post('/scan/orders/simple', { orderNo })
+      showToast('待绑定订单已保存')
+    }
+    bindUnknownOrderNo.value = ''
+    bindGoodsCode.value = ''
+    await recognize('manual')
+  } catch (err: any) {
+    showToast(err.response?.data?.message || err.userMessage || '绑定失败，请重新扫码试试')
   } finally {
     loading.value = false
   }
@@ -129,17 +236,17 @@ function viewOrder() {
   }
 }
 
-async function saveUnknownBinding() {
+async function savePendingBinding() {
   if (!result.value?.normalizedCode) return
   loading.value = true
   try {
     await api.post('/scan/bind', {
       scanCode: result.value.normalizedCode,
       scanType: result.value.scanType,
-      note: '未知编码手动保存',
+      note: '待绑定记录',
       source: 'manual',
     })
-    showToast('扫码记录已保存')
+    showToast('已保存待绑定记录')
     await loadRecent()
   } catch (err: any) {
     showToast(err.userMessage || '保存失败')
@@ -155,6 +262,19 @@ function formatTime(iso: string) {
     return iso
   }
 }
+
+const showBindGoodsToOrder = () =>
+  result.value?.nextActions?.includes('bind_goods')
+  && result.value?.order
+  && (result.value.order.needsGoodsBinding || result.value.order.isDraft)
+
+const showBindUnknownGoods = () =>
+  result.value?.nextActions?.includes('bind_goods')
+  && (result.value?.scanType === 'unknown' || !result.value?.matched)
+
+const showBindUnknownOrder = () =>
+  result.value?.nextActions?.includes('bind_order')
+  && result.value?.scanType === 'unknown'
 
 onMounted(async () => {
   await loadRecent()
@@ -222,6 +342,8 @@ onMounted(async () => {
           <div v-if="result.order" class="scan-page__info-block">
             <div class="section-title">订单信息</div>
             <div>订单号：{{ result.order.orderNo }}</div>
+            <div v-if="result.order.isDraft" class="scan-page__warn">待绑定订单（尚未进入销售报表）</div>
+            <div v-else-if="result.order.needsGoodsBinding" class="scan-page__warn">这个订单还没绑定货品</div>
             <div v-if="result.order.logisticsNo" class="muted">物流：{{ result.order.logisticsNo }}</div>
           </div>
 
@@ -230,16 +352,62 @@ onMounted(async () => {
               新建货品
             </ActionButton>
             <ActionButton v-if="result.nextActions?.includes('create_order')" block plain @click="createSimpleOrder">
-              新建订单
+              新建待绑定订单
             </ActionButton>
+
+            <!-- 扫到货品 → 绑定订单 -->
             <template v-if="result.nextActions?.includes('bind_order') && result.goods">
               <input
                 v-model="bindOrderNo"
                 class="scan-page__input scan-page__input--sm"
+                data-testid="bind-order-no-input"
                 placeholder="输入要绑定的订单号"
               />
-              <ActionButton block plain @click="bindOrderToGoods">绑定订单</ActionButton>
+              <ActionButton data-testid="bind-order-btn" block plain @click="bindGoodsToOrder">绑定订单</ActionButton>
             </template>
+
+            <!-- 扫到订单未绑货品 → 绑定已有货品 -->
+            <template v-if="showBindGoodsToOrder()">
+              <input
+                v-model="bindGoodsCode"
+                class="scan-page__input scan-page__input--sm"
+                data-testid="bind-goods-code-input"
+                placeholder="输入货品码"
+              />
+              <ActionButton data-testid="bind-goods-btn" block plain @click="bindOrderWithGoodsCode">绑定货品</ActionButton>
+            </template>
+
+            <!-- unknown → 绑定已有货品 -->
+            <template v-if="showBindUnknownGoods() && !showBindGoodsToOrder()">
+              <input
+                v-model="bindGoodsCode"
+                class="scan-page__input scan-page__input--sm"
+                data-testid="bind-unknown-goods-input"
+                placeholder="输入已有货品码"
+              />
+              <ActionButton data-testid="bind-unknown-goods-btn" block plain @click="bindUnknownToGoods">
+                绑定到已有货品
+              </ActionButton>
+            </template>
+
+            <!-- unknown → 绑定到订单 -->
+            <template v-if="showBindUnknownOrder()">
+              <input
+                v-model="bindUnknownOrderNo"
+                class="scan-page__input scan-page__input--sm"
+                data-testid="bind-unknown-order-input"
+                placeholder="输入订单号"
+              />
+              <input
+                v-model="bindGoodsCode"
+                class="scan-page__input scan-page__input--sm"
+                placeholder="可选：同时绑定货品码"
+              />
+              <ActionButton data-testid="bind-unknown-order-btn" block plain @click="bindUnknownToOrder">
+                绑定到订单
+              </ActionButton>
+            </template>
+
             <ActionButton v-if="result.nextActions?.includes('create_expense')" block @click="goExpense">
               记一笔支出
             </ActionButton>
@@ -252,8 +420,8 @@ onMounted(async () => {
             <ActionButton v-if="result.nextActions?.includes('view_order')" block plain @click="viewOrder">
               查看订单
             </ActionButton>
-            <ActionButton v-if="result.scanType === 'unknown'" block plain @click="saveUnknownBinding">
-              保存扫码记录
+            <ActionButton v-if="result.nextActions?.includes('create_binding')" block plain @click="savePendingBinding">
+              保存待绑定记录
             </ActionButton>
           </div>
         </LuxuryCard>
@@ -268,9 +436,10 @@ onMounted(async () => {
             :key="item.id"
             class="scan-page__recent-item"
             :class="{ 'scan-page__recent-item--desktop': isDesktop }"
+            data-testid="scan-recent-item"
           >
             <div class="scan-page__recent-code">{{ item.scanCode }}</div>
-            <div class="muted">{{ item.scanTypeLabel }} · {{ item.bound ? '已绑定' : '未绑定' }}</div>
+            <div class="muted">{{ item.scanTypeLabel }} · {{ item.statusLabel || '只是扫过' }}</div>
             <div class="scan-page__recent-time">{{ formatTime(item.createdAt) }}</div>
           </div>
         </LuxuryCard>
@@ -280,6 +449,11 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.scan-page {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 .scan-page__header {
   margin-bottom: 16px;
 }
@@ -347,6 +521,7 @@ onMounted(async () => {
   font-size: 16px;
   font-weight: 600;
   color: var(--color-primary, #8b6914);
+  word-break: break-all;
 }
 
 .scan-page__result-status {
@@ -374,6 +549,12 @@ onMounted(async () => {
   padding: 12px;
   border-radius: 10px;
   background: var(--color-bg-soft, #faf7f2);
+}
+
+.scan-page__warn {
+  color: #c45c00;
+  font-size: 13px;
+  margin: 4px 0;
 }
 
 .scan-page__ops {

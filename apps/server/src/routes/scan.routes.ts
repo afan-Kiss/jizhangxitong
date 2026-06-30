@@ -6,6 +6,7 @@ import {
   listRecentScans,
   createSimpleOrderFromScan,
   bindExpenseToGoods,
+  bindOrderToGoods,
 } from '../services/scan-binding.service'
 
 export const scanRouter = Router()
@@ -37,6 +38,18 @@ scanRouter.post('/bind', requirePermission('bracelet:sync'), async (req: AuthReq
   }
 })
 
+scanRouter.post('/orders/bind-goods', requirePermission('sale:create'), async (req: AuthRequest, res) => {
+  try {
+    const data = await bindOrderToGoods(req.body, req.user)
+    res.json({ success: true, data, message: '已绑定货品' })
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      message: (err as Error).message || '绑定失败，请重新扫码试试',
+    })
+  }
+})
+
 scanRouter.get('/recent', requirePermission('bracelet:view'), async (req, res) => {
   const limit = Math.min(Number(req.query.limit || 20), 50)
   const data = await listRecentScans(limit)
@@ -46,7 +59,12 @@ scanRouter.get('/recent', requirePermission('bracelet:view'), async (req, res) =
 scanRouter.post('/orders/simple', requirePermission('sale:create'), async (req: AuthRequest, res) => {
   try {
     const data = await createSimpleOrderFromScan(req.body, req.user)
-    res.json({ success: true, data, message: '订单已创建' })
+    const isDraft = data.isDraft
+    res.json({
+      success: true,
+      data,
+      message: isDraft ? '待绑定订单已保存，请绑定货品' : '订单已创建',
+    })
   } catch (err) {
     res.status(400).json({
       success: false,

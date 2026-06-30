@@ -52,3 +52,18 @@ export function scanTypeRecognizeMessage(scanType: ScanType, code: string): stri
   const label = scanTypeHumanLabel(scanType)
   return `识别到${label}：${code}`
 }
+
+export type ScanBindingStatus = 'recognized' | 'bound' | 'pending'
+
+export function scanBindingStatusLabel(status: ScanBindingStatus): string {
+  switch (status) {
+    case 'bound': return '已绑定'
+    case 'pending': return '待绑定'
+    default: return '只是扫过'
+  }
+}
+
+/** 占位假货品编码（历史兼容，禁止新建） */
+export function isPlaceholderGoodsCode(code: string): boolean {
+  return /^PENDING-/i.test(String(code || '').trim())
+}

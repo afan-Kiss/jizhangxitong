@@ -272,6 +272,7 @@ model ScanBinding {
   id         Int       @id @default(autoincrement())
   scanCode   String
   scanType   String
+  status     String    @default("recognized")
   braceletId Int?
   saleId     Int?
   source     String    @default("manual")
@@ -284,4 +285,18 @@ model ScanBinding {
 
   @@index([scanCode])
   @@index([createdAt])
+  @@index([status])
+}
+
+model ScanOrderDraft {
+  id          Int      @id @default(autoincrement())
+  orderNo     String   @unique
+  logisticsNo String?
+  source      String   @default("manual")
+  note        String?
+  createdBy   Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([logisticsNo])
 }
