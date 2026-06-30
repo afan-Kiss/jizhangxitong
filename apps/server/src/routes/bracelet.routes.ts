@@ -119,6 +119,6 @@ braceletRouter.post('/:id/cost-adjustment', requirePermission('cost:adjust'), as
 export const workerRouter = Router()
 workerRouter.use(authMiddleware)
 workerRouter.get('/status', async (_req, res) => {
-  const status = await getWorkerStatusDetail()
+  const status = await getWorkerStatusDetail({ probeUpload: true, probeScan: true })
   res.json({ success: true, data: status })
 })

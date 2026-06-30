@@ -6,7 +6,9 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { chromium } from 'playwright'
-import { RECOMMENDED_URL } from './lib/deploy-env.mjs'
+import {
+  resolveAcceptanceWebBase, getAdminCredentials,
+} from './lib/services.mjs'
 import {
   PAGE_TIMEOUT_MS,
   SCRIPT_TIMEOUT_MS,
@@ -24,7 +26,14 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(__dirname, '..')
-const BASE = (process.env.ACCEPTANCE_SERVER || RECOMMENDED_URL).replace(/\/$/, '')
+const API_BASE = (process.env.ACCEPTANCE_SERVER || 'http://127.0.0.1:3001').replace(/\/$/, '')
+let WEB_BASE = API_BASE
+
+function accountWebBase(webBase) {
+  if (/\/account$/i.test(webBase)) return webBase
+  if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(webBase) && !webBase.includes('/account')) return webBase
+  return webBase.includes('/account') ? webBase : `${webBase}/account`
+}
 const reportsDir = path.join(ROOT, 'reports')
 
 const VIEWPORTS = [
@@ -40,12 +49,12 @@ function readAdminPassword() {
   return fs.readFileSync(file, 'utf-8').match(/密码:\s*(.+)/)?.[1]?.trim() || 'admin123'
 }
 
-async function login(page, password) {
-  await gotoLoginStable(page, `${BASE}/login`)
+async function login(page, creds) {
+  await gotoLoginStable(page, `${WEB_BASE}/login`)
   const pwd = page.locator('input[type="password"]')
   if (await pwd.count()) {
-    await page.locator('input:not([type="password"])').first().fill('admin')
-    await pwd.fill(password)
+    await page.locator('input:not([type="password"])').first().fill(creds.username)
+    await pwd.fill(creds.password)
     const submit = page.getByTestId('login-submit')
     if (await submit.count()) await submit.click()
     else await page.getByRole('button', { name: /进入系统|登录/ }).click()
@@ -64,11 +73,11 @@ async function assertNoOverflow(page) {
   }
 }
 
-async function runViewport(browser, vp, password) {
-  return withTimeout(runViewportInner(browser, vp, password), VIEWPORT_TIMEOUT_MS * 4, `viewport ${vp.name}`)
+async function runViewport(browser, vp, creds) {
+  return withTimeout(runViewportInner(browser, vp, creds), VIEWPORT_TIMEOUT_MS * 4, `viewport ${vp.name}`)
 }
 
-async function runViewportInner(browser, vp, password) {
+async function runViewportInner(browser, vp, creds) {
   const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
   const page = await context.newPage()
   const bucket = { consoleErrors: [], pageErrors: [], failedRequests: [] }
@@ -90,16 +99,16 @@ async function runViewportInner(browser, vp, password) {
   }
 
   await check('login 不是白屏', async () => {
-    await gotoLoginStable(page, `${BASE}/login`, {
+    await gotoLoginStable(page, `${WEB_BASE}/login`, {
       retryOnBlank: vp.name === 'mobile',
     })
     await assertNoOverflow(page)
   })
 
-  await login(page, password)
+  await login(page, creds)
 
   await check('首页不是白屏', async () => {
-    await gotoStable(page, `${BASE}/`)
+    await gotoStable(page, `${WEB_BASE}/`)
     const text = await page.evaluate(() => document.body?.innerText?.trim() || '')
     if (!text.includes('今天店里情况') && !text.includes('经营总览') && !text.includes('今日简况')) {
       throw new Error('首页内容异常')
@@ -119,7 +128,7 @@ async function runViewportInner(browser, vp, password) {
     })
   } else {
     await check('显示底部 TabBar', async () => {
-      await gotoStable(page, `${BASE}/`)
+      await gotoStable(page, `${WEB_BASE}/`)
       if (!(await tabBar.isVisible())) throw new Error('TabBar 不可见')
     })
     await check('不显示 Sidebar', async () => {
@@ -127,24 +136,24 @@ async function runViewportInner(browser, vp, password) {
     })
 
     await check('扫码页 Tab 显隐正确', async () => {
-      await gotoStable(page, `${BASE}/scan`)
+      await gotoStable(page, `${WEB_BASE}/scan`)
       if (await tabBar.isVisible().catch(() => false)) {
         throw new Error('扫码页不应显示 TabBar')
       }
-      await gotoStable(page, `${BASE}/`)
+      await gotoStable(page, `${WEB_BASE}/`)
       if (!(await tabBar.isVisible())) throw new Error('返回首页 TabBar 应显示')
     })
   }
 
   await check('Worker 状态可见', async () => {
-    await gotoStable(page, `${BASE}/`)
+    await gotoStable(page, `${WEB_BASE}/`)
     const text = await page.evaluate(() => document.body?.innerText || '')
     if (!/本地助手|公司电脑/.test(text)) throw new Error('未见 Worker 状态文案')
   })
 
   if (vp.desktop) {
     await check('记支出页两栏布局', async () => {
-      await gotoStable(page, `${BASE}/expense/create`)
+      await gotoStable(page, `${WEB_BASE}/expense/create`)
       const layout = await page.locator('[data-testid="expense-create-page"]').evaluate((el) => {
         const style = getComputedStyle(el)
         return { flexDirection: style.flexDirection }
@@ -153,7 +162,7 @@ async function runViewportInner(browser, vp, password) {
     })
 
     await check('导出页按钮可见', async () => {
-      await gotoStable(page, `${BASE}/expense/export`)
+      await gotoStable(page, `${WEB_BASE}/expense/export`)
       const btn = page.locator('[data-testid="export-btn"]')
       await btn.waitFor({ state: 'visible', timeout: 10000 })
       const box = await btn.boundingBox()
@@ -175,10 +184,11 @@ async function runViewportInner(browser, vp, password) {
 installScriptTimeout('test:responsive', SCRIPT_TIMEOUT_MS * 2)
 
 async function main() {
-  console.log(`\n========== 响应式验收 (${BASE}) ==========`)
+  WEB_BASE = accountWebBase(await resolveAcceptanceWebBase())
+  const creds = await getAdminCredentials()
+  console.log(`\n========== 响应式验收 (${WEB_BASE}) ==========`)
   console.log(`单页 ${PAGE_TIMEOUT_MS / 1000}s，单 viewport ${VIEWPORT_TIMEOUT_MS / 1000}s\n`)
   fs.mkdirSync(reportsDir, { recursive: true })
-  const password = readAdminPassword()
 
   let browser
   const all = []
@@ -186,7 +196,7 @@ async function main() {
   try {
     browser = await launchBrowser(chromium)
     for (const vp of VIEWPORTS) {
-      all.push(...await runViewport(browser, vp, password))
+      all.push(...await runViewport(browser, vp, creds))
     }
   } finally {
     if (browser) await browser.close().catch(() => {})

@@ -3,12 +3,18 @@ import api, { resolveApiErrorMessage } from '../api'
 
 export type WorkerStatusData = {
   online: boolean
+  workerOnline?: boolean
+  socketOpen?: boolean
+  uploadChannelReady?: boolean
+  scanChannelReady?: boolean
   reason?: string
   message?: string
   workerId?: string | null
   workerName?: string | null
   lastSeenAt?: string | null
   lastHeartbeatAt?: string | null
+  lastUploadProbeAt?: string | null
+  lastUploadProbeOk?: boolean
   serverNow?: string | null
   secondsSinceLastSeen?: number | null
   localWorkerEnabled?: boolean
@@ -19,7 +25,7 @@ export type WorkerStatusData = {
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: localStorage.getItem('token') || '',
-    user: null as { id: number; username: string; name: string } | null,
+    user: null as { id: number; username: string; name: string; status?: string } | null,
     permissions: [] as string[],
     workerOnline: false,
     workerStatus: {
@@ -81,17 +87,28 @@ export const useAuthStore = defineStore('auth', {
     },
     async fetchWorkerStatus() {
       try {
-        const res = await api.get('/local-worker/status')
+        const res = await api.get('/worker/status')
         const data = res.data.data as WorkerStatusData
         this.workerStatus = data
-        this.workerOnline = Boolean(data.online)
+        this.workerOnline = Boolean(data.uploadChannelReady && data.socketOpen)
       } catch {
         this.workerOnline = false
         this.workerStatus = {
           online: false,
+          uploadChannelReady: false,
+          scanChannelReady: false,
+          socketOpen: false,
           reason: 'WORKER_NOT_CONNECTED',
-          message: '公司电脑开着，但本地助手没有连上。请在公司电脑运行「一键修复本地Worker连接」。',
+          message: '公司电脑本地助手未连接，图片上传和扫码枪暂不可用。你仍可以先手动记账。',
         }
+      }
+    },
+    async probeUploadChannel() {
+      try {
+        const res = await api.post('/worker/probe-upload', { timeoutMs: 3000 })
+        return res.data.data as { ok: boolean; message?: string }
+      } catch {
+        return { ok: false, message: '公司电脑本地助手没连上，先重启本地助手；这笔账可以先不传图保存。' }
       }
     },
     hasPermission(code: string) {

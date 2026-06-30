@@ -10,6 +10,7 @@ import { prisma } from '../lib/prisma'
 import { generateNo, toNumber, startOfDay, endOfDay, startOfWeek, startOfMonth } from '../lib/utils'
 import { AuthRequest } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
+import { getEntityOperationLogs, resolveUserBrief, resolveUsersBrief } from './audit.service'
 import { clampPage, clampPageSize } from '../lib/pagination'
 import { resolveBraceletBinding } from '../lib/bracelet-bind'
 import { sanitizeFile } from '../lib/serialize'
@@ -177,7 +178,13 @@ export async function listExpenses(filter: ExpenseFilter) {
       file: a.file ? sanitizeFile(a.file) : a.file,
     })),
   }))
-  return { items: sanitized, total, page, pageSize }
+  const userMap = await resolveUsersBrief(sanitized.map((e) => e.createdBy))
+  const withCreator = sanitized.map((e) => ({
+    ...e,
+    createdByUser: userMap.get(e.createdBy) || null,
+    submitterName: userMap.get(e.createdBy)?.displayName || null,
+  }))
+  return { items: withCreator, total, page, pageSize }
 }
 
 export async function getExpense(id: number) {
@@ -194,11 +201,23 @@ export async function getExpense(id: number) {
   const qianfanTemplate = await getQianfanOrderUrlTemplate()
   const qianfanOrderUrl = expense.qianfanOrderUrl
     || (orderNo ? buildQianfanOrderUrl(qianfanTemplate, orderNo) : null)
+
+  const [createdByUser, updatedByUser, voidedByUser, operationLogs] = await Promise.all([
+    resolveUserBrief(expense.createdBy),
+    resolveUserBrief(expense.updatedBy),
+    resolveUserBrief(expense.voidedBy),
+    getEntityOperationLogs('expense', expense.id),
+  ])
+
   return {
     ...expense,
     qianfanOrderUrl,
     qianfanOrderLinkEnabled: await isQianfanOrderLinkEnabled(),
     affectsProfit: calculateExpenseImpact(expense).affectsProfit,
+    createdByUser: createdByUser || { displayName: '历史数据，未记录操作人' },
+    updatedByUser,
+    voidedByUser,
+    operationLogs,
   }
 }
 
@@ -403,6 +422,7 @@ export async function linkExpense(
       qianfanOrderUrl,
       pendingLinkStatus,
       linkNote: input.linkNote?.trim() || before.linkNote,
+      updatedBy: operator!.userId,
     },
   })
 
@@ -512,7 +532,7 @@ export async function updateExpense(
     data.braceletCode = binding.braceletCode || input.braceletCode?.trim().toUpperCase()
   }
 
-  const expense = await prisma.expense.update({ where: { id }, data })
+  const expense = await prisma.expense.update({ where: { id }, data: { ...data, updatedBy: operator!.userId } })
 
   const newBraceletId = expense.braceletId
   if (newBraceletId) await refreshBraceletCostTotal(newBraceletId)
@@ -634,7 +654,7 @@ export async function addAttachments(
 
   await prisma.expense.update({
     where: { id: expenseId },
-    data: { needsAttachment: false },
+    data: { needsAttachment: false, updatedBy: operator?.userId },
   })
 
   await writeOperationLog({

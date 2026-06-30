@@ -93,6 +93,13 @@ async function handleRpc(msg: RpcMessage) {
           return { success: false, error: (err as Error).message }
         }
       }
+      case RPC_METHODS.WORKER_UPLOAD_PROBE: {
+        return { success: true, data: { ok: true, fileBaseWritable: !!FILE_BASE_DIR } }
+      }
+      case RPC_METHODS.WORKER_SCAN_PROBE: {
+        const ok = await checkScannerHealth(SCANNER_API_URL, Number(msg.params.timeoutMs || 3000))
+        return { success: true, data: { ok } }
+      }
       case RPC_METHODS.FILE_DELETE_LOCAL: {
         const localPath = String(msg.params.localPath || '')
         const thumbPath = String(msg.params.thumbPath || '')

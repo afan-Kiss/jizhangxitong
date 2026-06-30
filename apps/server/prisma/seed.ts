@@ -53,8 +53,8 @@ async function main() {
   const password = await bcrypt.hash('fanfan9724', 10)
   const adminUser = await prisma.user.upsert({
     where: { username: 'fanfan' },
-    create: { username: 'fanfan', password, name: '管理员' },
-    update: {},
+    create: { username: 'fanfan', password, name: '管理员', status: 'active', isActive: true, approvedAt: new Date() },
+    update: { status: 'active', isActive: true },
   })
 
   await prisma.userRole.upsert({

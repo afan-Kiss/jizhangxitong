@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma'
 import { generateNo, toNumber } from '../lib/utils'
 import { AuthRequest } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
+import { getEntityOperationLogs, resolveUserBrief } from './audit.service'
 import { resolveBraceletBinding } from '../lib/bracelet-bind'
 import { clampPage, clampPageSize } from '../lib/pagination'
 import { startOfDay, endOfDay } from '../lib/utils'
@@ -15,6 +16,18 @@ import {
 } from '../finance/core-ledger'
 
 export { calculateSaleCost } from '../finance/core-ledger'
+
+async function enrichSaleWithAudit<T extends { id: number; createdBy: number }>(sale: T) {
+  const [createdByUser, operationLogs] = await Promise.all([
+    resolveUserBrief(sale.createdBy),
+    getEntityOperationLogs('sale', sale.id),
+  ])
+  return {
+    ...sale,
+    createdByUser: createdByUser || { displayName: '历史数据，未记录操作人' },
+    operationLogs,
+  }
+}
 
 export async function createSale(
   input: {
@@ -149,15 +162,15 @@ export async function getSale(id: number) {
     })
     if (refreshed) {
       const row = saleProfitRow({ ...refreshed, expenses: refreshed.expenses })
-      return { ...refreshed, ...row, finalProfit: row.profit }
+      return enrichSaleWithAudit({ ...refreshed, ...row, finalProfit: row.profit })
     }
   }
 
-  return {
+  return enrichSaleWithAudit({
     ...sale,
     ...profitRow,
     finalProfit: profitRow.profit,
-  }
+  })
 }
 
 export async function listSales(filter: {

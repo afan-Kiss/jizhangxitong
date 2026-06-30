@@ -47,6 +47,30 @@ export async function uploadFile(file: File, fileType: string) {
   return res.data.data
 }
 
+export async function uploadFileWithProgress(
+  file: File,
+  fileType: string,
+  onProgress: (percent: number) => void,
+) {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('fileType', fileType)
+  const res = await api.post('/files/upload', form, {
+    timeout: 120000,
+    onUploadProgress: (evt) => {
+      if (!evt.total) return
+      onProgress(Math.min(99, Math.round((evt.loaded / evt.total) * 100)))
+    },
+  })
+  onProgress(100)
+  return res.data.data
+}
+
+export async function probeWorkerUpload(timeoutMs = 3000) {
+  const res = await api.post('/worker/probe-upload', { timeoutMs })
+  return res.data.data as { ok: boolean; message?: string }
+}
+
 const accessTokenCache = new Map<number, { token: string; expiresAt: number }>()
 
 export async function getFileAccessUrl(fileId: number, kind: 'view' | 'thumb' = 'view') {

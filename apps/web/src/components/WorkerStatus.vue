@@ -4,6 +4,10 @@ import StatusPill from './StatusPill.vue'
 
 export type WorkerStatusView = {
   online?: boolean
+  workerOnline?: boolean
+  socketOpen?: boolean
+  uploadChannelReady?: boolean
+  scanChannelReady?: boolean
   reason?: string
   message?: string
 }
@@ -14,32 +18,41 @@ const props = defineProps<{
   compact?: boolean
 }>()
 
-const isOnline = computed(() => props.status?.online ?? props.online ?? false)
-const reason = computed(() => props.status?.reason || '')
+const status = computed(() => props.status || {})
 const displayMessage = computed(() => {
-  if (props.status?.message) return props.status.message
-  if (isOnline.value && reason.value === 'SCANNER_API_UNAVAILABLE') {
-    return '本地助手在线，但扫码枪接口没开。'
+  if (status.value.message) return status.value.message
+  if (status.value.uploadChannelReady && status.value.scanChannelReady) {
+    return '公司电脑已连接，扫码枪和图片可正常使用。'
   }
-  if (isOnline.value) return '公司电脑已连接，扫码枪和图片可正常使用。'
-  return '公司电脑开着，但本地助手没有连上。请在公司电脑运行「一键修复本地Worker连接」。'
+  if (status.value.uploadChannelReady && !status.value.scanChannelReady) {
+    return '图片上传可用，扫码枪未连接；可手动输入编号。'
+  }
+  if (status.value.socketOpen && !status.value.uploadChannelReady) {
+    return '公司电脑已连接，但图片上传通道超时，请重启本地助手。'
+  }
+  return '公司电脑本地助手未连接，图片上传和扫码枪暂不可用。你仍可以先手动记账。'
 })
+
 const pillType = computed(() => {
-  if (isOnline.value && reason.value === 'SCANNER_API_UNAVAILABLE') return 'warning'
-  return isOnline.value ? 'success' : 'warning'
+  if (status.value.uploadChannelReady && status.value.scanChannelReady) return 'success'
+  if (status.value.uploadChannelReady || status.value.socketOpen) return 'warning'
+  return 'warning'
 })
+
+const fullyReady = computed(() => Boolean(status.value.uploadChannelReady && status.value.scanChannelReady))
 </script>
 
 <template>
   <div
     class="worker-status"
-    :class="{ 'worker-status--offline': !isOnline, 'worker-status--compact': compact }"
+    :class="{ 'worker-status--offline': !fullyReady, 'worker-status--compact': compact }"
+    data-testid="worker-status"
   >
     <div class="worker-status__title muted">公司电脑本地助手状态</div>
     <StatusPill :type="pillType" dot>
       {{ displayMessage }}
     </StatusPill>
-    <p v-if="!isOnline && !compact" class="worker-status__hint muted">
+    <p v-if="!fullyReady && !compact" class="worker-status__hint muted">
       普通记账、统计仍可使用；需要扫码枪或本地图片时会受影响。
     </p>
   </div>

@@ -62,6 +62,7 @@ const form = ref({
   includeFreightRefund: false,
 })
 const uploadedFiles = ref<Array<{ fileId: number; fileType: string; name: string; preview?: string }>>([])
+const uploadFailCount = ref(0)
 const loading = ref(false)
 const amountFocused = ref(false)
 
@@ -229,8 +230,13 @@ async function onSubmit() {
     savePrefs()
     const expenseId = res.data.data.id
     const pending = res.data.data.pendingLinkStatus
-    if (pending === 'pending_order') {
-      showToast('已保存，待关联订单')
+    const recorder = auth.user?.name || auth.user?.username || '当前用户'
+    if (uploadFailCount.value > 0) {
+      showToast(`已保存，记录人为：${recorder}；有 ${uploadFailCount.value} 张图没传上，可稍后补传。`)
+    } else if (pending === 'pending_order') {
+      showToast(`已保存，待关联订单；记录人为：${recorder}`)
+    } else {
+      showToast(`已保存，记录人为：${recorder}`)
     }
     router.push(`/expense/${expenseId}`)
   } catch (err: unknown) {
@@ -389,7 +395,7 @@ async function onSubmit() {
 
         <LuxuryCard>
           <div class="section-title">凭证图片</div>
-          <ImageUploader v-model="uploadedFiles" />
+          <ImageUploader v-model="uploadedFiles" @upload-failures="uploadFailCount = $event" />
         </LuxuryCard>
 
         <div v-if="isDesktop" class="expense-create__save-desktop">

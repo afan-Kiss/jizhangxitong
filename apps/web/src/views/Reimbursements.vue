@@ -121,6 +121,7 @@ watch(filter, load, { deep: true })
         <div v-for="item in items" :key="item.id" class="list-card__item" @click="router.push(`/expense/${item.id}`)">
           <div>{{ item.occurredAt?.slice(0, 10) }} · {{ item.expenseType }} · ¥{{ Number(item.amount).toFixed(2) }}</div>
           <div class="muted">{{ item.paySource }} · {{ statusLabels[item.reimbursementStatus] || item.reimbursementStatus }}</div>
+          <div v-if="item.submitterName" class="muted">提交人：{{ item.submitterName }}</div>
         </div>
       </div>
       <div v-if="!items.length" class="muted">暂无记录</div>

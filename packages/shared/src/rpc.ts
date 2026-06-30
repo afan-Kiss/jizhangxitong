@@ -40,6 +40,8 @@ export const RPC_METHODS = {
   FILE_EXISTS: 'file.exists',
   FILE_READ_MANY_FOR_EXPORT: 'file.readManyForExport',
   FILE_DELETE_LOCAL: 'file.deleteLocal',
+  WORKER_UPLOAD_PROBE: 'worker.uploadProbe',
+  WORKER_SCAN_PROBE: 'worker.scanProbe',
 } as const
 
 export const ERROR_CODES = {

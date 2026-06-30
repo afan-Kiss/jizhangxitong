@@ -8,14 +8,21 @@ datasource db {
 }
 
 model User {
-  id        Int        @id @default(autoincrement())
-  username  String     @unique
-  password  String
-  name      String
-  isActive  Boolean    @default(true)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  userRoles UserRole[]
+  id               Int        @id @default(autoincrement())
+  username         String     @unique
+  password         String
+  name             String
+  phone            String?
+  status           String     @default("active")
+  isActive         Boolean    @default(true)
+  approvedAt       DateTime?
+  approvedByUserId Int?
+  rejectedAt       DateTime?
+  rejectedByUserId Int?
+  lastLoginAt      DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  userRoles        UserRole[]
 }
 
 model Role {
@@ -102,6 +109,7 @@ model Expense {
   voidReason           String?
   voidedAt             DateTime?
   voidedBy             Int?
+  updatedBy            Int?
   businessType         String?
   externalOrderNo      String?
   logisticsNo          String?

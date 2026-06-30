@@ -10,6 +10,7 @@ import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import ActionButton from '../components/ActionButton.vue'
 import OrderLink from '../components/OrderLink.vue'
+import ImageUploader from '../components/ImageUploader.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,6 +26,8 @@ const statusLabels: Record<string, string> = {
   failed: '打款失败',
 }
 const thumbUrls = ref<Record<number, string>>({})
+const supplementFiles = ref<Array<{ fileId: number; fileType: string; name: string }>>([])
+const supplementing = ref(false)
 
 const orderNo = computed(() => expense.value?.externalOrderNo || expense.value?.sale?.externalOrderNo || '')
 
@@ -73,6 +76,29 @@ async function linkOrder() {
   }
 }
 
+async function supplementAttachments() {
+  if (!supplementFiles.value.length) return
+  supplementing.value = true
+  try {
+    await api.post(`/expenses/${route.params.id}/attachments`, {
+      items: supplementFiles.value.map((f) => ({ fileId: f.fileId, fileType: f.fileType })),
+    })
+    showToast('凭证已补传')
+    supplementFiles.value = []
+    const res = await api.get(`/expenses/${route.params.id}`)
+    expense.value = res.data.data
+    for (const att of expense.value.attachments || []) {
+      if (!thumbUrls.value[att.fileId]) {
+        thumbUrls.value[att.fileId] = await fileThumbUrl(att.fileId)
+      }
+    }
+  } catch (err: any) {
+    showToast(err.response?.data?.message || '补传失败')
+  } finally {
+    supplementing.value = false
+  }
+}
+
 function goGoodsProfit() {
   const code = expense.value?.braceletCode
   if (code) router.push(`/bracelets/${code}`)
@@ -108,6 +134,25 @@ function goGoodsProfit() {
     </LuxuryCard>
 
     <LuxuryCard :stagger="2">
+      <div class="section-title">操作记录</div>
+      <div class="expense-detail__row">
+        <span class="muted">创建人</span>
+        <span>{{ expense.createdByUser?.displayName || '历史数据，未记录操作人' }}</span>
+      </div>
+      <div v-if="expense.updatedByUser" class="expense-detail__row">
+        <span class="muted">最近修改</span>
+        <span>{{ expense.updatedByUser.displayName }}</span>
+      </div>
+      <div v-if="expense.voidedByUser" class="expense-detail__row">
+        <span class="muted">作废人</span>
+        <span>{{ expense.voidedByUser.displayName }}</span>
+      </div>
+      <div v-for="log in expense.operationLogs || []" :key="log.id" class="expense-detail__log muted">
+        {{ log.summary }} · {{ log.createdAt?.slice(0, 16).replace('T', ' ') }}
+      </div>
+    </LuxuryCard>
+
+    <LuxuryCard :stagger="3">
       <div class="section-title">详情</div>
       <div class="expense-detail__row">
         <span class="muted">报销人</span>
@@ -139,7 +184,7 @@ function goGoodsProfit() {
       </div>
     </LuxuryCard>
 
-    <LuxuryCard v-if="auth.hasPermission('expense:attachment:view')" :stagger="3" data-testid="expense-voucher-card">
+    <LuxuryCard v-if="auth.hasPermission('expense:attachment:view')" :stagger="4" data-testid="expense-voucher-card">
       <div class="section-title">凭证图片（{{ expense.attachments?.length || 0 }}）</div>
       <div class="expense-detail__thumbs">
         <img
@@ -150,6 +195,17 @@ function goGoodsProfit() {
         />
       </div>
       <div v-if="!expense.attachments?.length" class="muted">暂无凭证</div>
+      <div v-if="auth.hasPermission('expense:attachment:upload') && !expense.isVoided" class="expense-detail__supplement">
+        <div class="section-title" style="margin-top:16px">补传凭证</div>
+        <ImageUploader v-model="supplementFiles" />
+        <ActionButton
+          v-if="supplementFiles.length"
+          plain
+          :loading="supplementing"
+          data-testid="expense-supplement-upload"
+          @click="supplementAttachments"
+        >保存补传图片</ActionButton>
+      </div>
     </LuxuryCard>
 
     <div class="expense-detail__nav" data-testid="expense-detail-nav">

@@ -59,7 +59,18 @@ async function onRefund() {
       <div class="muted">{{ sale.customerName || '-' }} · {{ sale.soldAt?.slice(0, 10) }}</div>
     </LuxuryCard>
 
-    <LuxuryCard v-if="sale.externalOrderNo" :stagger="1" data-testid="sale-order-card">
+    <LuxuryCard :stagger="1">
+      <div class="section-title">登记信息</div>
+      <div class="sale-detail__row">
+        <span class="muted">登记人</span>
+        <span>{{ sale.createdByUser?.displayName || '历史数据，未记录操作人' }}</span>
+      </div>
+      <div v-for="log in sale.operationLogs || []" :key="log.id" class="muted sale-detail__log">
+        {{ log.summary }} · {{ log.createdAt?.slice(0, 16).replace('T', ' ') }}
+      </div>
+    </LuxuryCard>
+
+    <LuxuryCard v-if="sale.externalOrderNo" :stagger="2" data-testid="sale-order-card">
       <div class="section-title">小红书订单</div>
       <OrderLink :order-no="sale.externalOrderNo" data-testid="sale-detail-order-no" />
     </LuxuryCard>

@@ -8,6 +8,7 @@ import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import WorkerStatus from '../components/WorkerStatus.vue'
 import PermissionManage from '../components/PermissionManage.vue'
+import UserManage from '../components/UserManage.vue'
 import { loginPath } from '../utils/base-path'
 import { useBreakpoint } from '../composables/useBreakpoint'
 
@@ -26,7 +27,7 @@ onMounted(async () => {
   await auth.fetchWorkerStatus()
   const [settingsRes, workerRes, healthRes, scanRes] = await Promise.all([
     api.get('/settings'),
-    api.get('/local-worker/status'),
+    api.get('/worker/status'),
     api.get('/health'),
     api.get('/scan/status'),
   ])
@@ -82,7 +83,7 @@ function logout() {
       <van-cell title="版本号" :value="healthInfo.version || '未知'" data-testid="settings-app-version" />
       <van-cell title="扫码工作台" :value="healthInfo.scanWorkbenchEnabled ? '已启用' : '未启用'" />
       <van-cell title="7789 扫码枪" :value="scanStatus.scannerOnline ? '已连接' : '未连接'" data-testid="settings-scanner-status" />
-      <van-cell title="Worker" :value="workerStatus.online ? '在线' : '离线'" data-testid="settings-worker-status" />
+      <van-cell title="Worker" :value="workerStatus.uploadChannelReady ? '上传可用' : '未连接'" data-testid="settings-worker-status" />
     </LuxuryCard>
 
     <div class="settings-grid desktop-grid-2">
@@ -130,6 +131,10 @@ function logout() {
       <van-cell title="操作日志" is-link @click="router.push('/logs')" />
       <van-cell title="未报销列表" is-link @click="router.push('/reimbursements')" />
       <van-cell title="报销导出" is-link @click="router.push('/expense/export')" />
+    </LuxuryCard>
+
+    <LuxuryCard v-if="canManagePermission" gold data-testid="settings-user-manage">
+      <UserManage />
     </LuxuryCard>
 
     <PermissionManage v-if="canManagePermission" />

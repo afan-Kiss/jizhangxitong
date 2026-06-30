@@ -18,6 +18,8 @@ import { maintenanceRouter } from './routes/maintenance.routes'
 import { scanRouter } from './routes/scan.routes'
 import { goodsRouter } from './routes/goods.routes'
 import { statsRouter } from './routes/stats.routes'
+import { workerApiRouter } from './routes/worker.routes'
+import { userRouter } from './routes/user.routes'
 import { getSystemStatus } from './services/system-status.service'
 import { isQianfanOrderLinkEnabled } from './services/settings.service'
 
@@ -52,6 +54,8 @@ export function createApp() {
 
   app.use('/api/auth', authRouter)
   app.use('/api/local-worker', workerRouter)
+  app.use('/api/worker', workerApiRouter)
+  app.use('/api/users', userRouter)
   app.use('/api/bracelets', braceletRouter)
   app.use('/api/expenses', expenseRouter)
   app.use('/api/sales', saleRouter)
