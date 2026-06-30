@@ -17,17 +17,26 @@ export function getLocalHead() {
 
 export async function fetchRemoteVersions(baseUrl) {
   const base = baseUrl.replace(/\/$/, '')
-  const indexRes = await fetchWithTimeout(`${base}/`, {}, 30000)
-  const html = await indexRes.text()
-  const metaVersion = html.match(/app-version" content="([^"]+)"/)?.[1]?.trim() || null
+  let lastErr
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const indexRes = await fetchWithTimeout(`${base}/`, {}, 30000)
+      const html = await indexRes.text()
+      const metaVersion = html.match(/app-version" content="([^"]+)"/)?.[1]?.trim() || null
 
-  const healthRes = await fetchWithTimeout(`${base}/api/health`, {}, 30000)
-  const healthText = await healthRes.text()
-  let healthJson = {}
-  try { healthJson = JSON.parse(healthText) } catch { /* ignore */ }
-  const healthVersion = healthJson.version != null ? String(healthJson.version).trim() : null
+      const healthRes = await fetchWithTimeout(`${base}/api/health`, {}, 30000)
+      const healthText = await healthRes.text()
+      let healthJson = {}
+      try { healthJson = JSON.parse(healthText) } catch { /* ignore */ }
+      const healthVersion = healthJson.version != null ? String(healthJson.version).trim() : null
 
-  return { metaVersion, healthVersion, indexStatus: indexRes.status, healthStatus: healthRes.status }
+      return { metaVersion, healthVersion, indexStatus: indexRes.status, healthStatus: healthRes.status }
+    } catch (e) {
+      lastErr = e
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 2000 * attempt))
+    }
+  }
+  throw lastErr
 }
 
 export async function verifyDeployVersion(expectedHead, baseUrl = RECOMMENDED_URL.replace(/\/$/, '')) {
