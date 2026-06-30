@@ -15,9 +15,33 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(__dirname, '..')
 const DEPLOY_PY = path.join(ROOT, 'deploy/aliyun/upload-and-deploy.py')
 
+const deployReport = {
+  core: [],
+  external: [],
+}
+
 function run(cmd, opts = {}) {
   console.log(`\n>>> ${cmd}`)
   execSync(cmd, { cwd: ROOT, stdio: 'inherit', timeout: opts.timeout ?? 600000, ...opts })
+}
+
+/** 运行子命令；exit 2 = 仅外部依赖失败，不阻断部署 */
+function runTiered(label, cmd, tier, opts = {}) {
+  console.log(`\n>>> ${cmd}`)
+  try {
+    execSync(cmd, { cwd: ROOT, stdio: 'inherit', timeout: opts.timeout ?? 600000, ...opts })
+    deployReport[tier].push({ name: label, ok: true })
+    return { ok: true }
+  } catch (e) {
+    const code = e.status ?? 1
+    if (tier === 'external' && code === 2) {
+      console.warn(`\nWARN — ${label}: 外部依赖未全部通过（exit 2），不阻断部署`)
+      deployReport.external.push({ name: label, ok: false, warnOnly: true, exitCode: 2 })
+      return { ok: false, warnOnly: true }
+    }
+    deployReport[tier].push({ name: label, ok: false, exitCode: code })
+    throw e
+  }
 }
 
 async function restartWorker() {
@@ -61,14 +85,56 @@ async function verifyWorkerRemote(baseUrl) {
     console.log('本地 fileBaseWritable:', localStatus.fileBaseWritable)
     console.log('本地 scannerAvailable:', localStatus.scannerAvailable)
 
+    deployReport.external.push({
+      name: 'Worker online（远程 API）',
+      ok: d.online === true,
+      detail: d.message || d.reason,
+    })
+
     return d
   } catch (e) {
     console.error('Worker 验收失败:', e.message)
+    deployReport.external.push({ name: 'Worker online（远程 API）', ok: false, detail: e.message })
     return { online: false, reason: 'WORKER_NOT_CONNECTED' }
   } finally {
     if (prev !== undefined) process.env.ACCEPTANCE_SERVER = prev
     else delete process.env.ACCEPTANCE_SERVER
   }
+}
+
+async function check7789() {
+  const scanner = process.env.SCANNER_API_URL || 'http://127.0.0.1:7789'
+  try {
+    const h = await fetch(`${scanner}/api/health`, { signal: AbortSignal.timeout(10000) })
+    deployReport.external.push({ name: '7789 health', ok: h.ok, detail: scanner })
+    return h.ok
+  } catch (e) {
+    deployReport.external.push({ name: '7789 health', ok: false, detail: e.message })
+    return false
+  }
+}
+
+function printDeploySummary(gitHash, workerReport) {
+  console.log('\n========================================')
+  console.log('部署验收分级报告')
+  console.log('========================================')
+  console.log('\n【核心业务验收】')
+  console.log('  /account/、/api/health、APP_VERSION、扫码工作台、记账/销售利润口径')
+  const coreFail = deployReport.core.filter((x) => !x.ok)
+  if (coreFail.length) {
+    coreFail.forEach((x) => console.log(`  ✗ ${x.name}`))
+  } else {
+    console.log('  ✓ 全部通过')
+  }
+  console.log('\n【外部依赖验收】')
+  console.log('  Worker online、7789、Excel 图片上传')
+  for (const x of deployReport.external) {
+    const icon = x.ok ? '✓' : (x.warnOnly ? '⚠' : '✗')
+    console.log(`  ${icon} ${x.name}${x.detail ? ` — ${x.detail}` : ''}`)
+  }
+  console.log(`\nAPP_VERSION: ${gitHash}`)
+  console.log(`Worker online: ${workerReport.online}`)
+  console.log('========================================\n')
 }
 
 async function main() {
@@ -108,25 +174,46 @@ async function main() {
     for (const e of versionCheck1.errors) console.error(`  - ${e}`)
     process.exit(1)
   }
+  deployReport.core.push({ name: 'APP_VERSION 与 HEAD 一致（上传后）', ok: true })
   console.log(`\nOK — 远程版本与 HEAD 一致: ${gitHash}\n`)
-  const workerReport = await verifyWorkerRemote(remoteUrl)
 
-  run(`node scripts/remote-acceptance.mjs`, {
+  const workerReport = await verifyWorkerRemote(remoteUrl)
+  await check7789()
+
+  runTiered('remote-acceptance（含 Excel/Worker 上传）', `node scripts/remote-acceptance.mjs`, 'external', {
     env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl, ACCEPTANCE_MODE: 'full' },
     timeout: TIMEOUTS.remoteAcceptance + 30000,
   })
 
   const testEnv = { ...process.env, ACCEPTANCE_SERVER: remoteUrl }
-  run('node scripts/test-white-screen.mjs', { env: testEnv, timeout: TIMEOUTS.whiteScreen + 180000 })
-  run('node scripts/test-responsive.mjs', { env: testEnv, timeout: TIMEOUTS.responsive + 180000 })
-  run('node scripts/test-login.mjs', { env: testEnv, timeout: TIMEOUTS.login + 30000 })
-  run('node scripts/test-subpath-refresh.mjs', { env: testEnv, timeout: TIMEOUTS.subpath + 30000 })
-  run('node scripts/test-scan-binding.mjs', { env: testEnv, timeout: TIMEOUTS.acceptanceFull + 60000 })
-  run('node scripts/test-scan-workbench.mjs', { env: testEnv, timeout: TIMEOUTS.acceptanceFull + 60000 })
-  run('node scripts/test-accounting-flow.mjs', { env: testEnv, timeout: TIMEOUTS.acceptanceFull + 60000 })
-  run('node scripts/test-effective-sales.mjs', { env: testEnv, timeout: TIMEOUTS.acceptanceBasic + 30000 })
-  run('node scripts/test-reimbursement-export.mjs', { env: testEnv, timeout: TIMEOUTS.acceptanceBasic + 120000 })
-  run('node scripts/test-worker-online.mjs', { env: testEnv, timeout: TIMEOUTS.workerOnline + 60000 })
+  const coreTests = [
+    ['test:white-screen', `node scripts/test-white-screen.mjs`, TIMEOUTS.whiteScreen + 180000],
+    ['test:responsive', `node scripts/test-responsive.mjs`, TIMEOUTS.responsive + 180000],
+    ['test:login', `node scripts/test-login.mjs`, TIMEOUTS.login + 30000],
+    ['test:subpath', `node scripts/test-subpath-refresh.mjs`, TIMEOUTS.subpath + 30000],
+    ['test:scan-binding', `node scripts/test-scan-binding.mjs`, TIMEOUTS.acceptanceFull + 60000],
+    ['test:scan-workbench', `node scripts/test-scan-workbench.mjs`, TIMEOUTS.acceptanceFull + 60000],
+    ['test:accounting-flow', `node scripts/test-accounting-flow.mjs`, TIMEOUTS.acceptanceFull + 60000],
+    ['test:effective-sales', `node scripts/test-effective-sales.mjs`, TIMEOUTS.acceptanceBasic + 30000],
+    ['test:reimbursement-export', `node scripts/test-reimbursement-export.mjs`, TIMEOUTS.acceptanceBasic + 120000],
+  ]
+  for (const [label, script, timeout] of coreTests) {
+    try {
+      run(script, { env: testEnv, timeout })
+      deployReport.core.push({ name: label, ok: true })
+    } catch (e) {
+      deployReport.core.push({ name: label, ok: false })
+      throw e
+    }
+  }
+
+  try {
+    run('node scripts/test-worker-online.mjs', { env: testEnv, timeout: TIMEOUTS.workerOnline + 60000 })
+    deployReport.external.push({ name: 'test:worker-online', ok: true })
+  } catch (e) {
+    deployReport.external.push({ name: 'test:worker-online', ok: false, detail: e.message })
+    console.warn('\nWARN — test:worker-online 未通过（外部依赖），不阻断部署')
+  }
 
   const versionCheck2 = await verifyDeployVersion(gitHash, remoteUrl)
   if (!versionCheck2.ok) {
@@ -137,13 +224,21 @@ async function main() {
     for (const e of versionCheck2.errors) console.error(`  - ${e}`)
     process.exit(1)
   }
-  console.log(`\nOK — 部署完成，版本一致: ${gitHash}\n`)
+  deployReport.core.push({ name: 'APP_VERSION 与 HEAD 一致（部署末）', ok: true })
 
-  console.log('\n=== 部署 Worker 报告 ===')
-  console.log(JSON.stringify(workerReport, null, 2))
+  printDeploySummary(gitHash, workerReport)
+
+  const extHardFail = deployReport.external.filter((x) => !x.ok && !x.warnOnly)
+  if (extHardFail.length) {
+    console.warn('提示: 部分外部依赖硬失败，但核心业务与版本已验收通过')
+  }
   if (!workerReport.online) {
     console.error('警告: 部署后 Worker 仍离线，请在公司电脑运行「一键修复本地Worker连接.bat」')
   }
+
+  console.log(`\nOK — 部署完成，版本一致: ${gitHash}\n`)
+  console.log('\n=== 部署 Worker 报告 ===')
+  console.log(JSON.stringify(workerReport, null, 2))
 }
 
 main().catch((e) => {

@@ -1,31 +1,49 @@
 /**
  * 和田玉镯子记账系统 - 全自动联调验收
  * 用法: node scripts/auto-acceptance.mjs [basic|full]
+ * 退出码: 0=全部通过; 1=核心业务失败; 2=仅外部依赖失败（Worker/7789/Excel上传）
  */
 import fs from 'fs/promises'
 import path from 'path'
 import ExcelJS from 'exceljs'
-import { spawn, execSync } from 'child_process'
+import { execSync } from 'child_process'
 import {
-  ROOT, SERVER, SCANNER, login, fetchJson, authHeaders, createTestPng,
+  ROOT, SERVER, SCANNER, login, fetchJson, authHeaders,
   ensureServerRunning, ensureWorkerRunning, ensureScannerRunning,
   writeMarkdownReport, sleep,
+  getWorkerCheckBaseUrl, fetchWorkerStatus,
+  uploadImageWithRetry, ACCEPTANCE_TIER, recordAcceptanceResult,
+  resetAcceptanceFailures, getAcceptanceFailures, isLocalServer,
 } from './lib/services.mjs'
 import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
 
 const MODE = process.argv[2] === 'full' || process.env.ACCEPTANCE_MODE === 'full' ? 'full' : 'basic'
 
+const SECTION_TIER = {
+  startup: ACCEPTANCE_TIER.CORE,
+  api: ACCEPTANCE_TIER.CORE,
+  worker: ACCEPTANCE_TIER.EXTERNAL,
+  scanner: ACCEPTANCE_TIER.EXTERNAL,
+  braceletSync: ACCEPTANCE_TIER.EXTERNAL,
+  expense: ACCEPTANCE_TIER.CORE,
+  image: ACCEPTANCE_TIER.EXTERNAL,
+  sale: ACCEPTANCE_TIER.CORE,
+  excel: ACCEPTANCE_TIER.EXTERNAL,
+  full: ACCEPTANCE_TIER.CORE,
+  remaining: ACCEPTANCE_TIER.CORE,
+}
+
 const report = {
   sections: [
     ['启动检查', 'startup'],
     ['接口检查', 'api'],
-    ['Worker', 'worker'],
-    ['扫码枪', 'scanner'],
-    ['镯子同步', 'braceletSync'],
+    ['Worker（外部依赖）', 'worker'],
+    ['扫码枪（外部依赖）', 'scanner'],
+    ['镯子同步（外部依赖）', 'braceletSync'],
     ['支出', 'expense'],
-    ['图片', 'image'],
+    ['图片（外部依赖）', 'image'],
     ['销售', 'sale'],
-    ['Excel', 'excel'],
+    ['Excel（外部依赖）', 'excel'],
     ['Full 模式扩展', 'full'],
     ['待处理', 'remaining'],
   ],
@@ -35,23 +53,42 @@ const report = {
   ),
 }
 
-function log(section, msg, ok = true) {
+function log(section, msg, ok = true, tierOverride) {
+  const tier = tierOverride ?? SECTION_TIER[section] ?? ACCEPTANCE_TIER.CORE
   const line = `${ok ? '✓' : '✗'} ${msg}`
   report.data[section].push(line)
   console.log(`[${section}] ${line}`)
+  if (!ok) recordAcceptanceResult(tier, `[${section}] ${msg}`)
+}
+
+async function resolveWorkerOnline(token) {
+  const workerBase = await getWorkerCheckBaseUrl()
+  const workerToken = workerBase === SERVER.replace(/\/$/, '') ? token : await login(workerBase)
+  const st = await fetchWorkerStatus(workerToken, workerBase)
+  return {
+    online: st.json.data?.online === true,
+    base: workerBase,
+    data: st.json.data || {},
+  }
 }
 
 async function uploadImage(token, fileType, name) {
-  const buf = await createTestPng()
-  const form = new FormData()
-  form.append('file', new Blob([buf], { type: 'image/png' }), name)
-  form.append('fileType', fileType)
-  const res = await fetch(`${SERVER}/api/files/upload`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: form,
+  const worker = await resolveWorkerOnline(token)
+  const up = await uploadImageWithRetry(token, fileType, name, {
+    maxRetries: 2,
+    timeoutMs: 45000,
   })
-  return res.json()
+  if (up.ok) return up.json
+
+  const detail = [
+    `接口=${up.uploadUrl}`,
+    `大小=${up.fileSize}B`,
+    `Worker.online=${worker.online}`,
+    `Worker.base=${worker.base}`,
+    `错误=${up.error?.message || 'unknown'}`,
+    `重试=${up.attempts}次`,
+  ].join('; ')
+  return { success: false, message: detail, _uploadMeta: { worker, up } }
 }
 
 async function verifyExcelBuffer(xlsxBuf, opts = {}) {
@@ -138,7 +175,7 @@ async function testMultiImageExcel(token, testCode, braceletId) {
     if (up.success) {
       fileIds.push(up.data.id)
     } else {
-      log('full', `上传 ${ft} 失败: ${up.message}`, false)
+      log('full', `上传 ${ft} 失败: ${up.message}`, false, ACCEPTANCE_TIER.EXTERNAL)
     }
   }
 
@@ -156,22 +193,23 @@ async function testMultiImageExcel(token, testCode, braceletId) {
     method: 'POST',
     headers: authHeaders(token),
     body: JSON.stringify({ startDate: monthStart, endDate: today, reimbursementStatus: 'all' }),
+    signal: AbortSignal.timeout(120000),
   })
 
   if (!exportRes.res.ok) {
-    log('full', `多图导出失败: ${exportRes.json.message}`, false)
+    log('full', `多图导出失败: ${exportRes.json.message}`, false, ACCEPTANCE_TIER.EXTERNAL)
     return
   }
 
-  const dl = await fetch(`${SERVER}${exportRes.json.data.downloadUrl}`)
+  const dl = await fetch(`${SERVER}${exportRes.json.data.downloadUrl}`, { signal: AbortSignal.timeout(120000) })
   const xlsxBuf = Buffer.from(await dl.arrayBuffer())
   const v = await verifyExcelBuffer(xlsxBuf, { minImages: 3, targetAmount: 12.34 })
 
   log('full', `主行含12.34: ${v.hasTargetAmount}`, v.hasTargetAmount)
-  log('full', `附图行(金额为空): ${v.attachmentRowsEmptyAmount}`, v.attachmentRowsEmptyAmount >= 2)
+  log('full', `附图行(金额为空): ${v.attachmentRowsEmptyAmount}`, v.attachmentRowsEmptyAmount >= 2, ACCEPTANCE_TIER.EXTERNAL)
   log('full', `合计公式: ${v.hasFormula}`, v.hasFormula)
-  log('full', `嵌入图片数: ${v.embeddedImages}`, v.embeddedImages >= 3)
-  log('full', `xlsx 内含 media: ${v.zipHasMedia}`, v.zipHasMedia)
+  log('full', `嵌入图片数: ${v.embeddedImages}`, v.embeddedImages >= 3, ACCEPTANCE_TIER.EXTERNAL)
+  log('full', `xlsx 内含 media: ${v.zipHasMedia}`, v.zipHasMedia, ACCEPTANCE_TIER.EXTERNAL)
 
   await fetchJson(`${SERVER}/api/maintenance/cleanup-test-data`, {
     method: 'POST',
@@ -188,22 +226,28 @@ async function testFullExtras(token) {
   const badFile = await fetch(`${SERVER}/api/files/999999/view`, { headers: { Authorization: `Bearer ${token}` } })
   log('full', `不存在图片 → ${badFile.status}`, badFile.status >= 400)
 
-  const workerStatus = await fetchJson(`${SERVER}/api/local-worker/status`, { headers: authHeaders(token) })
-  log('full', `Worker 在线: ${workerStatus.json.data?.online}`, workerStatus.json.data?.online)
+  const worker = await resolveWorkerOnline(token)
+  if (worker.online) {
+    log('full', `Worker 在线: true (${worker.base})`, true, ACCEPTANCE_TIER.EXTERNAL)
+  } else if (isLocalServer(SERVER) && worker.base !== SERVER.replace(/\/$/, '')) {
+    log('full', `Worker 离线（远程 ${worker.base}）：${worker.data.reason || worker.data.message || 'offline'}`, false, ACCEPTANCE_TIER.EXTERNAL)
+  } else {
+    log('full', `Worker 在线: false (${worker.base})`, false, ACCEPTANCE_TIER.EXTERNAL)
+  }
 
   try {
     execSync('npm run worker:status', { cwd: ROOT, encoding: 'utf-8', timeout: 15000 })
-    log('full', 'worker:status 命令可执行')
+    log('full', 'worker:status 命令可执行', true, ACCEPTANCE_TIER.EXTERNAL)
   } catch (e) {
-    log('full', `worker:status: ${e.message}`, false)
+    log('full', `worker:status: ${e.message}`, false, ACCEPTANCE_TIER.EXTERNAL)
   }
 }
 
 async function checkScanner() {
   try {
-    const health = await fetchJson(`${SCANNER}/api/health`)
+    const health = await fetchJson(`${SCANNER}/api/health`, { signal: AbortSignal.timeout(10000) })
     log('scanner', `GET /api/health → ${health.res.status}`, health.res.ok)
-    const search = await fetchJson(`${SCANNER}/api/bracelets/search?q=F`)
+    const search = await fetchJson(`${SCANNER}/api/bracelets/search?q=F`, { signal: AbortSignal.timeout(15000) })
     log('scanner', `GET search → ${search.res.status}`, search.res.ok)
     let testCode = search.json?.data?.[0]?.braceletCode || search.json?.data?.[0]?.certNo || null
     if (testCode) log('scanner', `测试编号: ${testCode}`)
@@ -215,37 +259,50 @@ async function checkScanner() {
 }
 
 async function main() {
+  resetAcceptanceFailures()
   installScriptTimeout(`acceptance:${MODE}`, MODE === 'full' ? TIMEOUTS.acceptanceFull : TIMEOUTS.acceptanceBasic)
   console.log(`\n========== 验收 (${MODE}) ==========\n`)
+  if (isLocalServer(SERVER)) {
+    const workerBase = await getWorkerCheckBaseUrl()
+    if (workerBase !== SERVER.replace(/\/$/, '')) {
+      console.log(`[info] 本地 API=${SERVER}，Worker 状态将查远程 ${workerBase}（与 test:worker-online 一致）\n`)
+    }
+  }
 
   await ensureServerRunning((s, m, ok) => log('startup', m, ok !== false))
-  await ensureScannerRunning((s, m, ok) => log('startup', m, ok !== false))
-  const token = await ensureWorkerRunning((s, m, ok) => log('startup', m, ok !== false))
+  await ensureScannerRunning((s, m, ok) => log('startup', m, ok !== false, ACCEPTANCE_TIER.EXTERNAL))
+  const token = await ensureWorkerRunning((s, m, ok) => {
+    const tier = /Worker/.test(m) ? ACCEPTANCE_TIER.EXTERNAL : ACCEPTANCE_TIER.CORE
+    log('startup', m, ok !== false, tier)
+  })
 
   const h = await fetchJson(`${SERVER}/api/health`)
   log('api', `health → ${h.json.message || h.text}`, h.res.ok)
+  if (h.json.scanWorkbenchEnabled !== undefined) {
+    log('api', `scanWorkbenchEnabled=${h.json.scanWorkbenchEnabled}`, true)
+  }
+  if (h.json.version) {
+    log('api', `version=${h.json.version}`, true)
+  }
 
   const me = await fetchJson(`${SERVER}/api/auth/me`, { headers: authHeaders(token) })
   log('api', `权限数: ${me.json.data?.permissions?.length || 0}`, me.res.ok)
 
   const scanner = await checkScanner()
-  let workerBefore = await fetchJson(`${SERVER}/api/local-worker/status`, { headers: authHeaders(token) })
-  log('worker', `online=${workerBefore.json.data?.online}`, workerBefore.json.data?.online)
+  const workerInfo = await resolveWorkerOnline(token)
+  log('worker', `online=${workerInfo.online} (${workerInfo.base})`, workerInfo.online)
 
   let testCode = scanner.testCode || 'F0007584'
   let braceletId = null
-  const workerOnline = workerBefore.json.data?.online
+  const workerOnline = workerInfo.online
 
   if (workerOnline && scanner.online) {
     const sync1 = await fetchJson(`${SERVER}/api/bracelets/${encodeURIComponent(testCode)}`, { headers: authHeaders(token) })
     braceletId = sync1.json.data?.id
     log('braceletSync', `同步 ${testCode} id=${braceletId}`, sync1.res.ok && !!braceletId)
   } else {
-    log('braceletSync', '跳过', false)
+    log('braceletSync', `跳过（Worker=${workerOnline} 扫码枪=${scanner.online}）`, false)
   }
-
-  const summaryBefore = await fetchJson(`${SERVER}/api/expenses/summary?period=today`, { headers: authHeaders(token) })
-  const pendingBefore = summaryBefore.json.data?.pendingAmount || 0
 
   const expCreate = await fetchJson(`${SERVER}/api/expenses`, {
     method: 'POST',
@@ -277,8 +334,13 @@ async function main() {
         headers: authHeaders(token),
         body: JSON.stringify({ items: [{ fileId, fileType: 'payment_screenshot' }] }),
       })
-      const viewRes = await fetch(`${SERVER}/api/files/${fileId}/view`, { headers: { Authorization: `Bearer ${token}` } })
+      const viewRes = await fetch(`${SERVER}/api/files/${fileId}/view`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(30000),
+      })
       log('image', `查看 → ${viewRes.status}`, viewRes.ok)
+    } else {
+      log('image', `上传失败: ${up.message}`, false)
     }
   }
 
@@ -315,9 +377,10 @@ async function main() {
         endDate: today,
         reimbursementStatus: 'all',
       }),
+      signal: AbortSignal.timeout(120000),
     })
     if (exportRes.res.ok) {
-      const dl = await fetch(`${SERVER}${exportRes.json.data.downloadUrl}`)
+      const dl = await fetch(`${SERVER}${exportRes.json.data.downloadUrl}`, { signal: AbortSignal.timeout(120000) })
       const buf = Buffer.from(await dl.arrayBuffer())
       const v = await verifyExcelBuffer(buf)
       log('excel', `表头: ${v.headerOk}`, v.headerOk)
@@ -331,17 +394,31 @@ async function main() {
   if (MODE === 'full') {
     if (workerOnline) {
       await testMultiImageExcel(token, testCode, braceletId)
+    } else {
+      log('full', '多图 Excel 跳过（Worker 离线）', false, ACCEPTANCE_TIER.EXTERNAL)
     }
     await testFullExtras(token)
   }
 
   report.data.remaining.push(`测试数据 expenseId=${expenseId} saleId=${saleId} fileId=${fileId} — 运行 npm run acceptance:cleanup 清理`)
 
+  const failures = getAcceptanceFailures()
+  report.data.remaining.push(`--- 分级汇总: 核心失败 ${failures.core.length} 项; 外部依赖失败 ${failures.external.length} 项 ---`)
+  if (failures.core.length) failures.core.forEach((m) => report.data.remaining.push(`[核心] ${m}`))
+  if (failures.external.length) failures.external.forEach((m) => report.data.remaining.push(`[外部] ${m}`))
+
   const reportPath = await writeMarkdownReport(report, MODE)
   console.log(`\n报告: ${reportPath}\n`)
 
-  const failed = Object.values(report.data).flat().filter((l) => l.startsWith('✗'))
-  if (failed.length) process.exit(1)
+  console.log('=== 验收分级 ===')
+  console.log(`核心业务: ${failures.core.length ? `✗ ${failures.core.length} 项失败` : '✓ 通过'}`)
+  console.log(`外部依赖: ${failures.external.length ? `⚠ ${failures.external.length} 项未通过` : '✓ 通过'}`)
+  if (failures.external.length) {
+    failures.external.forEach((m) => console.log(`  [外部] ${m}`))
+  }
+
+  if (failures.core.length) process.exit(1)
+  if (failures.external.length) process.exit(2)
 }
 
 main().catch((err) => {

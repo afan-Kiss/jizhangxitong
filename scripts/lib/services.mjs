@@ -16,7 +16,33 @@ export const SERVER = (process.env.ACCEPTANCE_SERVER || 'http://127.0.0.1:3001')
 export const SCANNER = process.env.SCANNER_API_URL || 'http://127.0.0.1:7789'
 export const SCANNER_ROOT = process.env.SCANNER_PROJECT_ROOT || path.join(ROOT, '..', '扫码枪登记出入库系统')
 
+/** 验收项分级：core=核心业务；external=Worker/7789/Excel上传等外部依赖 */
+export const ACCEPTANCE_TIER = {
+  CORE: 'core',
+  EXTERNAL: 'external',
+}
+
 const childProcesses = []
+const _acceptanceFailures = { core: [], external: [] }
+
+export function recordAcceptanceResult(tier, msg, ok) {
+  if (ok) return
+  if (tier === ACCEPTANCE_TIER.CORE) _acceptanceFailures.core.push(msg)
+  else _acceptanceFailures.external.push(msg)
+}
+
+export function getAcceptanceFailures() {
+  return { ..._acceptanceFailures, core: [..._acceptanceFailures.core], external: [..._acceptanceFailures.external] }
+}
+
+export function resetAcceptanceFailures() {
+  _acceptanceFailures.core.length = 0
+  _acceptanceFailures.external.length = 0
+}
+
+export function isLocalServer(url = SERVER) {
+  return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(String(url).replace(/\/$/, ''))
+}
 
 export function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
@@ -43,8 +69,8 @@ export async function getAdminPassword() {
   return 'admin123'
 }
 
-export async function login() {
-  const server = (process.env.ACCEPTANCE_SERVER || 'http://127.0.0.1:3001').replace(/\/$/, '')
+export async function login(serverUrl) {
+  const server = (serverUrl || process.env.ACCEPTANCE_SERVER || 'http://127.0.0.1:3001').replace(/\/$/, '')
   const password = await getAdminPassword()
   const { res, json } = await fetchJson(`${server}/api/auth/login`, {
     method: 'POST',
@@ -186,15 +212,43 @@ export async function resolveAcceptanceWebBase(logFn = () => {}) {
   return ensureWebDevRunning(logFn)
 }
 
-export async function ensureWorkerRunning(logFn) {
-  const token = await login()
-  let status = await fetchJson(`${SERVER}/api/local-worker/status`, { headers: authHeaders(token) })
-  if (status.json.data?.online) {
-    logFn('startup', 'Worker 已在线')
-    return token
-  }
+/** Worker 状态应查询的 API 基址（本地 dev + 远程 Worker 时查远程，与 test:worker-online 一致） */
+export async function getWorkerCheckBaseUrl() {
+  const apiServer = SERVER.replace(/\/$/, '')
+  if (!isLocalServer(apiServer)) return apiServer
 
-  logFn('startup', '自动启动 Worker...')
+  try {
+    const text = await fs.readFile(path.join(ROOT, 'apps/worker/.env'), 'utf-8')
+    const m = text.match(/^SERVER_WS_URL=(.*)$/m)
+    const wsUrl = m?.[1]?.trim().replace(/^["']|["']$/g, '')
+    if (wsUrl && !/localhost|127\.0\.0\.1/i.test(wsUrl)) {
+      const u = new URL(wsUrl.replace(/^ws/i, 'http'))
+      let base = `${u.protocol}//${u.host}`
+      if (/\/account/i.test(u.pathname)) base = `${base}/account`
+      return base.replace(/\/$/, '')
+    }
+  } catch { /* local worker */ }
+  return apiServer
+}
+
+export async function fetchWorkerStatus(token, baseUrl) {
+  return fetchJson(`${baseUrl.replace(/\/$/, '')}/api/local-worker/status`, {
+    headers: authHeaders(token),
+  })
+}
+
+async function tryStartLocalWorker() {
+  const ps1 = path.join(ROOT, 'scripts/windows/restart-local-worker.ps1')
+  if (process.platform === 'win32' && existsSync(ps1)) {
+    try {
+      execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${ps1}"`, {
+        cwd: ROOT,
+        stdio: 'ignore',
+        timeout: 120000,
+      })
+      return
+    } catch { /* fall through */ }
+  }
   const proc = spawn('npm', ['run', 'dev:worker'], {
     cwd: ROOT,
     shell: true,
@@ -203,16 +257,51 @@ export async function ensureWorkerRunning(logFn) {
   })
   proc.unref()
   childProcesses.push(proc)
+}
+
+export async function ensureWorkerRunning(logFn) {
+  const token = await login()
+  const workerBase = await getWorkerCheckBaseUrl()
+  const isRemoteCheck = workerBase !== SERVER.replace(/\/$/, '')
+
+  let workerToken = token
+  if (isRemoteCheck) workerToken = await login(workerBase)
+
+  let status = await fetchWorkerStatus(workerToken, workerBase)
+  if (status.json.data?.online) {
+    const label = isRemoteCheck ? `Worker 已在线（远程 ${workerBase}）` : 'Worker 已在线'
+    logFn('startup', label)
+    return token
+  }
+
+  if (isRemoteCheck) {
+    logFn('startup', `尝试启动本地 Worker 并连接 ${workerBase}...`)
+    await tryStartLocalWorker()
+    for (let i = 0; i < 25; i++) {
+      await sleep(1000)
+      status = await fetchWorkerStatus(workerToken, workerBase)
+      if (status.json.data?.online) {
+        logFn('startup', `Worker 已连接远程 ${workerBase}`)
+        return token
+      }
+    }
+    const reason = status.json.data?.reason || status.json.data?.message || 'offline'
+    logFn('startup', `远程 Worker 未在线（${workerBase}）：${reason} — 外部依赖项将跳过`, false)
+    return token
+  }
+
+  logFn('startup', '自动启动 Worker...')
+  await tryStartLocalWorker()
 
   for (let i = 0; i < 20; i++) {
     await sleep(1000)
-    status = await fetchJson(`${SERVER}/api/local-worker/status`, { headers: authHeaders(token) })
+    status = await fetchWorkerStatus(token, SERVER)
     if (status.json.data?.online) {
       logFn('startup', 'Worker 已连接')
       return token
     }
   }
-  logFn('worker', 'Worker 未能连接（部分测试将跳过）', false)
+  logFn('startup', 'Worker 未能连接（外部依赖项将跳过）', false)
   return token
 }
 
@@ -256,6 +345,47 @@ export async function ensureScannerRunning(logFn) {
 export async function createTestPng() {
   const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
   return Buffer.from(b64, 'base64')
+}
+
+/**
+ * Worker 文件上传（带超时与重试）
+ * @returns {{ ok: boolean, json?: object, error?: Error, fileSize?: number, attempts?: number, uploadUrl?: string }}
+ */
+export async function uploadImageWithRetry(token, fileType, name, opts = {}) {
+  const maxRetries = opts.maxRetries ?? 2
+  const timeoutMs = opts.timeoutMs ?? 45000
+  const server = (opts.server ?? SERVER).replace(/\/$/, '')
+  const uploadUrl = `${server}/api/files/upload`
+  const buf = await createTestPng()
+  let lastError = null
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const form = new FormData()
+      form.append('file', new Blob([buf], { type: 'image/png' }), name)
+      form.append('fileType', fileType)
+      const res = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+        signal: AbortSignal.timeout(timeoutMs),
+      })
+      const json = await res.json()
+      if (json.success) return { ok: true, json, attempt, fileSize: buf.length, uploadUrl }
+      lastError = new Error(json.message || `HTTP ${res.status}`)
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e))
+    }
+    if (attempt < maxRetries) await sleep(2000)
+  }
+
+  return {
+    ok: false,
+    error: lastError,
+    fileSize: buf.length,
+    attempts: maxRetries + 1,
+    uploadUrl,
+  }
 }
 
 export async function writeMarkdownReport(report, mode) {
