@@ -24,6 +24,7 @@ const recent = ref<any[]>([])
 const scannerOnline = ref(false)
 const bindGoodsCode = ref('')
 const lastPollCode = ref('')
+const inputFocused = ref(false)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -189,21 +190,30 @@ onUnmounted(() => {
             <p class="scan-workbench__hint muted">
               扫货品码、订单号、物流单号都可以。扫到货品后，可以直接记支出、登记销售、查利润。
             </p>
-            <div class="scan-workbench__scanner-status">
+            <div class="scan-workbench__scanner-status" data-testid="scan-scanner-status">
               <span :class="scannerOnline ? 'ok' : 'warn'">
+                <span class="scanner-dot" :class="scannerOnline ? 'scanner-dot--online' : 'scanner-dot--offline'" />
                 {{ scannerOnline ? '扫码枪已连接' : '扫码枪没连上，仍可手动输入' }}
               </span>
             </div>
-            <div class="scan-workbench__input-row">
-              <input
-                ref="inputRef"
-                v-model="scanInput"
-                class="scan-workbench__input"
-                data-testid="scan-input"
-                placeholder="扫码或输入货品码 / 订单号 / 物流单号"
-                @keydown.enter.prevent="onEnter"
-              />
-              <ActionButton :loading="recognizing" data-testid="scan-recognize-btn" @click="recognize()">识别</ActionButton>
+            <div
+              class="scan-input-wrap"
+              :class="{ 'scan-input-wrap--focused': inputFocused, 'scan-input-wrap--scanning': recognizing }"
+              data-testid="scan-input-wrap"
+            >
+              <div class="scan-workbench__input-row">
+                <input
+                  ref="inputRef"
+                  v-model="scanInput"
+                  class="scan-workbench__input"
+                  data-testid="scan-input"
+                  placeholder="扫码或输入货品码 / 订单号 / 物流单号"
+                  @keydown.enter.prevent="onEnter"
+                  @focus="inputFocused = true"
+                  @blur="inputFocused = false"
+                />
+                <ActionButton :loading="recognizing" data-testid="scan-recognize-btn" @click="recognize()">识别</ActionButton>
+              </div>
             </div>
           </LuxuryCard>
 
@@ -310,7 +320,7 @@ onUnmounted(() => {
 .scan-workbench__scanner-status { margin-bottom: 12px; font-size: 13px; }
 .scan-workbench__scanner-status .ok { color: #1F4D3A; }
 .scan-workbench__scanner-status .warn { color: #c45c00; }
-.scan-workbench__input-row { display: flex; flex-direction: column; gap: 10px; }
+.scan-workbench__input-row { display: flex; flex-direction: column; gap: 10px; position: relative; }
 .scan-workbench__input {
   width: 100%;
   font-size: 18px;
@@ -318,6 +328,11 @@ onUnmounted(() => {
   border: 1px solid rgba(198, 161, 91, 0.4);
   border-radius: 12px;
   box-sizing: border-box;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+.scan-workbench__input:focus {
+  outline: none;
+  border-color: var(--color-gold);
 }
 .scan-workbench__meta { display: flex; flex-direction: column; gap: 4px; font-size: 14px; margin-bottom: 8px; }
 .scan-workbench__suggestion { font-size: 15px; margin: 0 0 16px; line-height: 1.5; }

@@ -101,7 +101,7 @@ async function runViewportInner(browser, vp, password) {
   await check('首页不是白屏', async () => {
     await gotoStable(page, `${BASE}/`)
     const text = await page.evaluate(() => document.body?.innerText?.trim() || '')
-    if (!text.includes('经营总览') && !text.includes('今日支出')) {
+    if (!text.includes('今天店里情况') && !text.includes('经营总览') && !text.includes('今日简况')) {
       throw new Error('首页内容异常')
     }
     await assertNoOverflow(page)
@@ -124,6 +124,15 @@ async function runViewportInner(browser, vp, password) {
     })
     await check('不显示 Sidebar', async () => {
       if (await sidebar.isVisible().catch(() => false)) throw new Error('Sidebar 不应显示')
+    })
+
+    await check('扫码页 Tab 显隐正确', async () => {
+      await gotoStable(page, `${BASE}/scan`)
+      if (await tabBar.isVisible().catch(() => false)) {
+        throw new Error('扫码页不应显示 TabBar')
+      }
+      await gotoStable(page, `${BASE}/`)
+      if (!(await tabBar.isVisible())) throw new Error('返回首页 TabBar 应显示')
     })
   }
 

@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma'
 import { DEFAULT_SETTINGS } from '@jade-account/shared'
+import { config } from '../lib/config'
 
 export async function getSettings() {
   const rows = await prisma.systemSetting.findMany()
@@ -29,4 +30,17 @@ export async function getConfigOptions(category: string) {
     where: { category, isActive: true },
     orderBy: { sortOrder: 'asc' },
   })
+}
+
+/** DB 设置优先，其次环境变量 QIANFAN_ORDER_DETAIL_URL_TEMPLATE */
+export async function getQianfanOrderUrlTemplate(): Promise<string> {
+  const settings = await getSettings()
+  const fromDb = settings.qianfan_order_detail_url_template?.trim()
+  if (fromDb?.includes('{orderNo}')) return fromDb
+  return config.qianfanOrderDetailUrlTemplate?.trim() || ''
+}
+
+export async function isQianfanOrderLinkEnabled(): Promise<boolean> {
+  const tpl = await getQianfanOrderUrlTemplate()
+  return !!tpl && tpl.includes('{orderNo}')
 }

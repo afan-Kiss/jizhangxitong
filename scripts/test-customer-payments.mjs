@@ -336,7 +336,7 @@ async function testUi(token) {
       fail('记支出页不依赖扫码', await page.evaluate(() => document.body.innerText.slice(0, 200)))
     }
     const hasRefundBiz = (await page.getByTestId('expense-biz-customer_refund').count()) > 0
-      || (await page.getByText('客户返款/退差价').count()) > 0
+      || (await page.getByTestId('expense-business-cards').count() > 0 && await page.getByText('客户返款/退差价').count() > 0)
     if (hasRefundBiz) {
       pass('记支出页有客户返款业务类型')
     } else {

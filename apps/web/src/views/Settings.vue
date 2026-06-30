@@ -17,6 +17,7 @@ const auth = useAuthStore()
 const canManagePermission = computed(() => auth.hasPermission('permission:manage'))
 const settings = ref<any>({})
 const workerStatus = ref<any>({})
+const qianfanEnabled = ref(false)
 
 onMounted(async () => {
   await auth.fetchMe()
@@ -27,7 +28,21 @@ onMounted(async () => {
   ])
   settings.value = settingsRes.data.data.settings
   workerStatus.value = workerRes.data.data
+  qianfanEnabled.value = !!settingsRes.data.data.qianfanOrderLinkEnabled
 })
+
+async function saveQianfanTemplate() {
+  const current = settings.value.qianfan_order_detail_url_template || ''
+  const value = prompt(
+    '千帆订单详情链接模板（用 {orderNo} 代替订单号）\n示例：https://xxx/order/detail?orderNo={orderNo}',
+    current,
+  )
+  if (value === null) return
+  await api.patch('/settings/qianfan_order_detail_url_template', { value })
+  settings.value.qianfan_order_detail_url_template = value
+  qianfanEnabled.value = value.includes('{orderNo}')
+  showToast('千帆链接已保存')
+}
 
 async function saveSetting(key: string, label: string) {
   const value = prompt(`修改 ${label}`, settings.value[key])
@@ -62,6 +77,21 @@ function logout() {
       <p class="mobile-tip muted">
         可以把本页面添加到手机桌面，方便随时记账：浏览器菜单 →「添加到主屏幕」或「添加桌面快捷方式」。
       </p>
+    </LuxuryCard>
+
+    <LuxuryCard gold data-testid="settings-qianfan-card">
+      <div class="section-title">千帆订单跳转</div>
+      <p class="settings-hint muted">
+        配置后，支出/销售详情可直接打开千帆查订单。模板里用 <code>{orderNo}</code> 代替小红书订单号。
+      </p>
+      <van-cell
+        title="链接模板"
+        :value="settings.qianfan_order_detail_url_template || '未配置'"
+        is-link
+        data-testid="settings-qianfan-template"
+        @click="saveQianfanTemplate"
+      />
+      <p v-if="!qianfanEnabled" class="settings-hint muted">未配置时，页面会提示「先复制订单号去千帆查」</p>
     </LuxuryCard>
 
     <LuxuryCard gold>
@@ -113,6 +143,17 @@ function logout() {
   padding: 0 0 14px;
   font-size: 13px;
   line-height: 1.55;
+}
+.settings-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.settings-hint code {
+  font-size: 12px;
+  background: rgba(198, 161, 91, 0.12);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 @media (min-width: 1200px) {
   .settings-grid :deep(.van-cell-group) {

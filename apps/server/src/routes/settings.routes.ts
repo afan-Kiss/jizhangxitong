@@ -1,8 +1,7 @@
 import { Router } from 'express'
 import { authMiddleware, requirePermission, AuthRequest } from '../middleware/auth'
-import { getConfigOptions, getSettings, updateSetting } from '../services/settings.service'
+import { getConfigOptions, getSettings, updateSetting, isQianfanOrderLinkEnabled } from '../services/settings.service'
 import { writeOperationLog } from '../services/operation-log.service'
-import { config } from '../lib/config'
 import { prisma } from '../lib/prisma'
 import { PERMISSIONS, PERMISSION_LABELS } from '@jade-account/shared'
 import { sanitizeUser, sanitizeUsers } from '../lib/serialize'
@@ -20,7 +19,7 @@ settingsRouter.get('/', async (_req, res) => {
       settings,
       expenseTypes,
       paySources,
-      qianfanOrderLinkEnabled: !!config.qianfanOrderDetailUrlTemplate?.trim()?.includes('{orderNo}'),
+      qianfanOrderLinkEnabled: await isQianfanOrderLinkEnabled(),
     },
   })
 })

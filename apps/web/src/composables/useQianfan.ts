@@ -16,7 +16,10 @@ export async function loadQianfanConfig(api: { get: (url: string) => Promise<{ d
       || settings.data.data?.qianfanOrderLinkEnabled
     )
     const tpl = settings.data.data?.settings?.qianfan_order_detail_url_template
-    if (tpl) qianfanTemplate.value = tpl
+    if (tpl?.includes('{orderNo}')) {
+      qianfanTemplate.value = tpl
+      qianfanEnabled.value = true
+    }
   } catch {
     qianfanEnabled.value = false
   }

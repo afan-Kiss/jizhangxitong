@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth'
 import DesktopSidebar from './DesktopSidebar.vue'
 import DesktopHeader from './DesktopHeader.vue'
 import TabBar from './TabBar.vue'
+import { shouldHideMobileTab } from '../utils/mobile-tab-routes'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -14,15 +15,7 @@ const { isDesktop, isWide } = useBreakpoint()
 const isLogin = computed(() => route.path === '/login')
 const showChrome = computed(() => !isLogin.value && Boolean(auth.token))
 
-const hideMobileTab = computed(() => {
-  if (isWide.value) return true
-  return route.path === '/login'
-    || /^\/expense\/\d+/.test(route.path)
-    || /^\/sales\/\d+/.test(route.path)
-    || route.path === '/sales/create'
-    || route.path === '/expense/create'
-    || route.path === '/expense/export'
-})
+const hideMobileTab = computed(() => shouldHideMobileTab(route.path, isWide.value))
 </script>
 
 <template>

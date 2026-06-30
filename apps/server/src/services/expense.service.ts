@@ -14,7 +14,7 @@ import { clampPage, clampPageSize } from '../lib/pagination'
 import { resolveBraceletBinding } from '../lib/bracelet-bind'
 import { sanitizeFile } from '../lib/serialize'
 import { refreshBraceletCostTotal } from './goods.service'
-import { config } from '../lib/config'
+import { getQianfanOrderUrlTemplate, isQianfanOrderLinkEnabled } from './settings.service'
 import { getSale } from './sale.service'
 
 export interface ExpenseFilter {
@@ -190,12 +190,13 @@ export async function getExpense(id: number) {
   })
   if (!expense) return null
   const orderNo = expense.externalOrderNo || expense.sale?.externalOrderNo || ''
+  const qianfanTemplate = await getQianfanOrderUrlTemplate()
   const qianfanOrderUrl = expense.qianfanOrderUrl
-    || (orderNo ? buildQianfanOrderUrl(config.qianfanOrderDetailUrlTemplate, orderNo) : null)
+    || (orderNo ? buildQianfanOrderUrl(qianfanTemplate, orderNo) : null)
   return {
     ...expense,
     qianfanOrderUrl,
-    qianfanOrderLinkEnabled: !!config.qianfanOrderDetailUrlTemplate?.trim(),
+    qianfanOrderLinkEnabled: await isQianfanOrderLinkEnabled(),
     affectsProfit: isProfitDeductingExpense(expense),
   }
 }
@@ -269,8 +270,9 @@ export async function createExpense(
     })
 
   const orderNo = saleBinding.externalOrderNo || input.externalOrderNo?.trim() || null
+  const qianfanTemplate = await getQianfanOrderUrlTemplate()
   const qianfanOrderUrl = orderNo
-    ? buildQianfanOrderUrl(config.qianfanOrderDetailUrlTemplate, orderNo)
+    ? buildQianfanOrderUrl(qianfanTemplate, orderNo)
     : null
 
   let paidAt: Date | null = null
@@ -376,8 +378,9 @@ export async function linkExpense(
   }
 
   const orderNo = saleBinding.externalOrderNo || before.externalOrderNo
+  const qianfanTemplate = await getQianfanOrderUrlTemplate()
   const qianfanOrderUrl = orderNo
-    ? buildQianfanOrderUrl(config.qianfanOrderDetailUrlTemplate, orderNo)
+    ? buildQianfanOrderUrl(qianfanTemplate, orderNo)
     : before.qianfanOrderUrl
 
   const pendingLinkStatus = resolvePendingLinkStatus({
@@ -485,7 +488,8 @@ export async function updateExpense(
     data.logisticsNo = saleBinding.logisticsNo
     const orderNo = saleBinding.externalOrderNo
     if (orderNo) {
-      data.qianfanOrderUrl = buildQianfanOrderUrl(config.qianfanOrderDetailUrlTemplate, orderNo)
+      const qianfanTemplate = await getQianfanOrderUrlTemplate()
+      data.qianfanOrderUrl = buildQianfanOrderUrl(qianfanTemplate, orderNo)
     }
     data.pendingLinkStatus = resolvePendingLinkStatus({
       businessType: (input.businessType || before.businessType) as string,

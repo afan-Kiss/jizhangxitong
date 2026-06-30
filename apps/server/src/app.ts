@@ -19,6 +19,7 @@ import { scanRouter } from './routes/scan.routes'
 import { goodsRouter } from './routes/goods.routes'
 import { statsRouter } from './routes/stats.routes'
 import { getSystemStatus } from './services/system-status.service'
+import { isQianfanOrderLinkEnabled } from './services/settings.service'
 
 export function createApp() {
   const app = express()
@@ -33,14 +34,13 @@ export function createApp() {
     next()
   })
 
-  app.get('/api/health', (_req, res) => {
+  app.get('/api/health', async (_req, res) => {
     const version = process.env.APP_VERSION?.trim()
-    const qianfanTemplate = config.qianfanOrderDetailUrlTemplate?.trim()
     res.json({
       success: true,
       message: '和田玉镯子记账系统运行中',
       scanWorkbenchEnabled: config.scanWorkbenchEnabled,
-      qianfanOrderLinkEnabled: !!qianfanTemplate && qianfanTemplate.includes('{orderNo}'),
+      qianfanOrderLinkEnabled: await isQianfanOrderLinkEnabled(),
       ...(version ? { version } : {}),
     })
   })

@@ -6,6 +6,7 @@ export const DEFAULT_SETTINGS = {
   scanner_api_base_url: 'http://127.0.0.1:7789',
   local_worker_enabled: 'true',
   scanner_sync_timeout: '8',
+  qianfan_order_detail_url_template: '',
 } as const
 
 export const EXPENSE_TYPES = [

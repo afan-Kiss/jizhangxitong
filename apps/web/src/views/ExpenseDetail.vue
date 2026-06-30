@@ -4,14 +4,16 @@ import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import api, { fileThumbUrl } from '../api'
 import { useAuthStore } from '../stores/auth'
-import { useQianfan, loadQianfanConfig } from '../composables/useQianfan'
+import { loadQianfanConfig } from '../composables/useQianfan'
 import { EXPENSE_BUSINESS_LABELS } from '@jade-account/shared'
+import AppShell from '../components/AppShell.vue'
+import LuxuryCard from '../components/LuxuryCard.vue'
 import ActionButton from '../components/ActionButton.vue'
+import OrderLink from '../components/OrderLink.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-const { qianfanEnabled, copyOrderNo, openQianfan } = useQianfan()
 
 const expense = ref<any>(null)
 const statusLabels: Record<string, string> = {
@@ -25,6 +27,14 @@ const statusLabels: Record<string, string> = {
 const thumbUrls = ref<Record<number, string>>({})
 
 const orderNo = computed(() => expense.value?.externalOrderNo || expense.value?.sale?.externalOrderNo || '')
+
+const profitImpactHint = computed(() => {
+  if (!expense.value) return ''
+  if (expense.value.affectsProfit) return '这笔钱会扣这单利润'
+  if (expense.value.paySource === '员工垫付') return '员工垫付，会进报销流程'
+  if (expense.value.reimbursementStatus === 'not_required') return '公司直接支出，不进员工报销'
+  return ''
+})
 
 onMounted(async () => {
   await loadQianfanConfig(api)
@@ -65,66 +75,143 @@ async function linkOrder() {
 </script>
 
 <template>
-  <div class="page expense-detail" v-if="expense" data-testid="expense-detail-page">
-    <van-nav-bar title="支出详情" left-arrow @click-left="router.back()" />
-    <div class="card">
-      <div class="stat-value">¥{{ Number(expense.amount).toFixed(2) }}</div>
-      <div>{{ expense.expenseType }} · {{ expense.paySource }}</div>
+  <AppShell v-if="expense" title="支出详情" show-back data-testid="expense-detail-page">
+    <LuxuryCard dark gold :stagger="0" padding="20px 18px" data-testid="expense-amount-card">
+      <div class="expense-detail__amount money">¥{{ Number(expense.amount).toFixed(2) }}</div>
+      <div class="expense-detail__type">
+        {{ expense.expenseType }} · {{ expense.paySource }}
+      </div>
       <div v-if="expense.businessType" class="muted">
         {{ EXPENSE_BUSINESS_LABELS[expense.businessType as keyof typeof EXPENSE_BUSINESS_LABELS] || expense.businessType }}
       </div>
       <div class="muted">{{ expense.occurredAt?.slice(0, 10) }}</div>
-      <div v-if="expense.isVoided" style="color:#ee0a24;">已作废: {{ expense.voidReason }}</div>
-      <div v-if="expense.affectsProfit" class="profit-tag">影响订单/货品利润</div>
-    </div>
-    <van-cell-group inset>
-      <van-cell v-if="orderNo" title="小红书订单号" :value="orderNo" data-testid="expense-detail-order-no">
-        <template #extra>
-          <ActionButton size="md" plain data-testid="expense-copy-order" @click="copyOrderNo(orderNo)">复制</ActionButton>
-          <ActionButton
-            v-if="qianfanEnabled && orderNo"
-            size="md"
-            plain
-            data-testid="expense-open-qianfan"
-            @click="openQianfan(orderNo)"
-          >打开千帆</ActionButton>
-        </template>
-      </van-cell>
-      <van-cell v-else-if="expense.pendingLinkStatus === 'pending_order'" title="关联状态" value="待关联订单">
-        <template #extra>
-          <ActionButton size="md" plain data-testid="expense-link-order" @click="linkOrder">补关联</ActionButton>
-        </template>
-      </van-cell>
-      <p v-if="orderNo && !qianfanEnabled" class="qianfan-hint muted">千帆链接还没配置，先复制订单号去千帆查</p>
-      <van-cell title="报销人" :value="expense.reimbursementPerson || '-'" />
-      <van-cell title="报销状态" :value="statusLabels[expense.reimbursementStatus] || expense.reimbursementStatus" />
-      <van-cell v-if="expense.customerPaymentStatus" title="打款状态" :value="statusLabels[expense.customerPaymentStatus] || expense.customerPaymentStatus" />
-      <van-cell title="货品编号" :value="expense.braceletCode || '未绑定'" />
-      <van-cell v-if="expense.saleId" title="关联销售" :value="`#${expense.saleId}`" is-link @click="router.push(`/sales/${expense.saleId}`)" />
-      <van-cell title="摘要" :value="expense.expenseSummary || '-'" />
-      <van-cell title="备注" :value="expense.remark || '-'" />
-    </van-cell-group>
+      <div v-if="expense.isVoided" class="expense-detail__void">已作废: {{ expense.voidReason }}</div>
+      <div v-if="profitImpactHint" class="expense-detail__impact" data-testid="expense-profit-impact">
+        {{ profitImpactHint }}
+      </div>
+    </LuxuryCard>
 
-    <div class="card" v-if="auth.hasPermission('expense:attachment:view')">
-      <h4>凭证图片（{{ expense.attachments?.length || 0 }}）</h4>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <img v-for="att in expense.attachments" :key="att.id"
-          :src="thumbUrls[att.fileId]" style="width:80px;height:80px;object-fit:cover;border-radius:6px;" />
+    <LuxuryCard v-if="orderNo" :stagger="1" data-testid="expense-order-card">
+      <div class="section-title">订单信息</div>
+      <OrderLink :order-no="orderNo" data-testid="expense-detail-order-no" />
+    </LuxuryCard>
+
+    <LuxuryCard v-else-if="expense.pendingLinkStatus === 'pending_order'" :stagger="1">
+      <div class="section-title">关联状态</div>
+      <p class="muted">待关联订单，可先保存后补关联</p>
+      <ActionButton plain data-testid="expense-link-order" @click="linkOrder">补关联订单号</ActionButton>
+    </LuxuryCard>
+
+    <LuxuryCard :stagger="2">
+      <div class="section-title">详情</div>
+      <div class="expense-detail__row">
+        <span class="muted">报销人</span>
+        <span>{{ expense.reimbursementPerson || '-' }}</span>
+      </div>
+      <div class="expense-detail__row">
+        <span class="muted">报销状态</span>
+        <span>{{ statusLabels[expense.reimbursementStatus] || expense.reimbursementStatus }}</span>
+      </div>
+      <div v-if="expense.customerPaymentStatus" class="expense-detail__row" data-testid="expense-payment-status">
+        <span class="muted">打款状态</span>
+        <span>{{ statusLabels[expense.customerPaymentStatus] || expense.customerPaymentStatus }}</span>
+      </div>
+      <div class="expense-detail__row">
+        <span class="muted">货品编号</span>
+        <span>{{ expense.braceletCode || '未绑定' }}</span>
+      </div>
+      <div v-if="expense.saleId" class="expense-detail__row expense-detail__row--link" @click="router.push(`/sales/${expense.saleId}`)">
+        <span class="muted">关联销售</span>
+        <span>#{{ expense.saleId }} →</span>
+      </div>
+      <div v-if="expense.expenseSummary" class="expense-detail__row">
+        <span class="muted">摘要</span>
+        <span>{{ expense.expenseSummary }}</span>
+      </div>
+      <div v-if="expense.remark" class="expense-detail__row">
+        <span class="muted">备注</span>
+        <span>{{ expense.remark }}</span>
+      </div>
+    </LuxuryCard>
+
+    <LuxuryCard v-if="auth.hasPermission('expense:attachment:view')" :stagger="3" data-testid="expense-voucher-card">
+      <div class="section-title">凭证图片（{{ expense.attachments?.length || 0 }}）</div>
+      <div class="expense-detail__thumbs">
+        <img
+          v-for="att in expense.attachments"
+          :key="att.id"
+          :src="thumbUrls[att.fileId]"
+          alt="凭证"
+        />
       </div>
       <div v-if="!expense.attachments?.length" class="muted">暂无凭证</div>
-    </div>
+    </LuxuryCard>
 
-    <div style="padding:16px;display:flex;gap:8px;flex-wrap:wrap;">
-      <van-button v-if="auth.hasPermission('reimbursement:update') && expense.paySource === '员工垫付'"
-        type="primary" size="small" @click="updateReimbursement('reimbursed')">标记已报销</van-button>
-      <van-button v-if="auth.hasPermission('expense:void') && !expense.isVoided"
-        type="danger" size="small" @click="voidExpense">作废</van-button>
+    <div class="expense-detail__actions">
+      <ActionButton
+        v-if="auth.hasPermission('reimbursement:update') && expense.paySource === '员工垫付'"
+        variant="secondary"
+        @click="updateReimbursement('reimbursed')"
+      >标记已报销</ActionButton>
+      <ActionButton
+        v-if="auth.hasPermission('expense:void') && !expense.isVoided"
+        variant="danger"
+        @click="voidExpense"
+      >作废</ActionButton>
     </div>
-  </div>
+  </AppShell>
 </template>
 
 <style scoped>
-.expense-detail { overflow-x: hidden; max-width: 100%; }
-.profit-tag { color: #c45c00; font-size: 13px; margin-top: 6px; }
-.qianfan-hint { padding: 0 16px 8px; font-size: 12px; }
+.expense-detail__amount {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--color-text-light);
+  margin-bottom: 6px;
+}
+.expense-detail__type {
+  font-size: 15px;
+  color: var(--color-gold-light);
+}
+.expense-detail__void {
+  color: #ffb4b4;
+  font-size: 13px;
+  margin-top: 8px;
+}
+.expense-detail__impact {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(198, 161, 91, 0.15);
+  color: var(--color-gold-light);
+  font-size: 13px;
+}
+.expense-detail__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(198, 161, 91, 0.08);
+  font-size: 14px;
+}
+.expense-detail__row:last-child { border-bottom: none; }
+.expense-detail__row--link { cursor: pointer; color: var(--color-jade-deep); }
+.expense-detail__thumbs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.expense-detail__thumbs img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: var(--border-gold);
+}
+.expense-detail__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 0 24px;
+}
 </style>

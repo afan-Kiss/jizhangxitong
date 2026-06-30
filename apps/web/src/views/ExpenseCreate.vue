@@ -250,7 +250,7 @@ async function onSubmit() {
       <div class="desktop-two-column__main">
         <LuxuryCard gold padding="16px">
           <div class="section-title">这笔钱属于什么</div>
-          <div class="pill-row">
+          <div class="pill-row" data-testid="expense-business-cards">
             <button
               v-for="opt in BUSINESS_OPTIONS"
               :key="opt.v"

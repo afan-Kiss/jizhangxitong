@@ -1,15 +1,34 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import api from '../api'
-import { loadQianfanConfig, useQianfan } from '../composables/useQianfan'
+import { loadQianfanConfig } from '../composables/useQianfan'
+import AppShell from '../components/AppShell.vue'
+import LuxuryCard from '../components/LuxuryCard.vue'
 import ActionButton from '../components/ActionButton.vue'
+import OrderLink from '../components/OrderLink.vue'
+import ProfitPanel from '../components/ProfitPanel.vue'
+import type { ProfitRow } from '../components/ProfitPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { qianfanEnabled, copyOrderNo, openQianfan } = useQianfan()
 const sale = ref<any>(null)
+
+const profitRows = computed<ProfitRow[]>(() => {
+  if (!sale.value) return []
+  const s = sale.value
+  const refund = Number(s.refundAmount ?? s.confirmedRefundTotal ?? 0)
+  const customerPay = Number(s.customerPaymentDeduction ?? s.compensationAmount ?? 0)
+  return [
+    { label: '销售金额', amount: Number(s.saleAmount), type: 'base' },
+    { label: '减：销售时总成本', amount: Number(s.totalCostSnapshot), type: 'deduct' },
+    { label: '销售毛利', amount: Number(s.grossProfit), type: 'sub' },
+    ...(refund > 0 ? [{ label: '减：已确认退款', amount: refund, type: 'deduct' as const }] : []),
+    ...(customerPay > 0 ? [{ label: '减：客户返款/补偿', amount: customerPay, type: 'deduct' as const }] : []),
+    { label: '最终到手利润', amount: Number(s.finalProfit), type: 'total', highlight: true },
+  ]
+})
 
 onMounted(async () => {
   await loadQianfanConfig(api)
@@ -31,40 +50,68 @@ async function onRefund() {
 </script>
 
 <template>
-  <div class="page" v-if="sale">
-    <van-nav-bar title="销售详情" left-arrow @click-left="router.back()" />
-    <div class="card">
-      <div class="stat-value">¥{{ Number(sale.saleAmount).toFixed(2) }}</div>
-      <div>{{ sale.braceletCode }} · {{ sale.platform }} · {{ sale.status }}</div>
+  <AppShell v-if="sale" title="销售详情" show-back data-testid="sale-detail-page">
+    <LuxuryCard dark gold :stagger="0" padding="20px 18px">
+      <div class="sale-detail__amount money">¥{{ Number(sale.saleAmount).toFixed(2) }}</div>
+      <div class="sale-detail__meta">
+        {{ sale.braceletCode }} · {{ sale.platform }} · {{ sale.status }}
+      </div>
       <div class="muted">{{ sale.customerName || '-' }} · {{ sale.soldAt?.slice(0, 10) }}</div>
-    </div>
-    <van-cell-group inset>
-      <van-cell v-if="sale.externalOrderNo" title="小红书订单号" :value="sale.externalOrderNo" data-testid="sale-detail-order-no">
-        <template #extra>
-          <ActionButton size="md" plain @click="copyOrderNo(sale.externalOrderNo)">复制</ActionButton>
-          <ActionButton v-if="qianfanEnabled" size="md" plain data-testid="sale-open-qianfan" @click="openQianfan(sale.externalOrderNo)">打开千帆</ActionButton>
-        </template>
-      </van-cell>
-      <van-cell title="入库成本" :value="`¥${Number(sale.inboundCostSnapshot).toFixed(2)}`" />
-      <van-cell title="证书费" :value="`¥${Number(sale.certificateFeeSnapshot).toFixed(2)}`" />
-      <van-cell title="包装盒费" :value="`¥${Number(sale.packageFeeSnapshot).toFixed(2)}`" />
-      <van-cell title="快递费" :value="`¥${Number(sale.expressFeeSnapshot).toFixed(2)}`" />
-      <van-cell title="成本调整" :value="`¥${Number(sale.costAdjustmentSnapshot).toFixed(2)}`" />
-      <van-cell title="销售时总成本" :value="`¥${Number(sale.totalCostSnapshot).toFixed(2)}`" />
-      <van-cell title="销售毛利" :value="`¥${Number(sale.grossProfit).toFixed(2)}`" />
-      <van-cell title="客户相关支出" :value="`¥${Number(sale.customerPaymentDeduction ?? sale.compensationAmount).toFixed(2)}`" />
-      <van-cell title="最终到手利润" :value="`¥${Number(sale.finalProfit).toFixed(2)}`" />
-    </van-cell-group>
+    </LuxuryCard>
 
-    <div class="card" v-if="sale.expenses?.length">
-      <h4>相关支出</h4>
-      <div v-for="e in sale.expenses" :key="e.id" class="list-item" @click="router.push(`/expense/${e.id}`)">
+    <LuxuryCard v-if="sale.externalOrderNo" :stagger="1" data-testid="sale-order-card">
+      <div class="section-title">小红书订单</div>
+      <OrderLink :order-no="sale.externalOrderNo" data-testid="sale-detail-order-no" />
+    </LuxuryCard>
+
+    <LuxuryCard :stagger="2" data-testid="sale-profit-waterfall">
+      <div class="section-title">利润瀑布</div>
+      <ProfitPanel :rows="profitRows" />
+    </LuxuryCard>
+
+    <LuxuryCard v-if="sale.expenses?.length" :stagger="3">
+      <div class="section-title">相关支出</div>
+      <div
+        v-for="e in sale.expenses"
+        :key="e.id"
+        class="sale-detail__expense"
+        @click="router.push(`/expense/${e.id}`)"
+      >
         {{ e.expenseType }} · ¥{{ Number(e.amount).toFixed(2) }}
       </div>
-    </div>
+    </LuxuryCard>
 
-    <div style="padding:16px;">
-      <van-button v-if="sale.status === 'sold'" type="warning" block @click="onRefund">处理退款</van-button>
+    <div class="sale-detail__actions">
+      <ActionButton
+        v-if="sale.status === 'sold'"
+        variant="secondary"
+        block
+        @click="onRefund"
+      >处理退款</ActionButton>
     </div>
-  </div>
+  </AppShell>
 </template>
+
+<style scoped>
+.sale-detail__amount {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--color-text-light);
+  margin-bottom: 6px;
+}
+.sale-detail__meta {
+  font-size: 15px;
+  color: var(--color-gold-light);
+}
+.sale-detail__expense {
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(198, 161, 91, 0.08);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--color-jade-deep);
+}
+.sale-detail__expense:last-child { border-bottom: none; }
+.sale-detail__actions {
+  padding: 8px 0 24px;
+}
+</style>

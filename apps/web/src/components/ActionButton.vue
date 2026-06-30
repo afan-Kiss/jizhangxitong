@@ -1,18 +1,24 @@
 <script setup lang="ts">
-defineProps<{
+import { computed } from 'vue'
+
+const props = defineProps<{
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  /** @deprecated use variant="secondary" */
+  plain?: boolean
   block?: boolean
   loading?: boolean
   disabled?: boolean
   size?: 'md' | 'lg'
 }>()
+
+const resolvedVariant = computed(() => props.variant || (props.plain ? 'secondary' : 'primary'))
 </script>
 
 <template>
   <button
     class="action-btn"
     :class="[
-      `action-btn--${variant || 'primary'}`,
+      `action-btn--${resolvedVariant}`,
       { 'action-btn--block': block, 'action-btn--lg': size === 'lg' },
     ]"
     :disabled="disabled || loading"

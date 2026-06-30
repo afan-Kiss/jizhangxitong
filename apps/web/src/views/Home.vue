@@ -7,6 +7,7 @@ import LuxuryCard from '../components/LuxuryCard.vue'
 import MoneyCard from '../components/MoneyCard.vue'
 import WorkerStatus from '../components/WorkerStatus.vue'
 import ExpenseItem from '../components/ExpenseItem.vue'
+import PageHero from '../components/PageHero.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -63,12 +64,10 @@ function exportThisMonth() {
 
 <template>
   <div class="home-page page-enter" data-testid="home-page">
-    <header class="home-page__header">
-      <h1 class="home-page__title">经营总览</h1>
-      <div class="show-mobile-only">
-        <WorkerStatus :status="auth.workerStatus" compact />
-      </div>
-    </header>
+    <PageHero title="今天店里情况" subtitle="一眼看清今天花了多少、卖了多少、大概赚了多少" test-id="home-hero" />
+    <div class="show-mobile-only home-page__worker">
+      <WorkerStatus :status="auth.workerStatus" compact />
+    </div>
 
     <p v-if="loadError" class="home-page__error">{{ loadError }}</p>
 
@@ -97,7 +96,7 @@ function exportThisMonth() {
       </div>
     </LuxuryCard>
 
-    <LuxuryCard :stagger="5">
+    <LuxuryCard :stagger="5" data-testid="home-quick-actions">
       <div class="section-title">快捷操作</div>
       <div class="home-page__actions">
         <button class="home-page__action" data-testid="home-expense-btn" @click="router.push('/expense/create')">
