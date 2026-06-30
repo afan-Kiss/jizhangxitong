@@ -48,6 +48,7 @@ def build_server_env(
     *,
     host: str,
     public_domain: str,
+    app_version: str = "",
     force_rotate_worker: bool = False,
     force_rotate_jwt: bool = False,
 ) -> tuple[str, str, str]:
@@ -58,10 +59,12 @@ def build_server_env(
     if public_domain and public_domain != host:
         origins += f",https://{public_domain},https://www.{public_domain}"
 
+    version_line = f'APP_VERSION="{app_version}"\n' if app_version else ""
+
     env = f"""NODE_ENV=production
 SERVER_PORT=4731
 PORT=4731
-DATABASE_URL="file:./data/accounting.db"
+{version_line}DATABASE_URL="file:./data/accounting.db"
 JWT_SECRET="{jwt}"
 JWT_EXPIRES_IN=7d
 WORKER_WS_TOKEN="{worker}"

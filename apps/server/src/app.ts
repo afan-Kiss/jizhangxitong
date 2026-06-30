@@ -23,7 +23,12 @@ export function createApp() {
   app.use(express.json({ limit: '50mb' }))
 
   app.get('/api/health', (_req, res) => {
-    res.json({ success: true, message: '和田玉镯子记账系统运行中' })
+    const version = process.env.APP_VERSION?.trim()
+    res.json({
+      success: true,
+      message: '和田玉镯子记账系统运行中',
+      ...(version ? { version } : {}),
+    })
   })
 
   app.get('/api/system/status', async (_req, res) => {

@@ -164,10 +164,23 @@ def main() -> None:
     client = connect()
     try:
         existing = read_remote_env(client)
+        app_version = os.environ.get("DEPLOY_APP_VERSION", "").strip()
+        if not app_version:
+            try:
+                app_version = __import__("subprocess").check_output(
+                    ["git", "rev-parse", "--short", "HEAD"],
+                    cwd=str(ROOT),
+                    text=True,
+                ).strip()
+            except Exception:
+                app_version = ""
+        if app_version:
+            print(f"[deploy] APP_VERSION={app_version}")
         env_content, _, worker_token = build_server_env(
             existing,
             host=HOST,
             public_domain=PUBLIC_DOMAIN,
+            app_version=app_version,
             force_rotate_worker=False,
             force_rotate_jwt=False,
         )

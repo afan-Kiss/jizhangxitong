@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url'
 import { loadDeployEnv, RECOMMENDED_URL } from './lib/deploy-env.mjs'
 import { fetchJson, login, sleep } from './lib/services.mjs'
 import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
+import { verifyDeployVersion } from './verify-deploy-version.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(__dirname, '..')
@@ -89,12 +90,25 @@ async function main() {
   })
   run('npm run build -w @jade-account/worker', { timeout: 300000 })
 
-  run(`python "${DEPLOY_PY}"`, { env: { ...process.env }, timeout: 900000 })
+  run(`python "${DEPLOY_PY}"`, {
+    env: { ...process.env, DEPLOY_APP_VERSION: gitHash },
+    timeout: 900000,
+  })
 
   await restartWorker()
   await sleep(5000)
 
-  const remoteUrl = RECOMMENDED_URL
+  const remoteUrl = RECOMMENDED_URL.replace(/\/$/, '')
+  const versionCheck1 = await verifyDeployVersion(gitHash, remoteUrl)
+  if (!versionCheck1.ok) {
+    console.error('\nFAIL — 部署后版本不一致（上传后立即检查）')
+    console.error('本地 HEAD:', versionCheck1.localHead)
+    console.error('远程 APP_VERSION:', versionCheck1.remote.metaVersion ?? '(missing)')
+    console.error('远程 health version:', versionCheck1.remote.healthVersion ?? '(missing)')
+    for (const e of versionCheck1.errors) console.error(`  - ${e}`)
+    process.exit(1)
+  }
+  console.log(`\nOK — 远程版本与 HEAD 一致: ${gitHash}\n`)
   const workerReport = await verifyWorkerRemote(remoteUrl)
 
   run(`node scripts/remote-acceptance.mjs`, {
@@ -103,11 +117,22 @@ async function main() {
   })
 
   const testEnv = { ...process.env, ACCEPTANCE_SERVER: remoteUrl }
-  run('npm run test:white-screen', { env: testEnv, timeout: TIMEOUTS.whiteScreen + 120000 })
-  run('npm run test:responsive', { env: testEnv, timeout: TIMEOUTS.responsive + 120000 })
-  run('npm run test:login', { env: testEnv, timeout: TIMEOUTS.login + 30000 })
-  run('npm run test:subpath', { env: testEnv, timeout: TIMEOUTS.subpath + 30000 })
-  run('npm run test:worker-online', { env: testEnv, timeout: TIMEOUTS.workerOnline + 60000 })
+  run('node scripts/test-white-screen.mjs', { env: testEnv, timeout: TIMEOUTS.whiteScreen + 180000 })
+  run('node scripts/test-responsive.mjs', { env: testEnv, timeout: TIMEOUTS.responsive + 180000 })
+  run('node scripts/test-login.mjs', { env: testEnv, timeout: TIMEOUTS.login + 30000 })
+  run('node scripts/test-subpath-refresh.mjs', { env: testEnv, timeout: TIMEOUTS.subpath + 30000 })
+  run('node scripts/test-worker-online.mjs', { env: testEnv, timeout: TIMEOUTS.workerOnline + 60000 })
+
+  const versionCheck2 = await verifyDeployVersion(gitHash, remoteUrl)
+  if (!versionCheck2.ok) {
+    console.error('\nFAIL — 部署末尾版本一致性检查未通过')
+    console.error('本地 HEAD:', versionCheck2.localHead)
+    console.error('远程 APP_VERSION:', versionCheck2.remote.metaVersion ?? '(missing)')
+    console.error('远程 health version:', versionCheck2.remote.healthVersion ?? '(missing)')
+    for (const e of versionCheck2.errors) console.error(`  - ${e}`)
+    process.exit(1)
+  }
+  console.log(`\nOK — 部署完成，版本一致: ${gitHash}\n`)
 
   console.log('\n=== 部署 Worker 报告 ===')
   console.log(JSON.stringify(workerReport, null, 2))
