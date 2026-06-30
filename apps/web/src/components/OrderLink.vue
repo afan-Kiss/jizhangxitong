@@ -42,7 +42,7 @@ const { qianfanEnabled, copyOrderNo, openQianfan } = useQianfan()
 .order-link__no {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-jade-deep);
+  color: var(--color-gold-light);
   word-break: break-all;
 }
 .order-link__actions {

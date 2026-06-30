@@ -2,15 +2,15 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
-import { loadQianfanConfig, useQianfan } from '../composables/useQianfan'
+import { loadQianfanConfig } from '../composables/useQianfan'
 import { useBreakpoint } from '../composables/useBreakpoint'
 import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import ActionButton from '../components/ActionButton.vue'
+import OrderLink from '../components/OrderLink.vue'
 
 const router = useRouter()
 const { isDesktop } = useBreakpoint()
-const { qianfanEnabled, openQianfan } = useQianfan()
 const items = ref<any[]>([])
 const filter = ref({
   startDate: '',
@@ -75,7 +75,10 @@ onMounted(async () => {
         </thead>
         <tbody>
           <tr v-for="item in items" :key="item.id" @click="router.push(`/sales/${item.id}`)">
-            <td>{{ item.externalOrderNo || '-' }}</td>
+            <td @click.stop>
+              <OrderLink v-if="item.externalOrderNo" :order-no="item.externalOrderNo" compact data-testid="sales-list-order-link" />
+              <span v-else>-</span>
+            </td>
             <td>{{ item.braceletCode }}</td>
             <td class="money">¥{{ Number(item.saleAmount).toFixed(2) }}</td>
             <td>¥{{ Number(item.cost ?? item.totalCostSnapshot).toFixed(2) }}</td>
@@ -91,6 +94,9 @@ onMounted(async () => {
       <div v-else-if="items.length" class="list-card">
         <div v-for="item in items" :key="item.id" class="list-card__item" @click="router.push(`/sales/${item.id}`)">
           <div>{{ item.braceletCode }} · ¥{{ Number(item.saleAmount).toFixed(2) }}</div>
+          <div v-if="item.externalOrderNo" class="sales-list__order" @click.stop>
+            <OrderLink :order-no="item.externalOrderNo" compact />
+          </div>
           <div class="muted">毛利 ¥{{ Number(item.profit ?? item.grossProfit).toFixed(2) }} · {{ item.platform }} · {{ item.soldAt?.slice(0, 10) }}</div>
         </div>
       </div>
@@ -103,6 +109,7 @@ onMounted(async () => {
 <style scoped>
 .sales-list__toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 .sales-list__mobile-action { margin-bottom: 12px; }
+.sales-list__order { margin: 6px 0; }
 .filter-row { display: grid; gap: 0; }
 @media (min-width: 1200px) { .filter-row { grid-template-columns: 1fr 1fr; } }
 </style>

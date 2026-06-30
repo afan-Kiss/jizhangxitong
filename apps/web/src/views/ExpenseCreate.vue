@@ -183,7 +183,8 @@ async function onSubmit() {
   }
 
   let needsAttachment = false
-  if (!uploadedFiles.value.length) {
+  const skipAttachmentPrompt = ['customer_refund', 'customer_compensation', 'after_sale_compensation', 'platform_fee'].includes(form.value.businessType)
+  if (!uploadedFiles.value.length && !skipAttachmentPrompt) {
     try {
       await showConfirmDialog({
         title: '无图保存',

@@ -47,6 +47,8 @@
     "test:effective-sales": "node scripts/test-effective-sales.mjs",
     "test:reimbursement-export": "node scripts/test-reimbursement-export.mjs",
     "test:ui-polish": "node scripts/test-ui-polish.mjs",
+    "test:final-user-flow": "node scripts/test-final-user-flow.mjs",
+    "test:ui-regression": "node scripts/test-ui-regression.mjs",
     "test:core-ledger": "node scripts/test-core-ledger.mjs",
     "verify:deploy-version": "node scripts/verify-deploy-version.mjs"
   },

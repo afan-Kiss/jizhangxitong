@@ -8,7 +8,9 @@ import { useBreakpoint } from '../composables/useBreakpoint'
 import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import ActionButton from '../components/ActionButton.vue'
+import OrderLink from '../components/OrderLink.vue'
 import BraceletCard from '../components/BraceletCard.vue'
+import { loadQianfanConfig } from '../composables/useQianfan'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -135,6 +137,13 @@ function goCustomerExpense(businessType: string) {
   router.push({ path: '/expense/create', query })
 }
 
+function goManualOrderExpense() {
+  const code = scanInput.value.trim()
+  const query: Record<string, string> = {}
+  if (code) query.externalOrderNo = code
+  router.push({ path: '/expense/create', query })
+}
+
 function goOrderProfit() {
   const order = result.value?.order
   if (order?.saleId) router.push(`/sales/${order.saleId}`)
@@ -164,6 +173,7 @@ async function pollScannerHealth() {
 
 onMounted(async () => {
   await auth.fetchWorkerStatus()
+  await loadQianfanConfig(api)
   await loadStatus()
   await nextTick()
   inputRef.value?.focus()
@@ -253,11 +263,13 @@ onUnmounted(() => {
 
             <div v-if="result.order" class="scan-workbench__order" data-testid="scan-order-card">
               <div class="section-title">订单</div>
-              <div>小红书订单号：{{ result.order.orderNo }}</div>
+              <OrderLink :order-no="result.order.orderNo" data-testid="scan-order-link" />
               <div v-if="result.order.logisticsNo">物流：{{ result.order.logisticsNo }}</div>
               <div>状态：{{ result.order.orderStatus }}</div>
               <div v-if="result.order.afterSaleStatus">售后：{{ result.order.afterSaleStatus }}</div>
               <div v-if="result.order.braceletCode">关联货品：{{ result.order.braceletCode }}</div>
+              <div v-if="result.order.saleAmount != null">销售金额：¥{{ Number(result.order.saleAmount).toFixed(2) }}</div>
+              <div v-if="result.order.finalProfit != null">订单利润：¥{{ Number(result.order.finalProfit).toFixed(2) }}</div>
               <div class="scan-workbench__actions">
                 <ActionButton block data-testid="scan-customer-refund-btn" @click="goCustomerExpense('customer_refund')">记客户返款</ActionButton>
                 <ActionButton block plain data-testid="scan-customer-comp-btn" @click="goCustomerExpense('customer_compensation')">记客户补偿</ActionButton>
@@ -271,8 +283,9 @@ onUnmounted(() => {
             </div>
 
             <div v-if="!result.matched && result.scanType === 'unknown'" class="scan-workbench__unknown">
-              <p>暂时没识别出来</p>
+              <p>暂时没识别出来，可以手动记账或按订单号查找</p>
               <ActionButton block plain @click="router.push('/expense/create')">手动记账</ActionButton>
+              <ActionButton block plain data-testid="scan-manual-order-btn" @click="goManualOrderExpense">按订单号查找并记账</ActionButton>
               <ActionButton block plain @click="createGoods">用这个编码新建货品</ActionButton>
             </div>
           </LuxuryCard>
@@ -329,9 +342,12 @@ onUnmounted(() => {
   border: var(--border-glass);
   border-radius: 12px;
   box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.35);
   color: var(--color-text-light);
   transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+.scan-workbench__input::placeholder {
+  color: rgba(245, 230, 200, 0.55);
 }
 .scan-workbench__input:focus {
   outline: none;

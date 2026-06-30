@@ -557,6 +557,10 @@ export async function voidExpense(id: number, voidReason: string, operator: Auth
 
   await syncExpenseLedger(id)
 
+  if (before.saleId) {
+    await getSale(before.saleId)
+  }
+
   await writeOperationLog({
     module: 'expense',
     action: 'void_expense',

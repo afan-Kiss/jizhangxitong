@@ -18,16 +18,22 @@ const canManagePermission = computed(() => auth.hasPermission('permission:manage
 const settings = ref<any>({})
 const workerStatus = ref<any>({})
 const qianfanEnabled = ref(false)
+const healthInfo = ref<any>({})
+const scanStatus = ref<any>({})
 
 onMounted(async () => {
   await auth.fetchMe()
   await auth.fetchWorkerStatus()
-  const [settingsRes, workerRes] = await Promise.all([
+  const [settingsRes, workerRes, healthRes, scanRes] = await Promise.all([
     api.get('/settings'),
     api.get('/local-worker/status'),
+    api.get('/health'),
+    api.get('/scan/status'),
   ])
   settings.value = settingsRes.data.data.settings
   workerStatus.value = workerRes.data.data
+  healthInfo.value = healthRes.data
+  scanStatus.value = scanRes.data.data || {}
   qianfanEnabled.value = !!settingsRes.data.data.qianfanOrderLinkEnabled
 })
 
@@ -70,6 +76,14 @@ function logout() {
     <div class="show-mobile-only">
       <WorkerStatus :status="workerStatus" />
     </div>
+
+    <LuxuryCard gold data-testid="settings-system-status">
+      <div class="section-title">系统状态</div>
+      <van-cell title="版本号" :value="healthInfo.version || '未知'" data-testid="settings-app-version" />
+      <van-cell title="扫码工作台" :value="healthInfo.scanWorkbenchEnabled ? '已启用' : '未启用'" />
+      <van-cell title="7789 扫码枪" :value="scanStatus.scannerOnline ? '已连接' : '未连接'" data-testid="settings-scanner-status" />
+      <van-cell title="Worker" :value="workerStatus.online ? '在线' : '离线'" data-testid="settings-worker-status" />
+    </LuxuryCard>
 
     <div class="settings-grid desktop-grid-2">
     <LuxuryCard>

@@ -20,6 +20,7 @@ import {
   refreshBraceletCostTotal,
 } from './goods.service'
 import { calculateSaleCost, calculateProfit, syncSaleLedger } from '../finance/core-ledger'
+import { getSale } from './sale.service'
 
 export type ScanSource = 'scanner' | 'manual' | 'paste'
 
@@ -33,11 +34,13 @@ function presentOrder(sale: {
   braceletId: number
   braceletCode: string
   saleAmount: unknown
+  finalProfit?: unknown
   soldAt: Date
 }) {
   const hasRealGoods = !isPlaceholderGoodsCode(sale.braceletCode)
   return {
     id: sale.id,
+    saleId: sale.id,
     draftId: null as number | null,
     isDraft: false,
     orderNo: sale.externalOrderNo || sale.saleNo,
@@ -48,6 +51,7 @@ function presentOrder(sale: {
     braceletId: hasRealGoods ? sale.braceletId : null,
     braceletCode: hasRealGoods ? sale.braceletCode : null,
     saleAmount: toNumber(sale.saleAmount as string | number),
+    finalProfit: sale.finalProfit != null ? toNumber(sale.finalProfit as string | number) : null,
     soldAt: sale.soldAt,
     needsGoodsBinding: !hasRealGoods,
   }
@@ -74,6 +78,11 @@ function presentDraft(draft: {
     soldAt: draft.createdAt,
     needsGoodsBinding: true,
   }
+}
+
+async function presentOrderFresh(sale: NonNullable<Awaited<ReturnType<typeof findOrderByNo>>>) {
+  const fresh = await getSale(sale.id)
+  return presentOrder({ ...sale, finalProfit: fresh?.finalProfit ?? sale.finalProfit })
 }
 
 async function findOrderByNo(code: string) {
@@ -224,7 +233,7 @@ async function lookupByCode(normalizedCode: string, initialType: ScanType) {
     if (order || draft) return
     const sale = await findOrderByNo(normalizedCode)
     if (sale) {
-      order = presentOrder(sale)
+      order = await presentOrderFresh(sale)
       const g = await getGoodsById(sale.braceletId)
       if (g && !isPlaceholderGoodsCode(g.code)) goods = g
       effectiveType = 'order_no'
@@ -241,7 +250,7 @@ async function lookupByCode(normalizedCode: string, initialType: ScanType) {
     if (order || draft) return
     const sale = await findOrderByLogistics(normalizedCode)
     if (sale) {
-      order = presentOrder(sale)
+      order = await presentOrderFresh(sale)
       const g = await getGoodsById(sale.braceletId)
       if (g && !isPlaceholderGoodsCode(g.code)) goods = g
       effectiveType = 'logistics_no'

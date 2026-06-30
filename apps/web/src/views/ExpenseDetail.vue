@@ -72,6 +72,11 @@ async function linkOrder() {
     showToast(err.response?.data?.message || '关联失败')
   }
 }
+
+function goGoodsProfit() {
+  const code = expense.value?.braceletCode
+  if (code) router.push(`/bracelets/${code}`)
+}
 </script>
 
 <template>
@@ -147,6 +152,17 @@ async function linkOrder() {
       <div v-if="!expense.attachments?.length" class="muted">暂无凭证</div>
     </LuxuryCard>
 
+    <div class="expense-detail__nav" data-testid="expense-detail-nav">
+      <ActionButton plain data-testid="expense-continue-btn" @click="router.push('/expense/create')">继续记一笔</ActionButton>
+      <ActionButton plain data-testid="expense-home-btn" @click="router.push('/')">返回首页</ActionButton>
+      <ActionButton
+        v-if="expense.braceletCode"
+        plain
+        data-testid="expense-goods-profit-btn"
+        @click="goGoodsProfit"
+      >查看这件货利润</ActionButton>
+    </div>
+
     <div class="expense-detail__actions">
       <ActionButton
         v-if="auth.hasPermission('reimbursement:update') && expense.paySource === '员工垫付'"
@@ -207,6 +223,12 @@ async function linkOrder() {
   object-fit: cover;
   border-radius: 10px;
   border: var(--border-gold);
+}
+.expense-detail__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
 }
 .expense-detail__actions {
   display: flex;
