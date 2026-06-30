@@ -137,26 +137,31 @@ export async function getSale(id: number) {
   })
   if (!sale) return null
 
-  const compensation = sale.expenses
-    .filter((e) => e.expenseType === '客户补偿' || e.expenseType === '售后补偿')
-    .reduce((s, e) => s + toNumber(e.amount), 0)
-
-  const refundSum = sale.refunds.reduce((s, r) => s + toNumber(r.refundAmount), 0)
-  const finalProfit = toNumber(sale.grossProfit) - compensation - refundSum
+  const profitRow = saleProfitRow({
+    ...sale,
+    expenses: sale.expenses,
+  })
 
   if (
-    compensation !== toNumber(sale.compensationAmount)
-    || finalProfit !== toNumber(sale.finalProfit)
+    profitRow.compensationAmount !== toNumber(sale.compensationAmount)
+    || profitRow.profit !== toNumber(sale.finalProfit)
   ) {
     await prisma.sale.update({
       where: { id },
-      data: { compensationAmount: compensation, finalProfit },
+      data: {
+        compensationAmount: profitRow.compensationAmount,
+        finalProfit: profitRow.profit,
+      },
     })
-    sale.compensationAmount = compensation as unknown as typeof sale.compensationAmount
-    sale.finalProfit = finalProfit as unknown as typeof sale.finalProfit
+    sale.compensationAmount = profitRow.compensationAmount as unknown as typeof sale.compensationAmount
+    sale.finalProfit = profitRow.profit as unknown as typeof sale.finalProfit
   }
 
-  return sale
+  return {
+    ...sale,
+    ...profitRow,
+    finalProfit: profitRow.profit,
+  }
 }
 
 export async function listSales(filter: {
@@ -192,10 +197,14 @@ export async function listSales(filter: {
     }),
     prisma.sale.count({ where }),
   ])
-  const items = rows.map((s) => ({
-    ...s,
-    ...saleProfitRow(s),
-  }))
+  const items = rows.map((s) => {
+    const profitRow = saleProfitRow(s)
+    return {
+      ...s,
+      ...profitRow,
+      finalProfit: profitRow.profit,
+    }
+  })
   return { items, total, page, pageSize }
 }
 

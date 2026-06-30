@@ -3,9 +3,12 @@
  * 记账主流程 API 验收：首页、记支出、作废、统计、销售、扫码暂停
  */
 import { execSync } from 'child_process'
+import { existsSync } from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import { chromium } from 'playwright'
 import {
-  SERVER, login, fetchJson, authHeaders, ensureServerRunning, getAdminPassword,
+  ROOT, SERVER, login, fetchJson, authHeaders, ensureServerRunning, getAdminPassword,
 } from './lib/services.mjs'
 import { launchBrowser, gotoStable } from './lib/playwright-utils.mjs'
 import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
@@ -123,6 +126,51 @@ async function testHomeNoWhiteScreen() {
   }
 }
 
+async function testSaleProfitAlignment(token) {
+  console.log('\n--- 销售利润口径 ---')
+  const distPath = path.join(ROOT, 'apps/server/dist/services/stats.service.js')
+  if (!existsSync(distPath)) {
+    execSync('npm run build -w @jade-account/server', { cwd: ROOT, stdio: 'inherit', timeout: 120000 })
+  }
+  const { saleProfitRow } = await import(pathToFileURL(distPath).href)
+
+  const row = saleProfitRow({
+    saleAmount: 10000,
+    totalCostSnapshot: 6000,
+    grossProfit: 4000,
+    finalProfit: 0,
+    compensationAmount: 500,
+    status: 'sold',
+    refunds: [{ refundAmount: 1000 }],
+  })
+  if (row.profit === 2500 && row.compensationAmount === 500 && row.refundAmount === 1000) {
+    pass('销售利润 = 毛利 - 退款 - 补偿 (2500)')
+  } else {
+    fail('销售利润 = 毛利 - 退款 - 补偿 (2500)', JSON.stringify(row))
+  }
+
+  const list = await api(token, '/api/sales?pageSize=1')
+  const saleId = list.json.data?.items?.[0]?.id
+  if (!saleId) {
+    pass('销售列表与详情利润一致', '（无销售数据，跳过）')
+    return
+  }
+  const detail = await api(token, `/api/sales/${saleId}`)
+  const listItem = list.json.data.items[0]
+  const detailProfit = Number(detail.json.data?.profit ?? detail.json.data?.finalProfit)
+  const listProfit = Number(listItem.profit ?? listItem.finalProfit)
+  if (Math.abs(detailProfit - listProfit) < 0.01) {
+    pass('销售列表与详情利润一致')
+  } else {
+    fail('销售列表与详情利润一致', `list=${listProfit} detail=${detailProfit}`)
+  }
+}
+
+function pathToFileURL(p) {
+  const u = path.resolve(p).replace(/\\/g, '/')
+  return { href: `file:///${u}` }
+}
+
 async function testAppVersion() {
   console.log('\n--- 版本 ---')
   const head = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim()
@@ -144,6 +192,7 @@ async function main() {
   await testHomeDashboard(token)
   await testExpenseFlow(token)
   await testScanPaused(token)
+  await testSaleProfitAlignment(token)
   await testHomeNoWhiteScreen()
   await testAppVersion()
 

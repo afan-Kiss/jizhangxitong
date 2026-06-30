@@ -3,25 +3,43 @@ import { prisma } from '../lib/prisma'
 import { toNumber, startOfDay, endOfDay, startOfMonth } from '../lib/utils'
 import { getExpenseSummary } from './expense.service'
 
+const COMPENSATION_TYPES = new Set(['客户补偿', '售后补偿'])
+
+function resolveCompensationAmount(sale: {
+  compensationAmount?: unknown
+  expenses?: { expenseType: string; amount: unknown; isVoided?: boolean }[]
+}): number {
+  if (sale.expenses?.length) {
+    return sale.expenses
+      .filter((e) => !e.isVoided && COMPENSATION_TYPES.has(e.expenseType))
+      .reduce((s, e) => s + toNumber(e.amount as string | number), 0)
+  }
+  return toNumber(sale.compensationAmount as string | number)
+}
+
 function saleProfitRow(sale: {
   saleAmount: unknown
   totalCostSnapshot: unknown
   grossProfit: unknown
   finalProfit: unknown
+  compensationAmount?: unknown
   status: string
   refunds?: { refundAmount: unknown }[]
+  expenses?: { expenseType: string; amount: unknown; isVoided?: boolean }[]
 }) {
   const refundSum = (sale.refunds || []).reduce((s, r) => s + toNumber(r.refundAmount as string | number), 0)
   const saleAmount = toNumber(sale.saleAmount as string | number)
   const cost = toNumber(sale.totalCostSnapshot as string | number)
   const gross = toNumber(sale.grossProfit as string | number)
-  const profit = gross - refundSum
+  const compensationAmount = resolveCompensationAmount(sale)
+  const profit = gross - refundSum - compensationAmount
   const margin = saleAmount > 0 ? (profit / saleAmount) * 100 : 0
   return {
     saleAmount,
     cost,
     grossProfit: gross,
     refundAmount: refundSum,
+    compensationAmount,
     profit,
     profitMargin: Math.round(margin * 100) / 100,
   }
