@@ -177,13 +177,12 @@ async function testUi(webBase) {
 
       await gotoStable(page, `${webBase}/sales/create?goodsId=${goodsId}`)
       await page.waitForTimeout(800)
-      const saleText = await page.evaluate(() => document.body.innerText)
-      if (saleText.includes('已带入货品') || saleText.includes('成本')) {
-        pass('/sales/create?goodsId 能自动带出货品和成本')
-      } else failCore('/sales/create?goodsId 能自动带出货品和成本', saleText.slice(0, 80))
+      const disabled = await page.getByTestId('module-disabled-page').count()
+      if (disabled) pass('/sales/create 显示模块已停用')
+      else failCore('/sales/create 显示模块已停用')
     } else {
       pass('/expense/create?goodsId 能自动带出货品', '（无货品，跳过）')
-      pass('/sales/create?goodsId 能自动带出货品和成本', '（跳过）')
+      pass('/sales/create 显示模块已停用', '（无货品，跳过）')
     }
 
     await ctx.close()
