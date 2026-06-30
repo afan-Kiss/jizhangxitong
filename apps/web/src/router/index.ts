@@ -17,6 +17,7 @@ const router = createRouter({
     { path: '/sales/:id', component: () => import('../views/SaleDetail.vue') },
     { path: '/bracelets', component: () => import('../views/Bracelets.vue') },
     { path: '/bracelets/:code', component: () => import('../views/BraceletDetail.vue') },
+    { path: '/scan', component: () => import('../views/ScanBinding.vue') },
     { path: '/settings', component: () => import('../views/Settings.vue') },
     { path: '/logs', component: () => import('../views/Logs.vue') },
   ],

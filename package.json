@@ -40,6 +40,7 @@
     "test:assets": "node scripts/check-assets-remote.mjs",
     "cleanup:stuck-tests": "node scripts/cleanup-stuck-tests.mjs",
     "guard:no-networkidle": "node scripts/guard-no-networkidle.mjs",
+    "test:scan-binding": "node scripts/test-scan-binding.mjs",
     "verify:deploy-version": "node scripts/verify-deploy-version.mjs"
   },
   "devDependencies": {

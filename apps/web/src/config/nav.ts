@@ -22,6 +22,7 @@ export const desktopNav: NavItem[] = [
   { path: '/reimbursements', label: '报销列表', icon: 'bill-o' },
   { path: '/sales', label: '销售', icon: 'orders-o' },
   { path: '/bracelets', label: '镯子', icon: '', custom: true },
+  { path: '/scan', label: '扫码绑定', icon: 'scan' },
   { path: '/expense/export', label: '导出 Excel', icon: 'down' },
   { path: '/settings', label: '我的', icon: 'user-o' },
 ]

@@ -60,6 +60,8 @@ model UserRole {
 model Bracelet {
   id                Int              @id @default(autoincrement())
   braceletCode      String           @unique
+  name              String?
+  category          String?
   certificateNo     String?
   scannerProductId  String?
   barcodeValue      String?
@@ -67,6 +69,7 @@ model Bracelet {
   sourceImagePath   String?
   inboundAt         DateTime?
   inboundCost       Decimal          @default(0)
+  costTotal         Decimal          @default(0)
   scannerStatus     String?
   localSnapshotJson String?
   sourceSyncedAt    DateTime?
@@ -76,6 +79,7 @@ model Bracelet {
   sales             Sale[]
   costAdjustments   CostAdjustment[]
   refunds           Refund[]
+  scanBindings      ScanBinding[]
 }
 
 model Expense {
@@ -138,6 +142,8 @@ model Sale {
   saleNo                  String    @unique
   platform                String
   externalOrderNo         String?
+  logisticsNo             String?
+  afterSaleStatus         String?
   customerName            String?
   customerRemark          String?
   braceletId              Int
@@ -164,6 +170,10 @@ model Sale {
   bracelet                Bracelet  @relation(fields: [braceletId], references: [id])
   expenses                Expense[]
   refunds                 Refund[]
+  scanBindings            ScanBinding[]
+
+  @@index([externalOrderNo])
+  @@index([logisticsNo])
 }
 
 model Refund {
@@ -256,4 +266,22 @@ model ConfigOption {
   sortOrder Int      @default(0)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+model ScanBinding {
+  id         Int       @id @default(autoincrement())
+  scanCode   String
+  scanType   String
+  braceletId Int?
+  saleId     Int?
+  source     String    @default("manual")
+  note       String?
+  createdBy  Int?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  bracelet   Bracelet? @relation(fields: [braceletId], references: [id])
+  sale       Sale?     @relation(fields: [saleId], references: [id])
+
+  @@index([scanCode])
+  @@index([createdAt])
 }

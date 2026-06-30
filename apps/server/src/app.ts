@@ -15,12 +15,22 @@ import {
   settingsRouter,
 } from './routes/settings.routes'
 import { maintenanceRouter } from './routes/maintenance.routes'
+import { scanRouter } from './routes/scan.routes'
+import { goodsRouter } from './routes/goods.routes'
 import { getSystemStatus } from './services/system-status.service'
 
 export function createApp() {
   const app = express()
   app.use(cors({ origin: config.corsOrigin === '*' ? true : config.corsOrigin }))
   app.use(express.json({ limit: '50mb' }))
+
+  // 与 Nginx /account/api/ 反代一致，便于本地 production 模式验收 /account/ 子路径
+  app.use((req, _res, next) => {
+    if (req.url.startsWith('/account/api')) {
+      req.url = req.url.replace(/^\/account\/api/, '/api')
+    }
+    next()
+  })
 
   app.get('/api/health', (_req, res) => {
     const version = process.env.APP_VERSION?.trim()
@@ -47,6 +57,8 @@ export function createApp() {
   app.use('/api/operation-logs', logRouter)
   app.use('/api/permissions', permissionRouter)
   app.use('/api/maintenance', maintenanceRouter)
+  app.use('/api/scan', scanRouter)
+  app.use('/api/goods', goodsRouter)
 
   attachAccountWeb(app)
 

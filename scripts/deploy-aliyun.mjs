@@ -121,6 +121,7 @@ async function main() {
   run('node scripts/test-responsive.mjs', { env: testEnv, timeout: TIMEOUTS.responsive + 180000 })
   run('node scripts/test-login.mjs', { env: testEnv, timeout: TIMEOUTS.login + 30000 })
   run('node scripts/test-subpath-refresh.mjs', { env: testEnv, timeout: TIMEOUTS.subpath + 30000 })
+  run('node scripts/test-scan-binding.mjs', { env: testEnv, timeout: TIMEOUTS.acceptanceFull + 60000 })
   run('node scripts/test-worker-online.mjs', { env: testEnv, timeout: TIMEOUTS.workerOnline + 60000 })
 
   const versionCheck2 = await verifyDeployVersion(gitHash, remoteUrl)
