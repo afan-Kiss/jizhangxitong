@@ -90,20 +90,21 @@ async function testScanWorkbench(token) {
   if (health.json.scanWorkbenchEnabled === true) {
     pass('扫码工作台已启用')
   } else {
-    pass('扫码工作台已启用', '（远程未启用，跳过 API 校验）')
+    fail('扫码工作台已启用', JSON.stringify(health.json))
+    return
   }
+
+  const st = await api(token, '/api/scan/status')
+  if (st.res.ok && st.json.data?.enabled === true) pass('scan/status enabled=true')
+  else fail('scan/status enabled=true', st.text)
 
   const rec = await api(token, '/api/scan/recognize', {
     method: 'POST',
     body: JSON.stringify({ code: 'WORKBENCH-PING', source: 'manual' }),
   })
-  if (health.json.scanWorkbenchEnabled && rec.res.status === 503) {
-    fail('/api/scan recognize 可用', rec.text)
-  } else if (rec.res.ok || rec.res.status === 503) {
-    pass('/api/scan recognize 响应正常')
-  } else {
-    fail('/api/scan recognize 响应正常', rec.text)
-  }
+  if (rec.res.status === 503) fail('/api/scan recognize 可用', rec.text)
+  else if (rec.res.ok) pass('/api/scan recognize 响应正常')
+  else fail('/api/scan recognize 响应正常', rec.text)
 }
 
 async function testHomeNoWhiteScreen(webBase) {
@@ -149,6 +150,7 @@ async function testSaleProfitAlignment(token) {
     execSync('npm run build -w @jade-account/server', { cwd: ROOT, stdio: 'inherit', timeout: 120000 })
   }
   const { saleProfitRow } = await import(pathToFileURL(distPath).href)
+  const { isConfirmedRefund } = await import('@jade-account/shared')
 
   const row = saleProfitRow({
     saleAmount: 10000,
@@ -157,12 +159,36 @@ async function testSaleProfitAlignment(token) {
     finalProfit: 0,
     compensationAmount: 500,
     status: 'sold',
-    refunds: [{ refundAmount: 1000 }],
+    refunds: [{ refundAmount: 1000, status: 'completed' }],
+    expenses: [{ expenseType: '客户补偿', amount: 500, isVoided: false }],
   })
   if (row.profit === 2500 && row.compensationAmount === 500 && row.refundAmount === 1000) {
-    pass('销售利润 = 毛利 - 退款 - 补偿 (2500)')
+    pass('销售利润 = 毛利 - 已确认退款 - 补偿 (2500)')
   } else {
-    fail('销售利润 = 毛利 - 退款 - 补偿 (2500)', JSON.stringify(row))
+    fail('销售利润 = 毛利 - 已确认退款 - 补偿 (2500)', JSON.stringify(row))
+  }
+
+  const rowPending = saleProfitRow({
+    saleAmount: 10000,
+    totalCostSnapshot: 6000,
+    grossProfit: 4000,
+    status: 'sold',
+    refunds: [
+      { refundAmount: 1000, status: 'completed' },
+      { refundAmount: 800, status: 'pending' },
+    ],
+    expenses: [{ expenseType: '客户补偿', amount: 500, isVoided: false }],
+  })
+  if (rowPending.profit === 2500 && rowPending.refundAmount === 1000) {
+    pass('pending 退款不扣利润')
+  } else {
+    fail('pending 退款不扣利润', JSON.stringify(rowPending))
+  }
+
+  if (!isConfirmedRefund('pending') && !isConfirmedRefund('processing') && isConfirmedRefund('completed')) {
+    pass('isConfirmedRefund 规则正确')
+  } else {
+    fail('isConfirmedRefund 规则正确')
   }
 
   const list = await api(token, '/api/sales?pageSize=1')
@@ -179,6 +205,83 @@ async function testSaleProfitAlignment(token) {
     pass('销售列表与详情利润一致')
   } else {
     fail('销售列表与详情利润一致', `list=${listProfit} detail=${detailProfit}`)
+  }
+
+  const dash = await api(token, '/api/stats/home')
+  if (dash.res.ok && typeof dash.json.data?.todayProfit === 'number') {
+    pass('首页今日利润 API 可用')
+  } else {
+    fail('首页今日利润 API 可用', dash.text)
+  }
+}
+
+async function testGoodsProfitRefunded(token) {
+  console.log('\n--- 一物利润 refunded ---')
+  const refunded = await api(token, '/api/sales?status=refunded&pageSize=1')
+  const sale = refunded.json.data?.items?.[0]
+  if (!sale?.braceletId) {
+    pass('refunded 货品返回 saleInfo', '（无 refunded 销售，口径单测已覆盖）')
+    return
+  }
+  const profit = await api(token, `/api/goods/${sale.braceletId}/profit`)
+  const data = profit.json.data
+  if (
+    profit.res.ok
+    && data?.sale
+    && data.summary?.isSold === true
+    && data.sale.saleStatus === 'refunded'
+  ) {
+    pass('refunded 货品返回 saleInfo')
+  } else {
+    fail('refunded 货品返回 saleInfo', profit.text)
+  }
+}
+
+async function testSaleListFilters(token) {
+  console.log('\n--- 销售列表筛选 ---')
+  const all = await api(token, '/api/sales?pageSize=50')
+  const items = all.json.data?.items || []
+  if (!items.length) {
+    fail('销售列表筛选', '无销售数据')
+    return
+  }
+  const sample = items[0]
+
+  if (sample.afterSaleStatus) {
+    const f = await api(token, `/api/sales?afterSaleStatus=${encodeURIComponent(sample.afterSaleStatus)}&pageSize=50`)
+    const ok = (f.json.data?.items || []).every((i) => i.afterSaleStatus === sample.afterSaleStatus)
+    if (ok && f.json.data.items.length > 0) pass('afterSaleStatus 筛选生效')
+    else fail('afterSaleStatus 筛选生效')
+  } else {
+    pass('afterSaleStatus 筛选生效', '（样本无售后状态）')
+  }
+
+  const soldAt = String(sample.soldAt || '').slice(0, 10)
+  if (soldAt) {
+    const f = await api(token, `/api/sales?startDate=${soldAt}&endDate=${soldAt}&pageSize=50`)
+    const ids = new Set((f.json.data?.items || []).map((i) => i.id))
+    if (ids.has(sample.id)) pass('startDate/endDate 筛选生效')
+    else fail('startDate/endDate 筛选生效')
+  }
+
+  if (sample.logisticsNo) {
+    const partial = String(sample.logisticsNo).slice(0, Math.min(6, sample.logisticsNo.length))
+    const f = await api(token, `/api/sales?logisticsNo=${encodeURIComponent(partial)}&pageSize=50`)
+    const ids = new Set((f.json.data?.items || []).map((i) => i.id))
+    if (ids.has(sample.id)) pass('logisticsNo 模糊筛选生效')
+    else fail('logisticsNo 模糊筛选生效')
+  } else {
+    pass('logisticsNo 模糊筛选生效', '（样本无物流单号）')
+  }
+
+  if (sample.externalOrderNo) {
+    const partial = String(sample.externalOrderNo).slice(0, Math.min(6, sample.externalOrderNo.length))
+    const f = await api(token, `/api/sales?externalOrderNo=${encodeURIComponent(partial)}&pageSize=50`)
+    const ids = new Set((f.json.data?.items || []).map((i) => i.id))
+    if (ids.has(sample.id)) pass('externalOrderNo 模糊筛选生效')
+    else fail('externalOrderNo 模糊筛选生效')
+  } else {
+    pass('externalOrderNo 模糊筛选生效', '（样本无订单号）')
   }
 }
 
@@ -214,6 +317,8 @@ async function main() {
   await testExpenseFlow(token)
   await testScanWorkbench(token)
   await testSaleProfitAlignment(token)
+  await testGoodsProfitRefunded(token)
+  await testSaleListFilters(token)
   await testHomeNoWhiteScreen(webBase)
   await testAppVersion()
 

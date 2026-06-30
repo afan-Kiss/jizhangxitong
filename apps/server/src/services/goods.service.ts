@@ -6,6 +6,12 @@ import { findBraceletByExactCode, presentBracelet } from './bracelet.service'
 import { calculateSaleCost } from './sale.service'
 import { saleProfitRow } from './stats.service'
 
+function buildGoodsProfitHint(saleStatus: string, profit: number): string {
+  if (saleStatus === 'refunded') return '这件已经退款，利润按退款后计算'
+  if (profit < 0) return '这件目前是亏的'
+  return `扣掉退款和补偿后赚 ¥${profit.toFixed(2)}`
+}
+
 const STATUS_LABELS: Record<string, string> = {
   in_stock: '在库',
   sold: '已售',
@@ -157,7 +163,12 @@ export async function getGoodsProfit(braceletId: number) {
 
   const sale = await prisma.sale.findFirst({
     where: { braceletId, status: { in: ['sold', 'refunded'] } },
-    include: { refunds: true },
+    include: {
+      refunds: true,
+      expenses: {
+        where: { isVoided: false, expenseType: { in: ['客户补偿', '售后补偿'] } },
+      },
+    },
     orderBy: { soldAt: 'desc' },
   })
 
@@ -172,7 +183,7 @@ export async function getGoodsProfit(braceletId: number) {
     hint: '还没卖出，预计利润要等登记销售后才知道',
   }
 
-  if (sale && sale.status === 'sold') {
+  if (sale) {
     const row = saleProfitRow(sale)
     saleInfo = {
       id: sale.id,
@@ -183,6 +194,7 @@ export async function getGoodsProfit(braceletId: number) {
       finalProfit: row.profit,
       profitMargin: row.profitMargin,
       soldAt: sale.soldAt,
+      saleStatus: sale.status,
     }
     summary = {
       costTotal,
@@ -191,7 +203,7 @@ export async function getGoodsProfit(braceletId: number) {
       finalProfit: row.profit,
       profitMargin: row.profitMargin,
       isLoss: row.profit < 0,
-      hint: row.profit < 0 ? '这件目前是亏的' : `扣掉退款和补偿后赚 ¥${row.profit.toFixed(2)}`,
+      hint: buildGoodsProfitHint(sale.status, row.profit),
     }
   }
 

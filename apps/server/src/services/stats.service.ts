@@ -1,9 +1,16 @@
-import { isEffectiveSale, EFFECTIVE_SALES_RULE_HINT } from '@jade-account/shared'
+import { isEffectiveSale, EFFECTIVE_SALES_RULE_HINT, isConfirmedRefund } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
 import { toNumber, startOfDay, endOfDay, startOfMonth } from '../lib/utils'
 import { getExpenseSummary } from './expense.service'
 
-const COMPENSATION_TYPES = new Set(['客户补偿', '售后补偿'])
+const COMPENSATION_TYPES = ['客户补偿', '售后补偿']
+
+export const COMPENSATION_EXPENSE_INCLUDE = {
+  where: {
+    isVoided: false,
+    expenseType: { in: COMPENSATION_TYPES },
+  },
+}
 
 function resolveCompensationAmount(sale: {
   compensationAmount?: unknown
@@ -11,10 +18,16 @@ function resolveCompensationAmount(sale: {
 }): number {
   if (sale.expenses?.length) {
     return sale.expenses
-      .filter((e) => !e.isVoided && COMPENSATION_TYPES.has(e.expenseType))
+      .filter((e) => !e.isVoided && COMPENSATION_TYPES.includes(e.expenseType))
       .reduce((s, e) => s + toNumber(e.amount as string | number), 0)
   }
   return toNumber(sale.compensationAmount as string | number)
+}
+
+function confirmedRefundSum(refunds?: { refundAmount: unknown; status?: string | null }[]): number {
+  return (refunds || [])
+    .filter((r) => isConfirmedRefund(r.status))
+    .reduce((s, r) => s + toNumber(r.refundAmount as string | number), 0)
 }
 
 function saleProfitRow(sale: {
@@ -24,10 +37,10 @@ function saleProfitRow(sale: {
   finalProfit: unknown
   compensationAmount?: unknown
   status: string
-  refunds?: { refundAmount: unknown }[]
+  refunds?: { refundAmount: unknown; status?: string | null }[]
   expenses?: { expenseType: string; amount: unknown; isVoided?: boolean }[]
 }) {
-  const refundSum = (sale.refunds || []).reduce((s, r) => s + toNumber(r.refundAmount as string | number), 0)
+  const refundSum = confirmedRefundSum(sale.refunds)
   const saleAmount = toNumber(sale.saleAmount as string | number)
   const cost = toNumber(sale.totalCostSnapshot as string | number)
   const gross = toNumber(sale.grossProfit as string | number)
@@ -57,7 +70,10 @@ export async function getHomeDashboard() {
       status: 'sold',
       soldAt: { gte: dayStart, lte: dayEnd },
     },
-    include: { refunds: true },
+    include: {
+      refunds: true,
+      expenses: COMPENSATION_EXPENSE_INCLUDE,
+    },
   })
 
   let todaySaleAmount = 0
@@ -108,7 +124,10 @@ export async function getSalesSummary(period?: string, startDate?: string, endDa
       isTrialRun: false,
       soldAt: { gte: start, lte: end },
     },
-    include: { refunds: true },
+    include: {
+      refunds: true,
+      expenses: COMPENSATION_EXPENSE_INCLUDE,
+    },
   })
 
   let totalSaleAmount = 0
@@ -167,4 +186,4 @@ export async function getMonthlyReport(year: number, month: number) {
   }
 }
 
-export { saleProfitRow, EFFECTIVE_SALES_RULE_HINT }
+export { saleProfitRow, EFFECTIVE_SALES_RULE_HINT, isConfirmedRefund }

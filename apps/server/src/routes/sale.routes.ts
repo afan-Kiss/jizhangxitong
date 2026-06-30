@@ -12,6 +12,11 @@ saleRouter.get('/', requirePermission('sale:view'), async (req, res) => {
     platform: req.query.platform as string,
     braceletCode: req.query.braceletCode as string,
     status: req.query.status as string,
+    afterSaleStatus: req.query.afterSaleStatus as string,
+    startDate: req.query.startDate as string,
+    endDate: req.query.endDate as string,
+    logisticsNo: req.query.logisticsNo as string,
+    externalOrderNo: req.query.externalOrderNo as string,
   })
   res.json({ success: true, data })
 })

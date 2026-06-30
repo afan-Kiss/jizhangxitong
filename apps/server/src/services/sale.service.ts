@@ -173,6 +173,8 @@ export async function listSales(filter: {
   afterSaleStatus?: string
   startDate?: string
   endDate?: string
+  logisticsNo?: string
+  externalOrderNo?: string
 }) {
   const page = clampPage(filter.page)
   const pageSize = clampPageSize(filter.pageSize)
@@ -181,6 +183,8 @@ export async function listSales(filter: {
   if (filter.braceletCode) where.braceletCode = { contains: filter.braceletCode }
   if (filter.status) where.status = filter.status
   if (filter.afterSaleStatus) where.afterSaleStatus = filter.afterSaleStatus
+  if (filter.logisticsNo) where.logisticsNo = { contains: filter.logisticsNo }
+  if (filter.externalOrderNo) where.externalOrderNo = { contains: filter.externalOrderNo }
   if (filter.startDate || filter.endDate) {
     where.soldAt = {}
     if (filter.startDate) (where.soldAt as Record<string, Date>).gte = startOfDay(new Date(filter.startDate))
@@ -190,7 +194,12 @@ export async function listSales(filter: {
   const [rows, total] = await Promise.all([
     prisma.sale.findMany({
       where,
-      include: { refunds: true },
+      include: {
+        refunds: true,
+        expenses: {
+          where: { isVoided: false, expenseType: { in: ['客户补偿', '售后补偿'] } },
+        },
+      },
       orderBy: { soldAt: 'desc' },
       skip: (page - 1) * pageSize,
       take: pageSize,

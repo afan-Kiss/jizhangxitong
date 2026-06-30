@@ -116,16 +116,20 @@ async function testUi(webBase) {
       const ctx = await browser.newContext({ viewport: { width, height } })
       const page = await ctx.newPage()
       await loginAndGotoScan(page, webBase, password)
-      await page.waitForSelector('[data-testid="scan-workbench-page"], [data-testid="scan-input"], [data-testid="scan-workbench-disabled"]', { timeout: 15000 }).catch(() => {})
+      await page.waitForSelector('[data-testid="scan-workbench-page"]', { timeout: 15000 }).catch(() => {})
 
       const text = await page.evaluate(() => document.body.innerText)
-      const hasWorkbench = text.includes('扫码工作台') && !text.includes('扫码绑定功能已暂停')
+      const hasTitle = text.includes('扫码工作台') && !text.includes('扫码绑定功能已暂停')
       const hasInput = await page.locator('[data-testid="scan-input"]').count()
 
-      if (hasWorkbench && (hasInput > 0 || text.includes('未启用'))) {
+      if (hasTitle) pass(`${name} 页面标题为扫码工作台`)
+      else fail(`${name} 页面标题为扫码工作台`, text.slice(0, 120))
+
+      if (hasInput > 0) {
         pass(`${name} /scan 不白屏`)
+        pass(`${name} 扫码输入框可见`)
       } else {
-        fail(`${name} /scan 不白屏`, text.slice(0, 120))
+        fail(`${name} data-testid=scan-input 可见`)
       }
 
       if (name === '手机端') {
@@ -134,8 +138,6 @@ async function testUi(webBase) {
         if (scrollW <= clientW + 2) pass('手机端无横向滚动')
         else fail('手机端无横向滚动')
       }
-
-      if (hasInput > 0) pass(`${name} 扫码输入框可见`)
 
       await ctx.close()
     }
