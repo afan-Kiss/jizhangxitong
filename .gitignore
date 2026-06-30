@@ -13,3 +13,7 @@ reports/*password*
 secrets/
 .DS_Store
 scripts/windows/.last-backup-path.txt
+apps/web/tsconfig.tsbuildinfo
+**/tsconfig.tsbuildinfo
+deploy/aliyun/**/__pycache__/
+deploy/aliyun/out/
