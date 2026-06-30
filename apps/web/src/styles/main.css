@@ -3,12 +3,17 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
   background: var(--color-bg);
   color: var(--color-text-main);
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 .money {
@@ -24,9 +29,10 @@ body {
 
 .section-title {
   margin: 0 0 12px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-text-main);
+  letter-spacing: 0.02em;
 }
 
 .section-title--sub {
@@ -35,22 +41,41 @@ body {
   color: var(--color-text-sub);
 }
 
-/* Vant 全局微调 */
+.luxury-card .section-title,
+.luxury-card--dark .section-title {
+  color: var(--color-text-light);
+}
+
+/* Vant 全局微调 — 深色玻璃 */
 .van-nav-bar {
   background: transparent !important;
 }
 .van-nav-bar .van-icon {
   color: var(--color-text-main);
 }
+.van-nav-bar__title {
+  color: var(--color-text-main) !important;
+}
 .van-cell-group--inset {
   margin: 0 16px;
   border-radius: var(--radius-card);
   overflow: hidden;
-  border: var(--border-gold);
+  border: var(--border-glass);
   box-shadow: var(--shadow-card);
+  background: var(--color-card-light);
 }
 .van-field__label {
   color: var(--color-text-sub) !important;
+}
+.van-field__control {
+  color: var(--color-text-main) !important;
+}
+.van-cell {
+  background: transparent !important;
+  color: var(--color-text-main);
+}
+.van-cell__title {
+  color: var(--color-text-sub);
 }
 .van-toast {
   background: var(--color-card-dark) !important;

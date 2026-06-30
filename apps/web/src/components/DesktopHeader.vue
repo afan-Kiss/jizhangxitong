@@ -13,7 +13,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <header class="desktop-header" data-testid="desktop-header">
+  <header class="desktop-header glass-surface" data-testid="desktop-header">
     <div class="desktop-header__title">和田玉镯子记账系统</div>
     <div class="desktop-header__right">
       <WorkerStatus :status="auth.workerStatus" compact />
@@ -33,19 +33,18 @@ onMounted(async () => {
   gap: 16px;
   min-height: var(--header-height);
   padding: 10px 24px;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: var(--blur-glass);
-  border-bottom: var(--border-gold);
+  background: rgba(12, 16, 14, 0.72);
+  border-bottom: var(--border-glass);
   position: sticky;
   top: 0;
   z-index: 50;
 }
 
 .desktop-header__title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--color-jade-deep);
-  letter-spacing: 0.03em;
+  color: var(--color-gold-light);
+  letter-spacing: 0.04em;
   white-space: nowrap;
 }
 
@@ -74,8 +73,9 @@ onMounted(async () => {
   gap: 6px;
   padding: 6px 12px;
   border-radius: var(--radius-pill);
-  background: rgba(31, 77, 58, 0.08);
-  color: var(--color-jade-deep);
+  background: rgba(78, 125, 105, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--color-text-light);
   font-size: 13px;
   white-space: nowrap;
 }

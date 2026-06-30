@@ -7,7 +7,7 @@ const route = useRoute()
 </script>
 
 <template>
-  <nav class="luxury-tabbar" data-testid="mobile-tabbar">
+  <nav class="luxury-tabbar glass-surface" data-testid="mobile-tabbar">
     <router-link
       v-for="tab in mobileTabs"
       :key="tab.path"
@@ -25,42 +25,43 @@ const route = useRoute()
 <style scoped>
 .luxury-tabbar {
   position: fixed;
-  left: 12px;
-  right: 12px;
+  left: 10px;
+  right: 10px;
   bottom: calc(8px + env(safe-area-inset-bottom));
   display: flex;
   justify-content: space-around;
   align-items: center;
-  height: 58px;
+  min-height: 58px;
   padding: 0 4px;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: var(--blur-glass);
-  -webkit-backdrop-filter: var(--blur-glass);
-  border-radius: 20px;
-  border: var(--border-gold);
-  box-shadow: 0 8px 32px rgba(16, 22, 20, 0.1);
+  background: rgba(12, 16, 14, 0.88);
+  border-radius: 18px;
+  border: var(--border-glass);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
   z-index: 100;
 }
 .luxury-tabbar__item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 6px 10px;
+  justify-content: center;
+  gap: 3px;
+  min-width: 56px;
+  min-height: 48px;
+  padding: 6px 8px;
   text-decoration: none;
   color: var(--color-text-sub);
   font-size: 10px;
-  transition: color var(--duration-fast);
+  transition: color var(--duration-fast), transform var(--duration-fast);
   border-radius: 12px;
 }
 .luxury-tabbar__item--active {
-  color: var(--color-jade-deep);
+  color: var(--color-gold-light);
+  background: rgba(78, 125, 105, 0.12);
 }
 .luxury-tabbar__item--active :deep(.van-icon) {
   color: var(--color-gold);
 }
 .luxury-tabbar__item:active {
-  transform: scale(0.95);
-  transition: transform var(--duration-fast);
+  transform: scale(0.94);
 }
 </style>

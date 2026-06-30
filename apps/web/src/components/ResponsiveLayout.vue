@@ -40,7 +40,10 @@ const hideMobileTab = computed(() => shouldHideMobileTab(route.path, isWide.valu
 <style scoped>
 .responsive-layout {
   min-height: 100vh;
-  background: var(--color-bg);
+  background:
+    radial-gradient(ellipse 90% 50% at 10% -5%, var(--color-bg-mesh-1) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 95% 100%, var(--color-bg-mesh-2) 0%, transparent 50%),
+    var(--color-bg);
 }
 
 .responsive-layout--desktop {
@@ -59,6 +62,7 @@ const hideMobileTab = computed(() => shouldHideMobileTab(route.path, isWide.valu
   flex: 1;
   padding-left: 16px;
   padding-right: 16px;
+  overflow-x: hidden;
 }
 
 .responsive-layout__content--login {

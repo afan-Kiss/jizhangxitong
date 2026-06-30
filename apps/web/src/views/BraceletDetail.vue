@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import api, { braceletImageUrl } from '../api'
@@ -8,6 +8,8 @@ import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import BraceletCard from '../components/BraceletCard.vue'
 import ExpenseItem from '../components/ExpenseItem.vue'
+import ProfitPanel from '../components/ProfitPanel.vue'
+import type { ProfitRow } from '../components/ProfitPanel.vue'
 import { useBreakpoint } from '../composables/useBreakpoint'
 
 const route = useRoute()
@@ -18,6 +20,27 @@ const detail = ref<any>(null)
 const profit = ref<any>(null)
 const imageUrl = ref('')
 const imageError = ref('')
+
+const profitRows = computed<ProfitRow[]>(() => {
+  if (!profit.value) return []
+  const p = profit.value
+  const rows: ProfitRow[] = [
+    { label: '这件货一共花了多少', amount: Number(p.costs?.costTotal ?? 0), type: 'base' },
+  ]
+  if (p.summary?.isSold) {
+    rows.push({ label: '这件货卖了多少', amount: Number(p.sale?.saleAmount ?? 0), type: 'sub' })
+    if (Number(p.sale?.refundAmount ?? 0) > 0) {
+      rows.push({ label: '减：退款', amount: Number(p.sale.refundAmount), type: 'deduct' })
+    }
+    rows.push({
+      label: '扣掉退款和补偿后赚了多少',
+      amount: Number(p.summary?.finalProfit ?? 0),
+      type: 'total',
+      highlight: true,
+    })
+  }
+  return rows
+})
 
 onMounted(async () => {
   await auth.fetchWorkerStatus()
@@ -77,19 +100,9 @@ function onImageError() {
 
       <div class="desktop-two-column__aside">
         <LuxuryCard v-if="profit" gold data-testid="bracelet-profit-card">
-          <div class="section-title">一物一账</div>
-          <div class="profit-line">这件货一共花了多少：¥{{ Number(profit.costs?.costTotal ?? 0).toFixed(2) }}</div>
-          <div class="profit-line">支出 {{ profit.summary?.expenseCount ?? 0 }} 笔</div>
-          <div v-if="profit.summary?.isSold" class="profit-line">
-            这件货卖了多少：¥{{ Number(profit.sale?.saleAmount ?? 0).toFixed(2) }}
-          </div>
-          <div v-if="profit.summary?.isSold" class="profit-line">
-            扣掉退款和补偿后赚了多少：¥{{ Number(profit.summary?.finalProfit ?? 0).toFixed(2) }}
-          </div>
+          <div class="section-title">一物一账 · 利润面板</div>
+          <ProfitPanel :rows="profitRows" />
           <div v-if="profit.summary?.isLoss" class="profit-loss">这件目前是亏的</div>
-          <div v-if="profit.sale?.refundAmount" class="profit-line muted">
-            退款影响：¥{{ Number(profit.sale.refundAmount).toFixed(2) }}
-          </div>
         </LuxuryCard>
 
         <LuxuryCard>

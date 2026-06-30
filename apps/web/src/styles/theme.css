@@ -1,44 +1,47 @@
 :root {
-  /* 主色 */
-  --color-bg: #F7F3EA;
-  --color-bg-deep: #101614;
-  --color-card: rgba(255, 255, 255, 0.78);
-  --color-card-dark: rgba(18, 26, 23, 0.92);
+  /* 墨玉绿 + 暖金 — 高端珠宝工作台 */
+  --color-bg: #0c100e;
+  --color-bg-deep: #060908;
+  --color-bg-mesh-1: rgba(31, 77, 58, 0.22);
+  --color-bg-mesh-2: rgba(198, 161, 91, 0.08);
 
-  /* 点缀 */
+  --color-surface: rgba(18, 26, 23, 0.55);
+  --color-card: rgba(22, 30, 27, 0.78);
+  --color-card-dark: rgba(12, 16, 14, 0.92);
+  --color-card-light: rgba(255, 255, 255, 0.06);
+
   --color-gold: #C6A15B;
   --color-gold-light: #E6D3A3;
   --color-jade: #4E7D69;
   --color-jade-deep: #1F4D3A;
+  --color-jade-glow: rgba(74, 222, 128, 0.12);
 
-  /* 文字 */
-  --color-text-main: #1D2522;
-  --color-text-sub: #6F7772;
+  --color-text-main: #E8EDE9;
+  --color-text-sub: rgba(232, 237, 233, 0.62);
   --color-text-light: #F8F3E8;
 
-  /* 状态 */
-  --color-success: #2F7D57;
-  --color-warning: #C9822B;
-  --color-danger: #B94A48;
-  --color-info: #3E6C8C;
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+  --color-info: #7dd3fc;
 
-  /* 布局 */
-  --radius-card: 20px;
-  --radius-btn: 16px;
+  --radius-card: 16px;
+  --radius-btn: 14px;
   --radius-pill: 999px;
-  --shadow-card: 0 12px 30px rgba(16, 22, 20, 0.08);
-  --shadow-glow: 0 4px 24px rgba(198, 161, 91, 0.15);
-  --border-gold: 1px solid rgba(198, 161, 91, 0.18);
-  --blur-glass: blur(16px);
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35);
+  --shadow-glow: 0 0 24px rgba(198, 161, 91, 0.12);
+  --shadow-glow-jade: 0 0 24px rgba(74, 222, 128, 0.1);
+  --border-gold: 1px solid rgba(198, 161, 91, 0.14);
+  --border-glass: 1px solid rgba(255, 255, 255, 0.06);
+  --blur-glass: blur(12px);
 
-  /* 动效 */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --duration-fast: 120ms;
   --duration-normal: 220ms;
   --duration-slow: 480ms;
 
-  /* Vant 主题覆盖 */
-  --van-primary-color: var(--color-jade-deep);
+  /* Vant 深色主题 */
+  --van-primary-color: var(--color-jade);
   --van-success-color: var(--color-success);
   --van-warning-color: var(--color-warning);
   --van-danger-color: var(--color-danger);
@@ -46,26 +49,43 @@
   --van-text-color-2: var(--color-text-sub);
   --van-background: var(--color-bg);
   --van-background-2: var(--color-card);
-  --van-border-color: rgba(198, 161, 91, 0.12);
-  --van-active-color: rgba(78, 125, 105, 0.08);
+  --van-border-color: rgba(255, 255, 255, 0.08);
+  --van-active-color: rgba(78, 125, 105, 0.15);
+  --van-cell-background: transparent;
+  --van-field-label-color: var(--color-text-sub);
+  --van-field-input-text-color: var(--color-text-main);
   --van-radius-lg: var(--radius-card);
-  --van-button-primary-background: linear-gradient(135deg, var(--color-jade-deep) 0%, #2A5A45 50%, var(--color-gold) 120%);
+  --van-button-primary-background: linear-gradient(135deg, var(--color-jade-deep) 0%, #2A5A45 50%, rgba(198, 161, 91, 0.9) 130%);
   --van-button-primary-border-color: transparent;
   --van-nav-bar-background: transparent;
   --van-nav-bar-title-text-color: var(--color-text-main);
-  --van-tabbar-background: rgba(247, 243, 234, 0.82);
+  --van-nav-bar-icon-color: var(--color-text-main);
+  --van-tabbar-background: rgba(12, 16, 14, 0.88);
   --van-tabbar-item-active-color: var(--color-gold);
   --van-tabbar-item-text-color: var(--color-text-sub);
 }
 
+/* 玻璃面板 — 对齐总控台 .glass */
+.glass-surface {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+  border: var(--border-glass);
+}
+
 @keyframes page-enter {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes card-stagger {
-  from { opacity: 0; transform: translateY(16px); }
+  from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes card-float {
+  from { transform: translateY(0); }
+  to { transform: translateY(-2px); }
 }
 
 @keyframes pulse-soft {
@@ -74,7 +94,7 @@
 }
 
 @keyframes highlight-flash {
-  0% { box-shadow: 0 0 0 0 rgba(198, 161, 91, 0.5); }
+  0% { box-shadow: 0 0 0 0 rgba(198, 161, 91, 0.45); }
   70% { box-shadow: 0 0 0 8px rgba(198, 161, 91, 0); }
   100% { box-shadow: var(--shadow-card); }
 }
@@ -96,6 +116,16 @@
   to { transform: rotate(360deg); }
 }
 
+@keyframes breathe-dot {
+  0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 6px rgba(74, 222, 128, 0.4); }
+  50% { transform: scale(1.2); opacity: 0.75; box-shadow: 0 0 12px rgba(74, 222, 128, 0.65); }
+}
+
+@keyframes input-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(198, 161, 91, 0); }
+  50% { box-shadow: 0 0 0 3px rgba(198, 161, 91, 0.22); }
+}
+
 .page-enter {
   animation: page-enter var(--duration-normal) var(--ease-out) both;
 }
@@ -110,22 +140,6 @@
 
 .shake-soft {
   animation: shake-soft 0.4s var(--ease-out);
-}
-
-@keyframes scan-line {
-  0% { top: 0; opacity: 0.6; }
-  50% { opacity: 1; }
-  100% { top: calc(100% - 2px); opacity: 0.6; }
-}
-
-@keyframes breathe-dot {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.3); opacity: 0.7; }
-}
-
-@keyframes input-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(198, 161, 91, 0); }
-  50% { box-shadow: 0 0 0 3px rgba(198, 161, 91, 0.25); }
 }
 
 .scan-input-wrap {
@@ -145,6 +159,13 @@
   animation: scan-line 1.2s linear infinite;
   pointer-events: none;
 }
+
+@keyframes scan-line {
+  0% { top: 0; opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { top: calc(100% - 2px); opacity: 0.6; }
+}
+
 .scanner-dot {
   display: inline-block;
   width: 8px;
@@ -155,7 +176,7 @@
 }
 .scanner-dot--online {
   background: var(--color-success);
-  animation: breathe-dot 2s ease-in-out infinite;
+  animation: breathe-dot 2.4s ease-in-out infinite;
 }
 .scanner-dot--offline {
   background: var(--color-warning);

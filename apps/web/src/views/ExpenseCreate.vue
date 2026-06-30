@@ -250,15 +250,17 @@ async function onSubmit() {
       <div class="desktop-two-column__main">
         <LuxuryCard gold padding="16px">
           <div class="section-title">这笔钱属于什么</div>
-          <div class="pill-row" data-testid="expense-business-cards">
+          <div class="biz-card-grid" data-testid="expense-business-cards">
             <button
               v-for="opt in BUSINESS_OPTIONS"
               :key="opt.v"
-              class="pill"
-              :class="{ 'pill--active': form.businessType === opt.v }"
+              class="biz-card"
+              :class="{ 'biz-card--active': form.businessType === opt.v }"
               :data-testid="`expense-biz-${opt.v}`"
               @click="form.businessType = opt.v"
-            >{{ opt.l }}</button>
+            >
+              <span class="biz-card__label">{{ opt.l }}</span>
+            </button>
           </div>
         </LuxuryCard>
 
@@ -408,9 +410,10 @@ async function onSubmit() {
 .lookup-hint { margin: 8px 0 0; font-size: 13px; }
 .order-card {
   margin-top: 12px;
-  padding: 12px;
+  padding: 14px;
   border-radius: 12px;
-  background: rgba(31, 77, 58, 0.06);
+  background: rgba(78, 125, 105, 0.1);
+  border: var(--border-glass);
   font-size: 14px;
   line-height: 1.6;
 }
@@ -422,45 +425,104 @@ async function onSubmit() {
 .amount-zone__prefix { font-size: 28px; font-weight: 600; color: var(--color-gold); }
 .amount-zone__input {
   flex: 1; border: none; background: transparent;
-  font-size: 36px; font-weight: 600; color: var(--color-text-main);
+  font-size: 36px; font-weight: 600; color: var(--color-text-light);
   outline: none; min-width: 0;
 }
-.amount-zone__input::placeholder { color: rgba(111, 119, 114, 0.35); font-size: 28px; }
+.amount-zone__input::placeholder { color: rgba(232, 237, 233, 0.25); font-size: 28px; }
 .amount-zone__hint { margin-top: 6px; }
-.pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.pill {
-  padding: 8px 14px; border-radius: var(--radius-pill);
-  border: 1px solid rgba(198, 161, 91, 0.2);
-  background: rgba(255, 255, 255, 0.5);
-  font-size: 13px; color: var(--color-text-sub);
+.biz-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
-.pill--active {
-  background: rgba(31, 77, 58, 0.12);
-  border-color: var(--color-jade);
-  color: var(--color-jade-deep);
-  font-weight: 500;
+@media (min-width: 768px) {
+  .biz-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-.pay-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-.pay-card {
-  padding: 14px; border-radius: 14px; border: var(--border-gold);
-  background: rgba(255, 255, 255, 0.45); font-size: 14px;
+@media (min-width: 1200px) {
+  .biz-card-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
-.pay-card--active {
-  border-color: var(--color-gold);
-  background: rgba(198, 161, 91, 0.1);
+.biz-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 12px 10px;
+  border-radius: 14px;
+  border: var(--border-glass);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 13px;
+  color: var(--color-text-sub);
+  text-align: center;
+  cursor: pointer;
+  transition: transform var(--duration-fast), border-color var(--duration-fast), box-shadow var(--duration-fast), background var(--duration-fast);
+}
+@media (hover: hover) {
+  .biz-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(198, 161, 91, 0.22);
+  }
+}
+.biz-card--active {
+  background: rgba(78, 125, 105, 0.18);
+  border-color: rgba(198, 161, 91, 0.35);
+  color: var(--color-gold-light);
+  font-weight: 600;
   box-shadow: var(--shadow-glow);
 }
+.biz-card__label { line-height: 1.35; }
+.pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill {
+  padding: 10px 14px;
+  min-height: 44px;
+  border-radius: var(--radius-pill);
+  border: var(--border-glass);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+  color: var(--color-text-sub);
+}
+.pill--active {
+  background: rgba(78, 125, 105, 0.18);
+  border-color: rgba(198, 161, 91, 0.3);
+  color: var(--color-gold-light);
+  font-weight: 500;
+}
+.pay-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.pay-card {
+  padding: 16px 14px;
+  min-height: 52px;
+  border-radius: 14px;
+  border: var(--border-glass);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 14px;
+  color: var(--color-text-main);
+}
+.pay-card--active {
+  border-color: rgba(198, 161, 91, 0.35);
+  background: rgba(198, 161, 91, 0.1);
+  box-shadow: var(--shadow-glow);
+  color: var(--color-gold-light);
+}
 .segment {
-  display: flex; background: rgba(111, 119, 114, 0.08);
-  border-radius: 12px; padding: 4px; margin-bottom: 12px;
+  display: flex;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 12px;
+  border: var(--border-glass);
 }
 .segment__item {
-  flex: 1; padding: 10px; border: none; border-radius: 10px;
-  background: transparent; font-size: 13px; color: var(--color-text-sub);
+  flex: 1;
+  padding: 12px 10px;
+  min-height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 13px;
+  color: var(--color-text-sub);
 }
 .segment__item--active {
-  background: var(--color-card);
-  color: var(--color-jade-deep);
+  background: rgba(78, 125, 105, 0.2);
+  color: var(--color-gold-light);
   font-weight: 500;
 }
 :deep(.field-custom) { background: transparent; }

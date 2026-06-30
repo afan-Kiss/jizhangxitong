@@ -56,9 +56,9 @@ const resolvedVariant = computed(() => props.variant || (props.plain ? 'secondar
   box-shadow: 0 8px 20px rgba(31, 77, 58, 0.25);
 }
 .action-btn--secondary {
-  background: var(--color-card);
-  color: var(--color-jade-deep);
-  border: var(--border-gold);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-light);
+  border: var(--border-glass);
   backdrop-filter: var(--blur-glass);
 }
 .action-btn--ghost {

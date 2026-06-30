@@ -64,7 +64,7 @@ function exportThisMonth() {
 
 <template>
   <div class="home-page page-enter" data-testid="home-page">
-    <PageHero title="今天店里情况" subtitle="一眼看清今天花了多少、卖了多少、大概赚了多少" test-id="home-hero" />
+    <PageHero title="今天店里情况" subtitle="经营总览 · 一眼看清今天花了多少、卖了多少、大概赚了多少" test-id="home-hero" />
     <div class="show-mobile-only home-page__worker">
       <WorkerStatus :status="auth.workerStatus" compact />
     </div>
@@ -203,15 +203,24 @@ function exportThisMonth() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 14px 4px;
-  border: var(--border-gold);
+  justify-content: center;
+  gap: 8px;
+  min-height: 72px;
+  padding: 14px 8px;
+  border: var(--border-glass);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.45);
-  color: var(--color-jade-deep);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-light);
   font-size: 12px;
   cursor: pointer;
-  transition: transform var(--duration-fast) var(--ease-out);
+  transition: transform var(--duration-fast) var(--ease-out), border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+@media (hover: hover) {
+  .home-page__action:hover {
+    transform: translateY(-2px);
+    border-color: rgba(198, 161, 91, 0.25);
+    box-shadow: var(--shadow-glow);
+  }
 }
 .home-page__action:active { transform: scale(0.96); }
 .home-page__action :deep(.van-icon) { color: var(--color-gold); }

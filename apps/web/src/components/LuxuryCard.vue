@@ -5,21 +5,23 @@ defineProps<{
   padding?: string
   stagger?: number
   clickable?: boolean
+  hoverable?: boolean
 }>()
 </script>
 
 <template>
   <div
-    class="luxury-card"
+    class="luxury-card glass-surface"
     :class="{
       'luxury-card--dark': dark,
       'luxury-card--gold': gold,
       'luxury-card--clickable': clickable,
+      'luxury-card--hoverable': hoverable !== false,
       'card-stagger': stagger !== undefined,
     }"
     :style="{
       padding: padding || undefined,
-      animationDelay: stagger !== undefined ? `${stagger * 40}ms` : undefined,
+      animationDelay: stagger !== undefined ? `${stagger * 45}ms` : undefined,
     }"
   >
     <slot />
@@ -28,20 +30,28 @@ defineProps<{
 
 <style scoped>
 .luxury-card {
-  background: var(--color-card);
-  backdrop-filter: var(--blur-glass);
-  -webkit-backdrop-filter: var(--blur-glass);
   border-radius: var(--radius-card);
-  border: var(--border-gold);
+  border: var(--border-glass);
   box-shadow: var(--shadow-card);
   padding: 16px;
   margin-bottom: 14px;
+  position: relative;
+  transition:
+    transform var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out),
+    border-color var(--duration-fast);
+}
+@media (hover: hover) {
+  .luxury-card--hoverable:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-card), var(--shadow-glow);
+    border-color: rgba(198, 161, 91, 0.2);
+  }
 }
 .luxury-card--dark {
   background: linear-gradient(145deg, #141C19 0%, #1A2822 45%, #0F1614 100%);
   border-color: rgba(198, 161, 91, 0.22);
   color: var(--color-text-light);
-  position: relative;
   overflow: hidden;
 }
 .luxury-card--dark::before {
@@ -65,12 +75,11 @@ defineProps<{
   pointer-events: none;
 }
 .luxury-card--gold {
-  border-color: rgba(198, 161, 91, 0.35);
-  box-shadow: var(--shadow-glow);
+  border-color: rgba(198, 161, 91, 0.28);
+  box-shadow: var(--shadow-card), var(--shadow-glow);
 }
 .luxury-card--clickable {
   cursor: pointer;
-  transition: transform var(--duration-fast) var(--ease-out);
 }
 .luxury-card--clickable:active {
   transform: scale(0.985);

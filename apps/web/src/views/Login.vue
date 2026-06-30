@@ -71,13 +71,13 @@ async function onLogin() {
   margin-bottom: 32px;
 }
 .login__brand {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 600;
-  color: var(--color-text-main);
-  letter-spacing: 0.04em;
+  color: var(--color-gold-light);
+  letter-spacing: 0.06em;
 }
 .login__tagline {
-  margin-top: 8px;
+  margin-top: 10px;
   font-size: 14px;
   color: var(--color-text-sub);
 }
