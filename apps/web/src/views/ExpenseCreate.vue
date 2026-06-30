@@ -12,6 +12,8 @@ import ImageUploader from '../components/ImageUploader.vue'
 import ActionButton from '../components/ActionButton.vue'
 import { resolveApiErrorMessage } from '../utils/api-errors'
 
+const STORAGE_KEY = 'jade-expense-prefs'
+
 const router = useRouter()
 const auth = useAuthStore()
 const { isDesktop } = useBreakpoint()
@@ -43,13 +45,36 @@ onMounted(async () => {
   await auth.fetchWorkerStatus()
   const res = await api.get('/settings')
   settings.value = res.data.data
-  if (settings.value.expenseTypes?.length) form.value.expenseType = settings.value.expenseTypes[0].value
-  if (settings.value.paySources?.length) form.value.paySource = settings.value.paySources[0].value
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
+    if (saved.expenseType) form.value.expenseType = saved.expenseType
+    else if (settings.value.expenseTypes?.length) form.value.expenseType = settings.value.expenseTypes[0].value
+    if (saved.paySource) form.value.paySource = saved.paySource
+    else if (settings.value.paySources?.length) form.value.paySource = settings.value.paySources[0].value
+  } catch {
+    if (settings.value.expenseTypes?.length) form.value.expenseType = settings.value.expenseTypes[0].value
+    if (settings.value.paySources?.length) form.value.paySource = settings.value.paySources[0].value
+  }
 })
 
+function savePrefs() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    expenseType: form.value.expenseType,
+    paySource: form.value.paySource,
+  }))
+}
+
 async function onSubmit() {
-  if (!form.value.amount || !form.value.expenseType || !form.value.paySource) {
-    showToast('请填写必填项')
+  if (!form.value.amount) {
+    showToast('金额得填一下')
+    return
+  }
+  if (!form.value.expenseType) {
+    showToast('选一下花在哪一类')
+    return
+  }
+  if (!form.value.paySource) {
+    showToast('选一下用哪个账户付的')
     return
   }
   const amount = Number(form.value.amount)
@@ -79,8 +104,25 @@ async function onSubmit() {
       needsAttachment,
       reimbursementStatus: form.value.paySource === '员工垫付' ? form.value.reimbursementStatus : 'not_required',
     })
-    showToast('保存成功')
-    router.push(`/expense/${res.data.data.id}`)
+    savePrefs()
+    const expenseId = res.data.data.id
+    try {
+      await showConfirmDialog({
+        title: '已记账',
+        message: '接下来要做什么？',
+        confirmButtonText: '查看这笔支出',
+        cancelButtonText: '继续记一笔',
+        confirmButtonColor: '#1F4D3A',
+      })
+      router.push(`/expense/${expenseId}`)
+    } catch {
+      form.value.amount = ''
+      form.value.expenseSummary = ''
+      form.value.remark = ''
+      form.value.braceletCode = ''
+      uploadedFiles.value = []
+      showToast('可以继续记下一笔')
+    }
   } catch (err: unknown) {
     showToast(resolveApiErrorMessage(err))
   } finally {
@@ -167,7 +209,7 @@ async function onSubmit() {
 
         <LuxuryCard>
           <div class="section-title">镯子编号</div>
-          <van-field v-model="form.braceletCode" placeholder="可扫码，可为空" class="field-custom" />
+          <van-field v-model="form.braceletCode" placeholder="可不填，填了会关联到货品" class="field-custom" />
         </LuxuryCard>
 
         <LuxuryCard>

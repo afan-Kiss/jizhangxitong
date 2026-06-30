@@ -27,6 +27,7 @@ const filter = ref({
   onlyWithBracelet: false,
 })
 const preview = ref<any[]>([])
+const previewSummary = ref<any>(null)
 const missingImageCount = ref(0)
 const exportResult = ref<any>(null)
 const exporting = ref(false)
@@ -52,10 +53,15 @@ function updateSteps(activeIdx: number, errorIdx?: number) {
 
 async function onPreview() {
   updateSteps(1)
-  const res = await api.post('/expenses/export/reimbursement-excel/preview', filter.value)
-  preview.value = res.data.data.preview
-  missingImageCount.value = res.data.data.missingImageCount
-  exportSteps.value[1].status = 'done'
+  try {
+    const res = await api.post('/expenses/export/reimbursement-excel/preview', filter.value)
+    preview.value = res.data.data.preview
+    previewSummary.value = res.data.data.summary
+    missingImageCount.value = res.data.data.missingImageCount
+    exportSteps.value[1].status = 'done'
+  } catch {
+    showToast('数据没查出来，刷新试试')
+  }
 }
 
 async function onExport() {
@@ -82,7 +88,7 @@ async function onExport() {
   } catch (err: any) {
     const failedStep = currentStep.value || 2
     updateSteps(failedStep, failedStep)
-    showToast(err.response?.data?.message || '导出失败')
+    showToast(err.response?.data?.message || '导出失败，先别重复点，重新试一次')
   } finally {
     exporting.value = false
   }
@@ -115,18 +121,26 @@ onMounted(async () => {
           <div class="filter-row">
             <van-field v-model="filter.startDate" label="开始" type="date" />
             <van-field v-model="filter.endDate" label="结束" type="date" />
-            <van-field v-model="filter.reimbursementStatus" label="报销状态" placeholder="all / pending / reimbursed" />
-            <van-field v-model="filter.reimbursementPerson" label="报销人" />
+            <van-field v-model="filter.reimbursementStatus" label="报销状态" placeholder="全部/未报销/已报销" />
+            <van-field v-model="filter.reimbursementPerson" label="经手人" />
+            <van-field v-model="filter.expenseType" label="支出分类" placeholder="全部" />
+            <van-field v-model="filter.paySource" label="账户" placeholder="全部" />
           </div>
         </LuxuryCard>
 
         <LuxuryCard gold>
           <div class="section-title">导出进度</div>
+          <div v-if="previewSummary" class="summary-grid summary-grid--compact" data-testid="export-preview-summary">
+            <div><span class="muted">笔数</span><strong>{{ previewSummary.count }}</strong></div>
+            <div><span class="muted">总金额</span><strong>¥{{ Number(previewSummary.totalAmount).toFixed(2) }}</strong></div>
+            <div><span class="muted">未报销</span><strong>¥{{ Number(previewSummary.pendingAmount).toFixed(2) }}</strong></div>
+            <div><span class="muted">已报销</span><strong>¥{{ Number(previewSummary.reimbursedAmount).toFixed(2) }}</strong></div>
+          </div>
           <ExportProgress :steps="exportSteps" />
           <div v-if="isDesktop" class="export-actions export-actions--inline">
-            <ActionButton :loading="exporting" size="lg" data-testid="export-btn" @click="onExport">导出 Excel 报销表</ActionButton>
+            <ActionButton variant="secondary" data-testid="preview-btn" @click="onPreview">先预览</ActionButton>
+            <ActionButton :loading="exporting" size="lg" data-testid="export-btn" @click="onExport">导出报销表</ActionButton>
             <div class="export-footer__secondary">
-              <ActionButton variant="secondary" @click="onPreview">刷新预览</ActionButton>
               <ActionButton v-if="exportResult" variant="ghost" @click="download">下载文件</ActionButton>
             </div>
           </div>
@@ -156,9 +170,9 @@ onMounted(async () => {
 
     <template v-if="!isDesktop" #footer>
       <div class="export-footer export-actions">
-        <ActionButton :loading="exporting" size="lg" data-testid="export-btn" @click="onExport">导出 Excel 报销表</ActionButton>
+        <ActionButton variant="secondary" data-testid="preview-btn" @click="onPreview">先预览</ActionButton>
+        <ActionButton :loading="exporting" size="lg" data-testid="export-btn" @click="onExport">导出报销表</ActionButton>
         <div class="export-footer__secondary">
-          <ActionButton variant="secondary" @click="onPreview">刷新预览</ActionButton>
           <ActionButton v-if="exportResult" variant="ghost" @click="download">下载文件</ActionButton>
         </div>
       </div>
@@ -181,4 +195,18 @@ onMounted(async () => {
   gap: 8px;
 }
 .export-footer__secondary .action-btn { flex: 1; min-width: 0; }
+.summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.summary-grid strong { display: block; font-size: 16px; margin-top: 4px; }
+.summary-grid--compact {
+  margin-bottom: 12px;
+  grid-template-columns: repeat(4, 1fr);
+}
+.summary-grid--compact strong { font-size: 14px; }
+@media (min-width: 1200px) {
+  .summary-grid { grid-template-columns: repeat(5, 1fr); }
+}
 </style>

@@ -5,6 +5,7 @@ import { writeOperationLog } from './operation-log.service'
 import { clampPage, clampPageSize } from '../lib/pagination'
 import { resolveBraceletBinding } from '../lib/bracelet-bind'
 import { sanitizeFile } from '../lib/serialize'
+import { refreshBraceletCostTotal } from './goods.service'
 
 export interface ExpenseFilter {
   startDate?: string
@@ -109,7 +110,7 @@ export async function createExpense(
   const braceletId = binding.braceletId
   const braceletCode = binding.braceletCode
   if (input.braceletCode?.trim() && !braceletId) {
-    throw new Error('扫码枪系统未找到这只镯子，请确认编号是否扫错。')
+    throw new Error('本地电脑没连上，暂时查不到扫码枪里的镯子')
   }
 
   let reimbursementStatus = input.reimbursementStatus || 'pending'
@@ -156,6 +157,8 @@ export async function createExpense(
     })
   }
 
+  if (braceletId) await refreshBraceletCostTotal(braceletId)
+
   await writeOperationLog({
     module: 'expense',
     action: 'create_expense',
@@ -187,21 +190,28 @@ export async function updateExpense(
 ) {
   const before = await prisma.expense.findUnique({ where: { id } })
   if (!before) throw new Error('支出不存在')
-  if (before.isVoided) throw new Error('已作废支出不能修改')
+  if (before.isVoided) throw new Error('这条记录现在不能改')
 
+  const oldBraceletId = before.braceletId
   const data: Record<string, unknown> = { ...input }
   if (input.occurredAt) data.occurredAt = new Date(input.occurredAt)
-  if (input.amount !== undefined && input.amount <= 0) throw new Error('金额必须大于 0')
+  if (input.amount !== undefined && input.amount <= 0) throw new Error('金额得填一下')
   if (input.braceletCode !== undefined) {
     const binding = await resolveBraceletBinding(input.braceletCode, undefined, operator)
     if (input.braceletCode.trim() && !binding.braceletId) {
-      throw new Error('扫码枪系统未找到这只镯子，请确认编号是否扫错。')
+      throw new Error('本地电脑没连上，暂时查不到扫码枪里的镯子')
     }
     data.braceletId = binding.braceletId
     data.braceletCode = binding.braceletCode
   }
 
   const expense = await prisma.expense.update({ where: { id }, data })
+
+  const newBraceletId = expense.braceletId
+  if (newBraceletId) await refreshBraceletCostTotal(newBraceletId)
+  if (oldBraceletId && oldBraceletId !== newBraceletId) {
+    await refreshBraceletCostTotal(oldBraceletId)
+  }
 
   await writeOperationLog({
     module: 'expense',
@@ -230,6 +240,10 @@ export async function voidExpense(id: number, voidReason: string, operator: Auth
       voidedBy: operator!.userId,
     },
   })
+
+  if (before.braceletId) {
+    await refreshBraceletCostTotal(before.braceletId)
+  }
 
   await writeOperationLog({
     module: 'expense',

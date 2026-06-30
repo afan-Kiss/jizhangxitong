@@ -23,6 +23,7 @@ export const desktopNav: NavItem[] = [
   { path: '/sales', label: '销售', icon: 'orders-o' },
   { path: '/bracelets', label: '镯子', icon: '', custom: true },
   { path: '/expense/export', label: '导出 Excel', icon: 'down' },
+  { path: '/expense/stats', label: '支出统计', icon: 'chart-trending-o' },
   { path: '/settings', label: '我的', icon: 'user-o' },
 ]
 

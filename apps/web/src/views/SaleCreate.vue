@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showConfirmDialog, showToast } from 'vant'
 import api from '../api'
 import { useBreakpoint } from '../composables/useBreakpoint'
 import AppShell from '../components/AppShell.vue'
@@ -13,6 +13,7 @@ const { isDesktop } = useBreakpoint()
 const form = ref({
   platform: '小红书',
   externalOrderNo: '',
+  logisticsNo: '',
   customerName: '',
   braceletCode: '',
   saleAmount: '',
@@ -31,9 +32,9 @@ async function syncBracelet() {
     const b = res.data.data
     const cost = await api.get(`/sales/cost-preview/${b.id}`)
     costPreview.value = { ...cost.data.data, bracelet: b }
-    showToast('已同步镯子信息')
+    showToast('已查到货品信息')
   } catch (err: any) {
-    showToast(err.response?.data?.message || '同步失败')
+    showToast(err.response?.data?.message || '暂时查不到这个镯子')
   }
 }
 
@@ -51,8 +52,25 @@ async function onSubmit() {
       finalPaymentAmount: Number(form.value.finalPaymentAmount || form.value.saleAmount),
       braceletId: costPreview.value?.bracelet?.id,
     })
-    showToast('销售登记成功')
-    router.push(`/sales/${res.data.data.id}`)
+    try {
+      await showConfirmDialog({
+        title: '销售已登记',
+        message: '接下来要做什么？',
+        confirmButtonText: '查看销售详情',
+        cancelButtonText: '继续登记',
+        confirmButtonColor: '#1F4D3A',
+      })
+      router.push(`/sales/${res.data.data.id}`)
+    } catch {
+      form.value.externalOrderNo = ''
+      form.value.logisticsNo = ''
+      form.value.saleAmount = ''
+      costPreview.value = null
+      showToast('可以继续登记下一单')
+    }
+  } catch (err: any) {
+    const msg = err.response?.data?.message || '保存失败，请重试'
+    showToast(msg)
   } finally {
     loading.value = false
   }
@@ -75,10 +93,11 @@ async function onSubmit() {
               </template>
             </van-field>
             <van-field v-model="form.externalOrderNo" label="订单号" />
+            <van-field v-model="form.logisticsNo" label="物流单号" />
             <van-field v-model="form.customerName" label="客户昵称" />
-            <van-field v-model="form.braceletCode" label="镯子编号" placeholder="扫码/输入" required>
+            <van-field v-model="form.braceletCode" label="镯子编号" placeholder="输入编号后点查询" required>
               <template #button>
-                <van-button size="small" type="primary" @click="syncBracelet">同步</van-button>
+                <van-button size="small" type="primary" @click="syncBracelet">查询</van-button>
               </template>
             </van-field>
             <van-field v-model="form.saleAmount" label="销售金额" type="number" required />
@@ -100,7 +119,7 @@ async function onSubmit() {
           <div class="cost-line">成本调整: ¥{{ costPreview.costAdjustment }}</div>
           <div class="cost-line"><strong>销售时总成本: ¥{{ costPreview.totalCost }}</strong></div>
           <div v-if="form.saleAmount" class="cost-line">
-            <strong>销售毛利: ¥{{ (Number(form.saleAmount) - costPreview.totalCost).toFixed(2) }}</strong>
+            <strong>预计毛利: ¥{{ (Number(form.saleAmount) - costPreview.totalCost).toFixed(2) }}</strong>
           </div>
         </LuxuryCard>
 
@@ -111,11 +130,6 @@ async function onSubmit() {
 </template>
 
 <style scoped>
-.cost-line {
-  padding: 6px 0;
-  font-size: 14px;
-}
-:deep(.van-cell-group--inset) {
-  margin: 0;
-}
+.cost-line { padding: 6px 0; font-size: 14px; }
+:deep(.van-cell-group--inset) { margin: 0; }
 </style>

@@ -5,6 +5,8 @@ import { AuthRequest } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
 import { resolveBraceletBinding } from '../lib/bracelet-bind'
 import { clampPage, clampPageSize } from '../lib/pagination'
+import { startOfDay, endOfDay } from '../lib/utils'
+import { saleProfitRow } from './stats.service'
 
 export async function calculateSaleCost(braceletId: number) {
   const bracelet = await prisma.bracelet.findUnique({ where: { id: braceletId } })
@@ -34,6 +36,7 @@ export async function createSale(
   input: {
     platform: string
     externalOrderNo?: string
+    logisticsNo?: string
     customerName?: string
     customerRemark?: string
     braceletCode: string
@@ -53,11 +56,11 @@ export async function createSale(
   const braceletId = binding.braceletId
   const code = binding.braceletCode || input.braceletCode.trim()
   if (!braceletId) {
-    throw new Error('扫码枪系统未找到这只镯子，请确认编号是否扫错。')
+    throw new Error('本地电脑没连上，暂时查不到扫码枪里的镯子')
   }
 
   const existingSold = await prisma.sale.findFirst({
-    where: { braceletId, status: 'sold' },
+    where: { braceletId, status: { in: ['sold', 'customer_hold'] } },
   })
   if (existingSold) {
     const err = new Error('这只镯子已经登记销售，不能重复卖。')
@@ -77,6 +80,7 @@ export async function createSale(
       saleNo: generateNo('SL'),
       platform: input.platform,
       externalOrderNo: input.externalOrderNo,
+      logisticsNo: input.logisticsNo?.trim() || null,
       customerName: input.customerName,
       customerRemark: input.customerRemark || input.remark,
       braceletId,
@@ -137,8 +141,13 @@ export async function getSale(id: number) {
     .filter((e) => e.expenseType === '客户补偿' || e.expenseType === '售后补偿')
     .reduce((s, e) => s + toNumber(e.amount), 0)
 
-  if (compensation !== toNumber(sale.compensationAmount)) {
-    const finalProfit = toNumber(sale.grossProfit) - compensation
+  const refundSum = sale.refunds.reduce((s, r) => s + toNumber(r.refundAmount), 0)
+  const finalProfit = toNumber(sale.grossProfit) - compensation - refundSum
+
+  if (
+    compensation !== toNumber(sale.compensationAmount)
+    || finalProfit !== toNumber(sale.finalProfit)
+  ) {
     await prisma.sale.update({
       where: { id },
       data: { compensationAmount: compensation, finalProfit },
@@ -156,6 +165,9 @@ export async function listSales(filter: {
   platform?: string
   braceletCode?: string
   status?: string
+  afterSaleStatus?: string
+  startDate?: string
+  endDate?: string
 }) {
   const page = clampPage(filter.page)
   const pageSize = clampPageSize(filter.pageSize)
@@ -163,16 +175,27 @@ export async function listSales(filter: {
   if (filter.platform) where.platform = filter.platform
   if (filter.braceletCode) where.braceletCode = { contains: filter.braceletCode }
   if (filter.status) where.status = filter.status
+  if (filter.afterSaleStatus) where.afterSaleStatus = filter.afterSaleStatus
+  if (filter.startDate || filter.endDate) {
+    where.soldAt = {}
+    if (filter.startDate) (where.soldAt as Record<string, Date>).gte = startOfDay(new Date(filter.startDate))
+    if (filter.endDate) (where.soldAt as Record<string, Date>).lte = endOfDay(new Date(filter.endDate))
+  }
 
-  const [items, total] = await Promise.all([
+  const [rows, total] = await Promise.all([
     prisma.sale.findMany({
       where,
+      include: { refunds: true },
       orderBy: { soldAt: 'desc' },
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
     prisma.sale.count({ where }),
   ])
+  const items = rows.map((s) => ({
+    ...s,
+    ...saleProfitRow(s),
+  }))
   return { items, total, page, pageSize }
 }
 

@@ -103,7 +103,18 @@ export async function previewReimbursementExport(filter: ExpenseFilter) {
     }
   })
 
-  return { preview, missingImageCount, total: expenses.length }
+  return {
+    preview,
+    missingImageCount,
+    total: expenses.length,
+    summary: {
+      count: expenses.length,
+      totalAmount: expenses.reduce((s, e) => s + toNumber(e.amount), 0),
+      pendingAmount: expenses.filter((e) => e.reimbursementStatus === 'pending').reduce((s, e) => s + toNumber(e.amount), 0),
+      reimbursedAmount: expenses.filter((e) => e.reimbursementStatus === 'reimbursed').reduce((s, e) => s + toNumber(e.amount), 0),
+      notRequiredAmount: expenses.filter((e) => e.reimbursementStatus === 'not_required').reduce((s, e) => s + toNumber(e.amount), 0),
+    },
+  }
 }
 
 export async function createReimbursementExport(

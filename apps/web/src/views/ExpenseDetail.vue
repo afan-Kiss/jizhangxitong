@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showConfirmDialog, showToast } from 'vant'
+import { showToast } from 'vant'
 import api, { fileThumbUrl } from '../api'
 import { useAuthStore } from '../stores/auth'
 
@@ -9,6 +9,11 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const expense = ref<any>(null)
+const statusLabels: Record<string, string> = {
+  pending: '未报销',
+  reimbursed: '已报销',
+  not_required: '不需要报销',
+}
 const thumbUrls = ref<Record<number, string>>({})
 
 onMounted(async () => {
@@ -47,7 +52,7 @@ async function updateReimbursement(status: string) {
     </div>
     <van-cell-group inset>
       <van-cell title="报销人" :value="expense.reimbursementPerson || '-'" />
-      <van-cell title="报销状态" :value="expense.reimbursementStatus" />
+      <van-cell title="报销状态" :value="statusLabels[expense.reimbursementStatus] || expense.reimbursementStatus" />
       <van-cell title="镯子编号" :value="expense.braceletCode || '未绑定'" />
       <van-cell title="摘要" :value="expense.expenseSummary || '-'" />
       <van-cell title="备注" :value="expense.remark || '-'" />

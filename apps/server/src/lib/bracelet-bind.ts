@@ -26,12 +26,12 @@ export async function resolveBraceletBinding(
   } catch (err) {
     const e = err as Error & { code?: string }
     if (e.code === ERROR_CODES.SCANNER_NOT_FOUND) {
-      const msg = new Error('扫码枪系统未找到这只镯子，请确认编号是否扫错。')
+      const msg = new Error('本地电脑没连上，暂时查不到扫码枪里的镯子')
       ;(msg as Error & { code: string }).code = ERROR_CODES.SCANNER_NOT_FOUND
       throw msg
     }
     if (e.code === ERROR_CODES.LOCAL_WORKER_OFFLINE) {
-      const msg = new Error('本地电脑未连接，暂时不能同步镯子。')
+      const msg = new Error('本地电脑没连上，暂时查不到扫码枪里的镯子')
       ;(msg as Error & { code: string }).code = ERROR_CODES.LOCAL_WORKER_OFFLINE
       throw msg
     }
