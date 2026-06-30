@@ -17,6 +17,8 @@ export const config = {
   workerRpcTimeoutMs: Number(process.env.WORKER_RPC_TIMEOUT_MS || 30000),
   databaseUrl: process.env.DATABASE_URL || '',
   publicWebDir: process.env.PUBLIC_WEB_DIR || '',
+  /** 扫码绑定功能开关，默认关闭 */
+  scanBindingEnabled: process.env.SCAN_BINDING_ENABLED === 'true',
 }
 
 export function validateProductionConfig(): string[] {

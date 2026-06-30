@@ -96,10 +96,6 @@ function exportThisMonth() {
           <van-icon name="balance-pay" size="22" />
           <span>记一笔</span>
         </button>
-        <button class="home-page__action" @click="router.push('/scan')">
-          <van-icon name="scan" size="22" />
-          <span>扫码绑定</span>
-        </button>
         <button class="home-page__action" @click="router.push('/bracelets')">
           <van-icon name="gem-o" size="22" />
           <span>查镯子</span>
