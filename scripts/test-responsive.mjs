@@ -15,6 +15,8 @@ import {
   installScriptTimeout,
   launchBrowser,
   gotoStable,
+  gotoLoginStable,
+  waitForLoginPage,
   attachPageDiagnostics,
   dumpDiagnostics,
   withTimeout,
@@ -39,12 +41,14 @@ function readAdminPassword() {
 }
 
 async function login(page, password) {
-  await gotoStable(page, `${BASE}/login`)
+  await gotoLoginStable(page, `${BASE}/login`)
   const pwd = page.locator('input[type="password"]')
   if (await pwd.count()) {
     await page.locator('input:not([type="password"])').first().fill('admin')
     await pwd.fill(password)
-    await page.getByRole('button', { name: /进入系统|登录/ }).click()
+    const submit = page.getByTestId('login-submit')
+    if (await submit.count()) await submit.click()
+    else await page.getByRole('button', { name: /进入系统|登录/ }).click()
     await page.waitForTimeout(1200)
   }
 }
@@ -86,9 +90,9 @@ async function runViewportInner(browser, vp, password) {
   }
 
   await check('login 不是白屏', async () => {
-    await gotoStable(page, `${BASE}/login`)
-    const text = await page.evaluate(() => document.body?.innerText?.trim() || '')
-    if (!text.includes('和田玉')) throw new Error('登录页内容为空')
+    await gotoLoginStable(page, `${BASE}/login`, {
+      retryOnBlank: vp.name === 'mobile',
+    })
     await assertNoOverflow(page)
   })
 

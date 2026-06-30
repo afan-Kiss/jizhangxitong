@@ -35,7 +35,7 @@ async function onLogin() {
 </script>
 
 <template>
-  <div class="login-page page-enter">
+  <div class="login-page page-enter" data-testid="login-page">
     <div class="login-page__inner">
       <div class="login__hero">
         <div class="login__brand">和田玉镯子记账</div>
@@ -56,7 +56,7 @@ async function onLogin() {
           @keyup.enter="onLogin"
         />
         <div style="margin-top:20px">
-          <ActionButton block size="lg" :loading="loading" @click="onLogin">
+          <ActionButton block size="lg" :loading="loading" data-testid="login-submit" @click="onLogin">
             {{ loading ? '正在进入...' : '进入系统' }}
           </ActionButton>
         </div>

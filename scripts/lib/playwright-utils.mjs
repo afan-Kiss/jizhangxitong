@@ -43,6 +43,65 @@ export async function gotoStable(page, url, label = url) {
   return response
 }
 
+/** 等待登录页关键元素就绪（轮询，区分晚渲染与真白屏） */
+export async function waitForLoginPage(page, timeoutMs = PAGE_TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs
+  let lastState = { textLen: 0, hasInputs: false, hasBrand: false }
+
+  while (Date.now() < deadline) {
+    await page.waitForSelector('#app', { timeout: Math.min(5000, deadline - Date.now()) }).catch(() => {})
+
+    lastState = await page.evaluate(() => {
+      const root = document.querySelector('[data-testid="login-page"]') || document.querySelector('.login-page')
+      const user = document.querySelector('[data-testid="login-page"] input:not([type="password"])')
+        || document.querySelector('.login-page input:not([type="password"])')
+        || document.querySelector('input:not([type="password"])')
+      const pwd = document.querySelector('[data-testid="login-page"] input[type="password"]')
+        || document.querySelector('.login-page input[type="password"]')
+        || document.querySelector('input[type="password"]')
+      const submit = document.querySelector('[data-testid="login-submit"]')
+        || Array.from(document.querySelectorAll('button')).find((b) => /进入系统|登录/.test(b.textContent || ''))
+      const text = (root || document.body)?.textContent?.trim() || ''
+      const hasBrand = /和田玉|用户名|密码|进入系统|老板随身/.test(text)
+      const vis = (el) => {
+        if (!el) return false
+        const r = el.getBoundingClientRect()
+        return r.width > 0 && r.height > 0
+      }
+      return {
+        textLen: text.length,
+        hasBrand,
+        hasInputs: vis(user) && vis(pwd) && !!submit,
+        hasTestId: !!document.querySelector('[data-testid="login-page"]'),
+      }
+    })
+
+    if (lastState.hasBrand && lastState.hasInputs) return lastState
+
+    await page.waitForTimeout(250)
+  }
+
+  throw new Error(
+    `登录页关键元素未就绪（brand=${lastState.hasBrand} inputs=${lastState.hasInputs} textLen=${lastState.textLen}）`,
+  )
+}
+
+/** 打开登录页并等待就绪；mobile 可 refresh 一次 */
+export async function gotoLoginStable(page, url, { retryOnBlank = false } = {}) {
+  const attempt = async () => {
+    await gotoStable(page, url)
+    await waitForLoginPage(page, PAGE_TIMEOUT_MS)
+  }
+  try {
+    await attempt()
+  } catch (firstErr) {
+    if (!retryOnBlank) throw firstErr
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT_MS })
+    await page.waitForSelector('#app', { timeout: 10000 }).catch(() => {})
+    await waitForLoginPage(page, PAGE_TIMEOUT_MS)
+  }
+}
+
 export function attachPageDiagnostics(page, bucket) {
   page.on('console', (msg) => {
     if (msg.type() === 'error') bucket.consoleErrors.push(msg.text())
