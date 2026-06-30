@@ -18,7 +18,23 @@ maintenanceRouter.post('/cleanup-test-data', requirePermission('permission:manag
   res.json({ success: true, data: result })
 })
 
-maintenanceRouter.post('/rebuild-ledger', requirePermission('permission:manage'), async (_req, res) => {
-  const result = await rebuildLedger()
-  res.json({ success: true, data: result })
+maintenanceRouter.post('/rebuild-ledger', requirePermission('permission:manage'), async (req: AuthRequest, res) => {
+  const dryRun = req.body?.dryRun === true
+  const force = req.body?.force === true
+
+  if (config.isProd && !dryRun && !force) {
+    return res.status(403).json({
+      success: false,
+      message: '生产环境真实 rebuild 必须设置 force=true；建议先 dryRun=true 预览',
+    })
+  }
+
+  try {
+    const result = await rebuildLedger({ dryRun, force })
+    res.json({ success: true, data: result })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[maintenance/rebuild-ledger]', message)
+    res.status(500).json({ success: false, message })
+  }
 })

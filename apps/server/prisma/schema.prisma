@@ -277,6 +277,7 @@ model FinanceLedger {
   @@index([refType, refId])
   @@index([category])
   @@index([occurredAt])
+  @@unique([refType, refId, entryType], name: "finance_ledger_ref_unique")
 }
 
 model ExportTask {

@@ -15,6 +15,10 @@ import { getSettingNumber } from '../services/settings.service'
 
 export { EFFECTIVE_SALES_RULE_HINT, isConfirmedRefund }
 
+const CERT_EXPENSE_TYPES = ['证书鉴定费']
+const PACKAGE_EXPENSE_TYPES = ['包装耗材']
+const EXPRESS_EXPENSE_TYPES = ['物流保险', '顺丰快递费']
+
 export type LedgerBreakdownItem = {
   type: string
   amount: number
@@ -62,7 +66,7 @@ export const PROFIT_DEDUCT_EXPENSE_INCLUDE = {
       },
     ],
   },
-} 
+}
 
 /** @deprecated use PROFIT_DEDUCT_EXPENSE_INCLUDE */
 export const COMPENSATION_EXPENSE_INCLUDE = PROFIT_DEDUCT_EXPENSE_INCLUDE
@@ -187,23 +191,51 @@ export function calculateEffectiveSales(sales: EffectiveSaleInput[]) {
   return { effectiveSaleAmount: amount, effectiveOrderCount: count }
 }
 
-/** 销售时总成本 — 唯一成本计算入口 */
+/**
+ * 销售时总成本 — 唯一成本计算入口
+ * 口径：入库成本 + 绑定货品且计入成本的支出 + 成本调整 + 必要默认费用（不重复）
+ */
 export async function calculateSaleCost(braceletId: number) {
   const bracelet = await prisma.bracelet.findUnique({ where: { id: braceletId } })
   if (!bracelet) throw new Error('镯子不存在')
 
-  const inboundCost = toNumber(bracelet.inboundCost)
-  const certificateFee = await getSettingNumber('default_certificate_fee', 3)
-  const packageFee = await getSettingNumber('default_package_fee', 10)
-  const expressFee = await getSettingNumber('default_sf_express_fee', 18)
+  const expenses = await prisma.expense.findMany({
+    where: { braceletId, isVoided: false },
+  })
+  const expenseCost = expenses
+    .filter((e) => countsTowardBraceletCost(e))
+    .reduce((s, e) => s + toNumber(e.amount), 0)
 
+  const inboundCost = toNumber(bracelet.inboundCost)
   const adjustments = await prisma.costAdjustment.findMany({ where: { braceletId } })
   const costAdjustment = adjustments.reduce((s, a) => s + toNumber(a.amount), 0)
 
-  const totalCost = inboundCost + certificateFee + packageFee + expressFee + costAdjustment
+  const hasExpenseType = (types: string[]) =>
+    expenses.some((e) => types.includes(e.expenseType))
+
+  const certificateFee = hasExpenseType(CERT_EXPENSE_TYPES)
+    ? 0
+    : await getSettingNumber('default_certificate_fee', 3)
+  const packageFee = hasExpenseType(PACKAGE_EXPENSE_TYPES)
+    ? 0
+    : await getSettingNumber('default_package_fee', 10)
+  const expressFee = hasExpenseType(EXPRESS_EXPENSE_TYPES)
+    ? 0
+    : await getSettingNumber('default_sf_express_fee', 18)
+
+  const braceletCostTotal = inboundCost + expenseCost
+  if (Math.abs(toNumber(bracelet.costTotal) - braceletCostTotal) > 0.001) {
+    await prisma.bracelet.update({
+      where: { id: braceletId },
+      data: { costTotal: braceletCostTotal },
+    })
+  }
+
+  const totalCost = braceletCostTotal + costAdjustment + certificateFee + packageFee + expressFee
 
   return {
     inboundCost,
+    expenseCost,
     certificateFee,
     packageFee,
     expressFee,
@@ -225,10 +257,9 @@ type LedgerWriteInput = {
   metadata?: Record<string, unknown>
 }
 
-async function upsertLedgerEntry(input: LedgerWriteInput) {
-  const existing = await prisma.financeLedger.findFirst({
-    where: { refType: input.refType, refId: input.refId, entryType: input.entryType },
-  })
+type LedgerDb = Pick<typeof prisma, 'financeLedger' | 'sale' | 'expense'>
+
+async function upsertLedgerEntry(input: LedgerWriteInput, db: LedgerDb = prisma) {
   const data = {
     entryType: input.entryType,
     refType: input.refType,
@@ -241,24 +272,27 @@ async function upsertLedgerEntry(input: LedgerWriteInput) {
     occurredAt: input.occurredAt,
     metadataJson: input.metadata ? JSON.stringify(input.metadata) : null,
   }
-  if (existing) {
-    return prisma.financeLedger.update({ where: { id: existing.id }, data })
-  }
-  return prisma.financeLedger.create({ data })
+  return db.financeLedger.upsert({
+    where: {
+      finance_ledger_ref_unique: {
+        refType: input.refType,
+        refId: input.refId,
+        entryType: input.entryType,
+      },
+    },
+    create: data,
+    update: data,
+  })
 }
 
-async function removeLedgerByRef(refType: string, refId: string) {
-  await prisma.financeLedger.deleteMany({ where: { refType, refId } })
-}
-
-export async function syncSaleLedger(saleId: number) {
-  const sale = await prisma.sale.findUnique({
+async function syncSaleLedgerCore(saleId: number, db: LedgerDb = prisma) {
+  const sale = await db.sale.findUnique({
     where: { id: saleId },
     include: { refunds: true, expenses: { where: { isVoided: false } } },
   })
   if (!sale || sale.isTrialRun) return
 
-  await prisma.financeLedger.deleteMany({ where: { saleId } })
+  await db.financeLedger.deleteMany({ where: { saleId } })
 
   const fin = calculateProfit({
     id: sale.id,
@@ -279,7 +313,7 @@ export async function syncSaleLedger(saleId: number) {
       category: 'income',
       amount: fin.income,
       occurredAt: sale.soldAt,
-    })
+    }, db)
     await upsertLedgerEntry({
       entryType: 'sale_cost',
       refType: 'sale',
@@ -289,7 +323,7 @@ export async function syncSaleLedger(saleId: number) {
       category: 'cost',
       amount: fin.cost,
       occurredAt: sale.soldAt,
-    })
+    }, db)
   }
 
   for (const r of sale.refunds) {
@@ -303,7 +337,7 @@ export async function syncSaleLedger(saleId: number) {
       category: 'refund',
       amount: toNumber(r.refundAmount),
       occurredAt: r.refundedAt,
-    })
+    }, db)
   }
 
   for (const e of sale.expenses) {
@@ -319,13 +353,17 @@ export async function syncSaleLedger(saleId: number) {
       amount: toNumber(e.amount),
       occurredAt: e.occurredAt,
       metadata: { expenseType: e.expenseType, businessType: e.businessType },
-    })
+    }, db)
   }
 
-  await prisma.sale.update({
+  await db.sale.update({
     where: { id: saleId },
     data: { compensationAmount: fin.compensation, finalProfit: fin.netProfit },
   })
+}
+
+export async function syncSaleLedger(saleId: number) {
+  await syncSaleLedgerCore(saleId)
 }
 
 /** 同步单笔支出分录 */
@@ -333,15 +371,16 @@ export async function syncExpenseLedger(expenseId: number) {
   const expense = await prisma.expense.findUnique({ where: { id: expenseId } })
   if (!expense) return
 
-  await removeLedgerByRef('expense', String(expenseId))
-
   if (expense.isVoided) {
+    await prisma.financeLedger.deleteMany({
+      where: { refType: 'expense', refId: String(expenseId) },
+    })
     if (expense.saleId) await syncSaleLedger(expense.saleId)
     return
   }
 
   const impact = calculateExpenseImpact(expense)
-  if (impact.affectsProfit) {
+  if (impact.affectsProfit && !expense.saleId) {
     await upsertLedgerEntry({
       entryType: 'customer_payment',
       refType: 'expense',
@@ -353,6 +392,10 @@ export async function syncExpenseLedger(expenseId: number) {
       amount: impact.amount,
       occurredAt: expense.occurredAt,
       metadata: { expenseType: expense.expenseType, businessType: expense.businessType },
+    })
+  } else if (!impact.affectsProfit) {
+    await prisma.financeLedger.deleteMany({
+      where: { refType: 'expense', refId: String(expenseId) },
     })
   }
 
@@ -368,19 +411,8 @@ export async function syncRefundLedger(refundId: number) {
   await syncSaleLedger(refund.saleId)
 }
 
-/** 全量重建 finance_ledger */
-export async function rebuildLedger() {
-  await prisma.financeLedger.deleteMany()
-
-  const sales = await prisma.sale.findMany({
-    where: { isTrialRun: false },
-    select: { id: true },
-  })
-  for (const s of sales) {
-    await syncSaleLedger(s.id)
-  }
-
-  const orphanExpenses = await prisma.expense.findMany({
+async function countOrphanExpenses() {
+  return prisma.expense.findMany({
     where: {
       isVoided: false,
       saleId: null,
@@ -391,12 +423,98 @@ export async function rebuildLedger() {
     },
     select: { id: true },
   })
-  for (const e of orphanExpenses) {
-    await syncExpenseLedger(e.id)
+}
+
+function estimateLedgerEntries(saleCount: number, orphanCount: number) {
+  // 每笔销售至少 income + cost；orphan 支出各 1 条
+  return saleCount * 2 + orphanCount
+}
+
+export type RebuildLedgerOptions = {
+  dryRun?: boolean
+  force?: boolean
+}
+
+export type RebuildLedgerResult = {
+  dryRun: boolean
+  sales: number
+  orphanExpenses: number
+  entriesBefore: number
+  entriesAfter: number
+  estimatedEntries?: number
+  durationMs: number
+}
+
+/** 全量重建 finance_ledger */
+export async function rebuildLedger(options: RebuildLedgerOptions = {}): Promise<RebuildLedgerResult> {
+  const started = Date.now()
+  const dryRun = options.dryRun === true
+  const entriesBefore = await prisma.financeLedger.count()
+
+  const sales = await prisma.sale.findMany({
+    where: { isTrialRun: false },
+    select: { id: true },
+  })
+  const orphanExpenses = await countOrphanExpenses()
+  const estimatedEntries = estimateLedgerEntries(sales.length, orphanExpenses.length)
+
+  if (dryRun) {
+    return {
+      dryRun: true,
+      sales: sales.length,
+      orphanExpenses: orphanExpenses.length,
+      entriesBefore,
+      entriesAfter: entriesBefore,
+      estimatedEntries,
+      durationMs: Date.now() - started,
+    }
   }
 
-  const count = await prisma.financeLedger.count()
-  return { entries: count, sales: sales.length }
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.financeLedger.deleteMany()
+      for (const s of sales) {
+        await syncSaleLedgerCore(s.id, tx)
+      }
+      for (const e of orphanExpenses) {
+        const expense = await tx.expense.findUnique({ where: { id: e.id } })
+        if (!expense || expense.isVoided) continue
+        const impact = calculateExpenseImpact(expense)
+        if (impact.affectsProfit) {
+          await upsertLedgerEntry({
+            entryType: 'customer_payment',
+            refType: 'expense',
+            refId: String(e.id),
+            braceletId: expense.braceletId,
+            expenseId: e.id,
+            category: 'compensation',
+            amount: impact.amount,
+            occurredAt: expense.occurredAt,
+            metadata: { expenseType: expense.expenseType, businessType: expense.businessType },
+          }, tx)
+        }
+      }
+    }, { timeout: 120000 })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[rebuildLedger] failed:', msg)
+    throw new Error(`rebuildLedger 失败: ${msg}`)
+  }
+
+  const entriesAfter = await prisma.financeLedger.count()
+  const hasSourceData = sales.length > 0 || orphanExpenses.length > 0
+  if (hasSourceData && entriesAfter === 0) {
+    throw new Error('rebuildLedger 校验失败: 有销售/支出但 finance_ledger 为空')
+  }
+
+  return {
+    dryRun: false,
+    sales: sales.length,
+    orphanExpenses: orphanExpenses.length,
+    entriesBefore,
+    entriesAfter,
+    durationMs: Date.now() - started,
+  }
 }
 
 /** 从 ledger 聚合销售利润（对账用） */
@@ -431,4 +549,16 @@ export async function aggregateProfitFromLedger(saleId: number): Promise<Finance
     netProfit: gross - refund - compensation,
     breakdown,
   }
+}
+
+/** 统计某销售在 ledger 中的分录数（测试/对账） */
+export async function countLedgerEntriesForSale(saleId: number) {
+  return prisma.financeLedger.count({ where: { saleId } })
+}
+
+/** 统计某支出在 ledger 中的分录数（测试/对账） */
+export async function countLedgerEntriesForExpense(expenseId: number) {
+  return prisma.financeLedger.count({
+    where: { refType: 'expense', refId: String(expenseId) },
+  })
 }

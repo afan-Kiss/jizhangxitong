@@ -8,11 +8,23 @@ import { fileURLToPath } from 'url'
 import {
   SERVER, login, fetchJson, authHeaders, ensureServerRunning,
 } from './lib/services.mjs'
+import {
+  syncSaleLedgerRepeated,
+  syncExpenseLedgerRepeated,
+  aggregateProfitFromLedgerDirect,
+  setBraceletInboundCost,
+} from './lib/ledger-server.mjs'
 import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(__dirname, '..')
 const BASE = SERVER.replace(/\/$/, '')
+const TAG = `CL-${Date.now()}`
+
+async function loadCoreLedger() {
+  const distPath = path.join(ROOT, 'apps/server/dist/finance/core-ledger.js')
+  return import(pathToFileURL(distPath).href)
+}
 
 installScriptTimeout('test:core-ledger', TIMEOUTS.acceptanceBasic)
 
@@ -30,16 +42,16 @@ async function api(token, url, opts = {}) {
   })
 }
 
-async function loadCoreLedger() {
-  const distPath = path.join(ROOT, 'apps/server/dist/finance/core-ledger.js')
-  return import(pathToFileURL(distPath).href)
-}
-
 async function main() {
   console.log('\n=== test:core-ledger ===\n')
   await ensureServerRunning((m) => console.log(m))
 
-  const { calculateProfit, calculateEffectiveSales, calculateExpenseImpact } = await loadCoreLedger()
+  const {
+    calculateProfit,
+    calculateEffectiveSales,
+    calculateExpenseImpact,
+    isConfirmedRefund,
+  } = await loadCoreLedger()
 
   const fin = calculateProfit({
     saleAmount: 1000,
@@ -48,7 +60,10 @@ async function main() {
     refunds: [{ id: 1, refundAmount: 50, status: 'completed' }],
     expenses: [{ id: 2, expenseType: '客户返款', amount: 30, businessType: 'customer_refund' }],
   })
-  if (fin.income === 1000 && fin.cost === 400 && fin.refund === 50 && fin.compensation === 30 && fin.netProfit === 520) {
+  const fieldsOk = ['income', 'cost', 'refund', 'compensation', 'netProfit', 'breakdown']
+    .every((k) => fin[k] !== undefined)
+  if (fieldsOk && fin.income === 1000 && fin.cost === 400 && fin.refund === 50
+    && fin.compensation === 30 && fin.netProfit === 520) {
     pass('calculateProfit 统一结构', `net=${fin.netProfit}`)
   } else {
     fail('calculateProfit 统一结构', JSON.stringify(fin))
@@ -57,6 +72,55 @@ async function main() {
   if (fin.breakdown.length >= 4) pass('calculateProfit breakdown')
   else fail('calculateProfit breakdown', String(fin.breakdown.length))
 
+  const pendingRefund = calculateProfit({
+    saleAmount: 1000,
+    totalCostSnapshot: 400,
+    grossProfit: 600,
+    refunds: [{ id: 3, refundAmount: 100, status: 'pending' }],
+    expenses: [],
+  })
+  if (pendingRefund.refund === 0 && pendingRefund.netProfit === 600) {
+    pass('pending/processing 退款不扣利润')
+  } else {
+    fail('pending/processing 退款不扣利润', JSON.stringify(pendingRefund))
+  }
+
+  const cancelledRefund = calculateProfit({
+    saleAmount: 1000,
+    totalCostSnapshot: 400,
+    grossProfit: 600,
+    refunds: [{ id: 4, refundAmount: 100, status: 'cancelled' }],
+    expenses: [],
+  })
+  if (cancelledRefund.refund === 0) pass('cancelled 退款不扣利润')
+  else fail('cancelled 退款不扣利润')
+
+  for (const [label, exp] of [
+    ['客户返款', { expenseType: '客户返款', businessType: 'customer_refund', amount: 10 }],
+    ['客户补偿', { expenseType: '客户心理落差补偿', businessType: 'customer_compensation', amount: 10 }],
+    ['售后补偿', { expenseType: '售后补偿', businessType: 'after_sale_compensation', amount: 10 }],
+    ['平台扣款', { expenseType: '平台扣款', businessType: 'platform_fee', amount: 10, saleId: 1 }],
+  ]) {
+    const impact = calculateExpenseImpact(exp)
+    if (impact.affectsProfit && impact.category === 'compensation') pass(`${label}扣利润`)
+    else fail(`${label}扣利润`, JSON.stringify(impact))
+  }
+
+  const normalImpact = calculateExpenseImpact({ expenseType: '加工费', businessType: 'normal', amount: 50 })
+  if (!normalImpact.affectsProfit && normalImpact.affectsCost) pass('普通支出不扣单品利润、计入成本')
+  else fail('普通支出口径', JSON.stringify(normalImpact))
+
+  const customerPayImpact = calculateExpenseImpact({
+    expenseType: '客户返款',
+    businessType: 'customer_refund',
+    amount: 10,
+  })
+  if (customerPayImpact.affectsProfit && !customerPayImpact.affectsCost) {
+    pass('客户返款不计入货品成本')
+  } else {
+    fail('客户返款不计入货品成本', JSON.stringify(customerPayImpact))
+  }
+
   const eff = calculateEffectiveSales([
     { status: 'sold', afterSaleStatus: null, saleAmount: 100, refunds: [] },
     { status: 'sold', afterSaleStatus: '售后处理中', saleAmount: 200, refunds: [] },
@@ -64,39 +128,188 @@ async function main() {
   if (eff.effectiveOrderCount === 1 && eff.effectiveSaleAmount === 100) pass('calculateEffectiveSales')
   else fail('calculateEffectiveSales', JSON.stringify(eff))
 
-  const impact = calculateExpenseImpact({
-    expenseType: '客户返款',
-    businessType: 'customer_refund',
-    amount: 10,
-  })
-  if (impact.affectsProfit && impact.category === 'compensation') pass('calculateExpenseImpact 客户返款')
-  else fail('calculateExpenseImpact', JSON.stringify(impact))
-
   const token = await login()
-  const rebuild = await api(token, '/api/maintenance/rebuild-ledger', { method: 'POST' })
-  if (rebuild.res.ok && rebuild.json.data?.entries >= 0) {
-    pass('rebuildLedger API', `${rebuild.json.data.entries} entries`)
+  const today = new Date().toISOString().slice(0, 10)
+
+  // dryRun 不写入
+  const countBeforeDry = await api(token, '/api/maintenance/rebuild-ledger', {
+    method: 'POST',
+    body: JSON.stringify({ dryRun: true, force: true }),
+  })
+  const dryRun2 = await api(token, '/api/maintenance/rebuild-ledger', {
+    method: 'POST',
+    body: JSON.stringify({ dryRun: true, force: true }),
+  })
+  if (countBeforeDry.res.ok && countBeforeDry.json.data?.dryRun === true
+    && dryRun2.json.data?.entriesAfter === countBeforeDry.json.data?.entriesBefore) {
+    pass('rebuildLedger dryRun 不写入', `entries=${countBeforeDry.json.data.entriesBefore}`)
   } else {
-    fail('rebuildLedger API', rebuild.text)
+    fail('rebuildLedger dryRun 不写入', countBeforeDry.text || dryRun2.text)
   }
 
+  // 真实 rebuild（本地/测试库）
+  const rebuild1 = await api(token, '/api/maintenance/rebuild-ledger', {
+    method: 'POST',
+    body: JSON.stringify({ force: true }),
+  })
+  const rebuild2 = await api(token, '/api/maintenance/rebuild-ledger', {
+    method: 'POST',
+    body: JSON.stringify({ force: true }),
+  })
+  if (rebuild1.res.ok && rebuild2.res.ok
+    && rebuild1.json.data?.entriesAfter === rebuild2.json.data?.entriesAfter
+    && rebuild1.json.data?.entriesAfter > 0) {
+    pass('rebuildLedger force 后 entriesAfter 稳定', `${rebuild1.json.data.entriesAfter} entries`)
+  } else {
+    fail('rebuildLedger 稳定性', `${rebuild1.json.data?.entriesAfter} vs ${rebuild2.json.data?.entriesAfter}`)
+  }
+
+  // 同一 sale 多次 sync
   const sales = await api(token, '/api/sales?pageSize=1&status=sold')
   const saleId = sales.json.data?.items?.[0]?.id
   if (saleId) {
+    const counts = await syncSaleLedgerRepeated(saleId, 3)
+    const [c1, c2, c3] = counts
+    if (c1 === c2 && c2 === c3 && c1 > 0) {
+      pass('同一 sale 多次 sync 不重复分录', `${c1} entries`)
+    } else {
+      fail('同一 sale 多次 sync 不重复分录', `${c1}/${c2}/${c3}`)
+    }
+
     const detail = await api(token, `/api/sales/${saleId}`)
     const d = detail.json.data
-    const row = calculateProfit({
+    const calc = calculateProfit({
       saleAmount: d.saleAmount,
       totalCostSnapshot: d.totalCostSnapshot,
       grossProfit: d.grossProfit,
       refunds: d.refunds,
       expenses: d.expenses,
     })
-    const diff = Math.abs(row.netProfit - Number(d.finalProfit ?? d.profit ?? 0))
-    if (diff < 0.02) pass('API 销售利润与 core-ledger 一致', `#${saleId}`)
-    else fail('API 销售利润与 core-ledger 一致', `${row.netProfit} vs ${d.finalProfit}`)
+    const agg = await aggregateProfitFromLedgerDirect(saleId)
+    const diff = agg ? Math.abs(calc.netProfit - agg.netProfit) : 999
+    if (diff < 0.02) pass('aggregateProfitFromLedger 与 calculateProfit 一致', `#${saleId}`)
+    else fail('aggregateProfitFromLedger 与 calculateProfit 一致', `${calc.netProfit} vs ${agg?.netProfit}`)
+
+    const diffApi = Math.abs(calc.netProfit - Number(d.finalProfit ?? d.profit ?? 0))
+    if (diffApi < 0.02) pass('API 销售利润与 core-ledger 一致')
+    else fail('API 销售利润与 core-ledger 一致', `${calc.netProfit} vs ${d.finalProfit}`)
   } else {
-    pass('API 销售利润与 core-ledger 一致', '（无销售，跳过）')
+    pass('同一 sale 多次 sync', '（无销售，跳过）')
+    pass('aggregateProfitFromLedger', '（跳过）')
+    pass('API 销售利润与 core-ledger 一致', '（跳过）')
+  }
+
+  // 销售成本快照含绑定支出
+  const code = `${TAG}-GOODS`
+  const goodsRes = await api(token, '/api/goods', {
+    method: 'POST',
+    body: JSON.stringify({ code, name: code }),
+  })
+  const goodsId = goodsRes.json.data?.id
+  if (goodsId) {
+    await setBraceletInboundCost(goodsId, 1000)
+
+    await api(token, '/api/expenses', {
+      method: 'POST',
+      body: JSON.stringify({
+        businessType: 'normal',
+        expenseType: '加工费',
+        amount: 200,
+        paySource: '微信',
+        occurredAt: today,
+        braceletCode: code,
+        remark: `${TAG}-machining`,
+      }),
+    })
+    await api(token, '/api/expenses', {
+      method: 'POST',
+      body: JSON.stringify({
+        businessType: 'normal',
+        expenseType: '证书鉴定费',
+        amount: 50,
+        paySource: '微信',
+        occurredAt: today,
+        braceletCode: code,
+        remark: `${TAG}-cert`,
+      }),
+    })
+
+    const saleCreate = await api(token, '/api/sales', {
+      method: 'POST',
+      body: JSON.stringify({
+        platform: '其他',
+        braceletCode: code,
+        saleAmount: 3000,
+        soldAt: today,
+        remark: `${TAG}-sale`,
+      }),
+    })
+    const newSaleId = saleCreate.json.data?.id
+    const snapshot = Number(saleCreate.json.data?.totalCostSnapshot ?? 0)
+
+    if (newSaleId && snapshot >= 1250) {
+      pass('销售成本快照含绑定支出', `totalCostSnapshot=${snapshot}`)
+    } else {
+      fail('销售成本快照含绑定支出', `snapshot=${snapshot}, sale=${saleCreate.text}`)
+    }
+
+    // 销售后新增支出不应改快照
+    await api(token, '/api/expenses', {
+      method: 'POST',
+      body: JSON.stringify({
+        businessType: 'normal',
+        expenseType: '抛光费',
+        amount: 99,
+        paySource: '微信',
+        occurredAt: today,
+        braceletCode: code,
+        remark: `${TAG}-after-sale`,
+      }),
+    })
+    const afterDetail = await api(token, `/api/sales/${newSaleId}`)
+    const snapAfter = Number(afterDetail.json.data?.totalCostSnapshot ?? 0)
+    if (Math.abs(snapAfter - snapshot) < 0.02) {
+      pass('销售后新增支出不改变历史 totalCostSnapshot')
+    } else {
+      fail('销售后新增支出不改变历史 totalCostSnapshot', `${snapshot} -> ${snapAfter}`)
+    }
+
+    // 货品利润 API 与 calculateProfit 一致
+    const profitRes = await api(token, `/api/goods/${goodsId}/profit`)
+    const saleInfo = profitRes.json.data?.sale
+    if (saleInfo && Math.abs(Number(saleInfo.finalProfit) - Number(afterDetail.json.data?.finalProfit ?? 0)) < 0.02) {
+      pass('货品利润 API 与销售详情利润一致')
+    } else {
+      fail('货品利润 API 与销售详情利润一致', JSON.stringify(saleInfo))
+    }
+  } else {
+    fail('销售成本快照测试', goodsRes.text)
+  }
+
+  // 同一 expense 多次 sync
+  const orphanExp = await api(token, '/api/expenses', {
+    method: 'POST',
+    body: JSON.stringify({
+      businessType: 'customer_refund',
+      expenseType: '客户返款',
+      amount: 11.11,
+      paySource: '微信',
+      occurredAt: today,
+      externalOrderNo: `${TAG}-ORPHAN`,
+      remark: `${TAG}-orphan`,
+    }),
+  })
+  const expenseId = orphanExp.json.data?.id
+  if (expenseId) {
+    const counts = await syncExpenseLedgerRepeated(expenseId, 3)
+    const [e1, e2, e3] = counts
+    if (e1 === e2 && e2 === e3 && e1 === 1) {
+      pass('同一 expense 多次 sync 不重复分录')
+    } else {
+      fail('同一 expense 多次 sync 不重复分录', `${e1}/${e2}/${e3}`)
+    }
+  } else {
+    fail('同一 expense 多次 sync', orphanExp.text)
   }
 
   const worker = await api(token, '/api/local-worker/status')
