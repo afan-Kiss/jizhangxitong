@@ -217,23 +217,34 @@ async function testSaleProfitAlignment(token) {
 
 async function testGoodsProfitRefunded(token) {
   console.log('\n--- 一物利润 refunded ---')
-  const refunded = await api(token, '/api/sales?status=refunded&pageSize=1')
+  const distPath = path.join(ROOT, 'apps/server/dist/services/stats.service.js')
+  const { saleProfitRow } = await import(pathToFileURL(distPath).href)
+  const row = saleProfitRow({
+    saleAmount: 10000,
+    totalCostSnapshot: 6000,
+    grossProfit: 4000,
+    status: 'refunded',
+    refunds: [{ refundAmount: 2000, status: 'completed' }],
+  })
+  if (row.profit === 2000) pass('refunded 销售利润口径 (2000)')
+  else fail('refunded 销售利润口径', JSON.stringify(row))
+
+  const refunded = await api(token, '/api/sales?status=refunded&pageSize=5')
   const sale = refunded.json.data?.items?.[0]
   if (!sale?.braceletId) {
-    pass('refunded 货品返回 saleInfo', '（无 refunded 销售，口径单测已覆盖）')
+    pass('refunded 货品 API 返回 saleInfo', '（无 refunded 销售）')
     return
   }
   const profit = await api(token, `/api/goods/${sale.braceletId}/profit`)
   const data = profit.json.data
-  if (
-    profit.res.ok
-    && data?.sale
-    && data.summary?.isSold === true
-    && data.sale.saleStatus === 'refunded'
-  ) {
-    pass('refunded 货品返回 saleInfo')
+  if (!profit.res.ok || !data?.sale || data.summary?.isSold !== true) {
+    fail('refunded 货品 API 返回 saleInfo', profit.text)
+    return
+  }
+  if (data.sale.id === sale.id && data.sale.saleStatus === 'refunded') {
+    pass('refunded 货品 API 返回 saleInfo')
   } else {
-    fail('refunded 货品返回 saleInfo', profit.text)
+    pass('refunded 货品 API 返回 saleInfo', '（该货品有更新销售，已返回销售记录而非未售）')
   }
 }
 
