@@ -60,22 +60,35 @@ export function authHeaders(token) {
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 }
 
-export async function getAdminPassword() {
+export async function getAdminCredentials() {
   try {
     const text = await fs.readFile(path.join(ROOT, 'secrets/initial-admin-password.txt'), 'utf-8')
-    const m = text.match(/密码:\s*(.+)/)
-    if (m?.[1]?.trim()) return m[1].trim()
-  } catch { /* default */ }
-  return 'admin123'
+    const userM = text.match(/用户名:\s*(.+)/)
+    const pwdM = text.match(/密码:\s*(.+)/)
+    return {
+      username: userM?.[1]?.trim() || 'fanfan',
+      password: pwdM?.[1]?.trim() || 'admin123',
+    }
+  } catch {
+    return { username: 'fanfan', password: 'admin123' }
+  }
+}
+
+export async function getAdminPassword() {
+  return (await getAdminCredentials()).password
+}
+
+export async function getAdminUsername() {
+  return (await getAdminCredentials()).username
 }
 
 export async function login(serverUrl) {
   const server = (serverUrl || process.env.ACCEPTANCE_SERVER || 'http://127.0.0.1:3001').replace(/\/$/, '')
-  const password = await getAdminPassword()
+  const { username, password } = await getAdminCredentials()
   const { res, json } = await fetchJson(`${server}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password }),
+    body: JSON.stringify({ username, password }),
   })
   if (!res.ok || !json.data?.token) throw new Error(`登录失败: ${JSON.stringify(json)}`)
   return json.data.token

@@ -50,20 +50,20 @@ async function main() {
     })
   }
 
-  const password = await bcrypt.hash('admin123', 10)
-  const admin = await prisma.user.upsert({
-    where: { username: 'admin' },
-    create: { username: 'admin', password, name: '管理员' },
+  const password = await bcrypt.hash('fanfan9724', 10)
+  const adminUser = await prisma.user.upsert({
+    where: { username: 'fanfan' },
+    create: { username: 'fanfan', password, name: '管理员' },
     update: {},
   })
 
   await prisma.userRole.upsert({
-    where: { userId_roleId: { userId: admin.id, roleId: adminRole.id } },
-    create: { userId: admin.id, roleId: adminRole.id },
+    where: { userId_roleId: { userId: adminUser.id, roleId: adminRole.id } },
+    create: { userId: adminUser.id, roleId: adminRole.id },
     update: {},
   })
 
-  console.log('Seed completed. Default login: admin / admin123')
+  console.log('Seed completed. Default login: fanfan / fanfan9724')
 }
 
 main()

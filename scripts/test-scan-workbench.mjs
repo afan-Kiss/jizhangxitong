@@ -11,6 +11,7 @@ import {
   ensureServerRunning,
   resolveAcceptanceWebBase,
   getAdminPassword,
+  getAdminCredentials,
 } from './lib/services.mjs'
 import { launchBrowser, gotoStable } from './lib/playwright-utils.mjs'
 import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
@@ -46,9 +47,9 @@ async function api(token, url, opts = {}) {
   })
 }
 
-async function loginAndGotoScan(page, webBase, password) {
+async function loginAndGotoScan(page, webBase, password, username = 'fanfan') {
   await gotoStable(page, `${webBase}/login`)
-  await page.locator('input:not([type="password"])').first().fill('admin')
+  await page.locator('input:not([type="password"])').first().fill(username)
   await page.locator('input[type="password"]').fill(password || 'admin123')
   await page.getByRole('button', { name: /进入系统/ }).click()
   await page.waitForTimeout(1200)
@@ -114,13 +115,14 @@ async function testApi(token) {
 async function testUi(webBase) {
   console.log('\n--- UI ---')
   const password = await getAdminPassword()
+  const { username } = await getAdminCredentials()
   let browser
   try {
     browser = await launchBrowser(chromium)
     for (const [name, width, height] of [['手机端', 390, 844], ['电脑端', 1366, 768]]) {
       const ctx = await browser.newContext({ viewport: { width, height } })
       const page = await ctx.newPage()
-      await loginAndGotoScan(page, webBase, password)
+      await loginAndGotoScan(page, webBase, password, username)
       await page.waitForSelector('[data-testid="scan-workbench-page"]', { timeout: 15000 }).catch(() => {})
 
       const hasScannerStatus = await page.getByTestId('scan-scanner-status').count()
@@ -152,7 +154,7 @@ async function testUi(webBase) {
 
     const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 } })
     const page = await ctx.newPage()
-    await loginAndGotoScan(page, webBase, password)
+    await loginAndGotoScan(page, webBase, password, username)
     await gotoStable(page, `${webBase}/`)
     await page.waitForTimeout(800)
     const homeText = await page.evaluate(() => document.body.innerText)
@@ -210,10 +212,11 @@ async function main() {
   }
 
   const password = await getAdminPassword()
+  const { username } = await getAdminCredentials()
   const remoteLogin = await fetchJson(`${REMOTE_BASE}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password }),
+    body: JSON.stringify({ username, password }),
   })
   const remoteToken = remoteLogin.json.data?.token
   const worker = remoteToken

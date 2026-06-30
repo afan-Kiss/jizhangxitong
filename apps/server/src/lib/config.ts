@@ -53,9 +53,16 @@ export async function validateDefaultAdminPassword(): Promise<string | null> {
   if (!config.isProd) return null
   const bcrypt = await import('bcryptjs')
   const { prisma } = await import('./prisma')
-  const admin = await prisma.user.findUnique({ where: { username: 'admin' } })
-  if (!admin) return null
-  const isDefault = await bcrypt.compare('admin123', admin.password)
-  if (isDefault) return '生产环境仍在使用默认账号 admin/admin123，必须立即修改密码'
+  const weakUsers = await prisma.user.findMany({
+    where: { username: { in: ['admin', 'fanfan'] }, isActive: true },
+  })
+  for (const user of weakUsers) {
+    if (await bcrypt.compare('admin123', user.password)) {
+      return `生产环境账号 ${user.username} 仍使用弱密码 admin123，必须立即修改`
+    }
+    if (user.username === 'admin') {
+      return '生产环境仍存在 admin 账号，请改用 fanfan 管理员账号'
+    }
+  }
   return null
 }
