@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { showToast } from 'vant'
 import api, { uploadFileWithProgress } from '../api'
 
@@ -23,6 +23,8 @@ type LocalItem = {
   error?: string
 }
 
+const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'])
+
 const props = defineProps<{
   modelValue: UploadedItem[]
 }>()
@@ -44,9 +46,12 @@ const customLabel = ref('')
 const localItems = ref<LocalItem[]>([])
 const probing = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+const dropZone = ref<HTMLElement | null>(null)
 const uploadQueue = ref<Array<{ key: string; file: File }>>([])
 const queueRunning = ref(false)
 const failedCount = ref(0)
+const dragOver = ref(false)
+const isDesktop = ref(false)
 
 const displayItems = computed(() => {
   const saved = props.modelValue.map((m, idx) => ({
@@ -89,16 +94,44 @@ async function probeUploadChannel() {
   try {
     const res = await api.post('/worker/probe-upload', { timeoutMs: 3000 })
     if (!res.data.data?.ok) {
-      showToast(res.data.data?.message || '公司电脑本地助手没连上，先重启本地助手；这笔账可以先不传图保存。')
+      showToast(res.data.data?.message || '公司电脑本地助手没连上，这些图先别传；这笔账可以先保存。')
       return false
     }
     return true
   } catch {
-    showToast('公司电脑本地助手没连上，先重启本地助手；这笔账可以先不传图保存。')
+    showToast('公司电脑本地助手没连上，这些图先别传；这笔账可以先保存。')
     return false
   } finally {
     probing.value = false
   }
+}
+
+function isImageFile(file: File) {
+  if (file.type && IMAGE_TYPES.has(file.type.toLowerCase())) return true
+  return /\.(png|jpe?g|webp|gif)$/i.test(file.name)
+}
+
+function enqueueFiles(files: File[]) {
+  if (!files.length) return
+  const label = customLabel.value.trim() || tagLabel(selectedTag.value)
+  for (const file of files) {
+    if (!isImageFile(file)) {
+      showToast('这里只能放图片。')
+      continue
+    }
+    const key = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    localItems.value.push({
+      key,
+      fileType: selectedTag.value,
+      label,
+      name: file.name || '图片',
+      preview: URL.createObjectURL(file),
+      status: 'queued',
+      progress: 0,
+    })
+    uploadQueue.value.push({ key, file })
+  }
+  runUploadQueue()
 }
 
 async function onAddClick() {
@@ -112,21 +145,50 @@ function onFileChange(e: Event) {
   const files = input.files
   if (!files?.length) return
   input.value = ''
-  for (const file of Array.from(files)) {
-    const key = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    const label = customLabel.value.trim() || tagLabel(selectedTag.value)
-    localItems.value.push({
-      key,
-      fileType: selectedTag.value,
-      label,
-      name: file.name,
-      preview: URL.createObjectURL(file),
-      status: 'queued',
-      progress: 0,
-    })
-    uploadQueue.value.push({ key, file })
+  enqueueFiles(Array.from(files))
+}
+
+async function handleDrop(e: DragEvent) {
+  e.preventDefault()
+  e.stopPropagation()
+  dragOver.value = false
+  if (!isDesktop.value) return
+
+  const ok = await probeUploadChannel()
+  if (!ok) return
+
+  const dt = e.dataTransfer
+  if (!dt) return
+
+  const files: File[] = []
+  if (dt.files?.length) {
+    files.push(...Array.from(dt.files))
+  } else if (dt.items?.length) {
+    for (const item of Array.from(dt.items)) {
+      if (item.kind === 'file') {
+        const f = item.getAsFile()
+        if (f) files.push(f)
+      }
+    }
   }
-  runUploadQueue()
+
+  if (!files.length) {
+    showToast('这张微信图片没拖出来，请先保存到电脑再上传。')
+    return
+  }
+  enqueueFiles(files)
+}
+
+function onDragOver(e: DragEvent) {
+  if (!isDesktop.value) return
+  e.preventDefault()
+  dragOver.value = true
+}
+
+function onDragLeave(e: DragEvent) {
+  if (!isDesktop.value) return
+  if (dropZone.value && e.relatedTarget && dropZone.value.contains(e.relatedTarget as Node)) return
+  dragOver.value = false
 }
 
 async function runUploadQueue() {
@@ -162,7 +224,7 @@ async function retryItem(item: LocalItem) {
   if (!ok) return
   const input = document.createElement('input')
   input.type = 'file'
-  input.accept = 'image/*'
+  input.accept = 'image/png,image/jpeg,image/jpg,image/webp,image/gif'
   input.onchange = (e) => {
     const file = (e.target as HTMLInputElement).files?.[0]
     if (!file) return
@@ -181,6 +243,20 @@ function removeItem(item: { key: string; fileId?: number }) {
   }
   localItems.value = localItems.value.filter((i) => i.key !== item.key)
 }
+
+function updateDesktopFlag() {
+  isDesktop.value = window.matchMedia('(min-width: 768px) and (hover: hover)').matches
+}
+
+let mq: MediaQueryList | null = null
+onMounted(() => {
+  updateDesktopFlag()
+  mq = window.matchMedia('(min-width: 768px) and (hover: hover)')
+  mq.addEventListener('change', updateDesktopFlag)
+})
+onUnmounted(() => {
+  mq?.removeEventListener('change', updateDesktopFlag)
+})
 </script>
 
 <template>
@@ -204,51 +280,64 @@ function removeItem(item: { key: string; fileId?: number }) {
       maxlength="30"
     />
 
-    <div class="image-uploader__grid">
-      <div
-        v-for="item in displayItems"
-        :key="item.key"
-        class="image-uploader__thumb"
-        :class="{ 'image-uploader__thumb--failed': item.status === 'failed' }"
-      >
-        <img v-if="item.preview" :src="item.preview" alt="" />
-        <div v-if="item.status === 'uploading'" class="image-uploader__overlay">
-          上传中 {{ item.progress }}%
-        </div>
-        <div v-else-if="item.status === 'failed'" class="image-uploader__overlay image-uploader__overlay--error">
-          上传失败
-        </div>
-        <span class="image-uploader__label">{{ item.label }}</span>
-        <button class="image-uploader__remove" type="button" @click="removeItem(item as LocalItem)">×</button>
-        <button
-          v-if="item.status === 'failed'"
-          class="image-uploader__retry"
-          type="button"
-          @click="retryItem(item as LocalItem)"
+    <div
+      ref="dropZone"
+      class="image-uploader__drop"
+      :class="{ 'image-uploader__drop--active': dragOver }"
+      data-testid="image-uploader-drop"
+      @dragover="onDragOver"
+      @dragleave="onDragLeave"
+      @drop="handleDrop"
+    >
+      <div class="image-uploader__grid">
+        <div
+          v-for="item in displayItems"
+          :key="item.key"
+          class="image-uploader__thumb"
+          :class="{ 'image-uploader__thumb--failed': item.status === 'failed' }"
         >
-          重新上传
+          <img v-if="item.preview" :src="item.preview" alt="" />
+          <div v-if="item.status === 'uploading'" class="image-uploader__overlay">
+            上传中 {{ item.progress }}%
+          </div>
+          <div v-else-if="item.status === 'failed'" class="image-uploader__overlay image-uploader__overlay--error">
+            上传失败
+          </div>
+          <span class="image-uploader__label">{{ item.label }}</span>
+          <button class="image-uploader__remove" type="button" @click="removeItem(item as LocalItem)">×</button>
+          <button
+            v-if="item.status === 'failed'"
+            class="image-uploader__retry"
+            type="button"
+            @click="retryItem(item as LocalItem)"
+          >
+            重新上传
+          </button>
+        </div>
+
+        <button
+          type="button"
+          class="image-uploader__add"
+          :disabled="probing"
+          data-testid="image-uploader-add"
+          @click="onAddClick"
+        >
+          <span v-if="probing" class="image-uploader__ring" />
+          <template v-else>
+            <span class="image-uploader__plus">+</span>
+            <span class="show-desktop-only" data-testid="image-uploader-hint-desktop">点击或把微信图片拖到这里</span>
+            <span class="show-mobile-only">添加图片</span>
+          </template>
         </button>
       </div>
 
-      <button
-        type="button"
-        class="image-uploader__add"
-        :disabled="probing"
-        data-testid="image-uploader-add"
-        @click="onAddClick"
-      >
-        <span v-if="probing" class="image-uploader__ring" />
-        <template v-else>
-          <span class="image-uploader__plus">+</span>
-          <span>添加图片</span>
-        </template>
-      </button>
+      <p v-if="dragOver" class="image-uploader__drop-hint" data-testid="image-uploader-drop-hint">松开就上传</p>
     </div>
 
     <input
       ref="fileInput"
       type="file"
-      accept="image/*"
+      accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
       capture="environment"
       multiple
       hidden
@@ -281,11 +370,34 @@ function removeItem(item: { key: string; fileId?: number }) {
   color: var(--color-jade-deep);
   background: rgba(198, 161, 91, 0.12);
 }
+.image-uploader__drop {
+  position: relative;
+  margin-top: 12px;
+  border-radius: 16px;
+  transition: box-shadow var(--duration-fast), border-color var(--duration-fast);
+}
+.image-uploader__drop--active {
+  box-shadow: 0 0 0 2px rgba(198, 161, 91, 0.45), var(--shadow-glow);
+}
+.image-uploader__drop-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  border-radius: 16px;
+  background: rgba(16, 22, 20, 0.55);
+  color: var(--color-gold-light);
+  font-size: 16px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 2;
+}
 .image-uploader__grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
-  margin-top: 12px;
 }
 @media (min-width: 768px) {
   .image-uploader__grid { grid-template-columns: repeat(3, 1fr); }
@@ -311,6 +423,8 @@ function removeItem(item: { key: string; fileId?: number }) {
   cursor: pointer;
   font-size: 12px;
   color: var(--color-text-sub);
+  padding: 8px;
+  text-align: center;
 }
 .image-uploader__add:disabled { opacity: 0.6; cursor: wait; }
 .image-uploader__plus { font-size: 22px; color: var(--color-gold); line-height: 1; }

@@ -6,6 +6,7 @@ const router = createRouter({
   routes: [
     { path: '/login', component: () => import('../views/Login.vue'), meta: { public: true } },
     { path: '/', component: () => import('../views/Home.vue') },
+    { path: '/bi/drilldown', component: () => import('../views/BiDrilldown.vue') },
     { path: '/expenses', redirect: '/reimbursements' },
     { path: '/expense/create', component: () => import('../views/ExpenseCreate.vue') },
     { path: '/expense/:id', component: () => import('../views/ExpenseDetail.vue') },

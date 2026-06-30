@@ -236,7 +236,11 @@ async function main() {
     const p0 = Number(beforeLink.json.data?.finalProfit ?? 0)
     const link = await api(token, `/api/expenses/${noBracelet.json.data.id}/link`, {
       method: 'POST',
-      body: JSON.stringify({ externalOrderNo: orderNo }),
+      body: JSON.stringify(
+        sale?.externalOrderNo
+          ? { externalOrderNo: orderNo }
+          : { saleId },
+      ),
     })
     const afterLink = await api(token, `/api/sales/${saleId}`)
     const p1 = Number(afterLink.json.data?.finalProfit ?? 0)

@@ -1,31 +1,14 @@
 #!/usr/bin/env node
 /**
  * 清除测试数据和业务数据，只保留 fanfan 管理员和基础配置
+ * 注意：不会修改 fanfan 已有密码，也不会覆盖 secrets 文件
  */
 import { execSync } from 'child_process'
-import fs from 'fs/promises'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { ROOT } from './lib/services.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const password = process.env.FANFAN_PASSWORD || 'fanfan123456'
-
-async function writeSecrets() {
-  const secretsDir = path.join(ROOT, 'secrets')
-  await fs.mkdir(secretsDir, { recursive: true })
-  await fs.writeFile(
-    path.join(secretsDir, 'initial-admin-password.txt'),
-    [
-      '和田玉镯子记账系统 - 管理员账号',
-      `更新时间: ${new Date().toLocaleString('zh-CN')}`,
-      '用户名: fanfan',
-      `密码: ${password}`,
-      '',
-    ].join('\n'),
-    'utf-8',
-  )
-}
 
 async function main() {
   const dbPath = process.env.DATABASE_URL || 'file:./data/accounting.db'
@@ -34,11 +17,9 @@ async function main() {
     stdio: 'inherit',
     env: {
       ...process.env,
-      FANFAN_PASSWORD: password,
       DATABASE_URL: dbPath,
     },
   })
-  await writeSecrets()
 }
 
 main().catch((e) => {

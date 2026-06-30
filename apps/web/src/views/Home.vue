@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, watch, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import api from '../api'
 import { useAuthStore } from '../stores/auth'
 import LuxuryCard from '../components/LuxuryCard.vue'
@@ -8,15 +8,24 @@ import MoneyCard from '../components/MoneyCard.vue'
 import WorkerStatus from '../components/WorkerStatus.vue'
 import ExpenseItem from '../components/ExpenseItem.vue'
 import PageHero from '../components/PageHero.vue'
+import DateRangePicker from '../components/DateRangePicker.vue'
+import {
+  parseRouteRange,
+  rangeLabel,
+  toRangeQuery,
+  type DateRangeState,
+} from '../utils/date-range'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
-const dashboard = ref<any>(null)
-const weekAmount = ref(0)
-const monthAmount = ref(0)
+
+const dateRange = ref<DateRangeState>(parseRouteRange(route.query as Record<string, string>))
+const summary = ref<any>(null)
 const recentExpenses = ref<any[]>([])
 const recentLogs = ref<any[]>([])
 const loadError = ref('')
+const loading = ref(false)
 
 function formatLog(log: any): string {
   const name = log.operatorName || '有人'
@@ -33,66 +42,180 @@ function formatLog(log: any): string {
   return `${name}${action}${code}`
 }
 
+function syncRouteQuery() {
+  router.replace({ query: { ...route.query, ...toRangeQuery(dateRange.value) } })
+}
+
+async function loadDashboard() {
+  loading.value = true
+  loadError.value = ''
+  try {
+    const [bi, expenses, logs] = await Promise.all([
+      api.get('/bi/summary', {
+        params: {
+          range: dateRange.value.range,
+          startDate: dateRange.value.startDate,
+          endDate: dateRange.value.endDate,
+        },
+      }),
+      api.get('/expenses?pageSize=5'),
+      api.get('/operation-logs?pageSize=5'),
+    ])
+    summary.value = bi.data.data
+    recentExpenses.value = expenses.data.data.items
+    recentLogs.value = logs.data.data.items
+  } catch {
+    loadError.value = '数据没查出来，刷新试试'
+  } finally {
+    loading.value = false
+  }
+}
+
+function onRangeChange() {
+  syncRouteQuery()
+  loadDashboard()
+}
+
+function drill(type: string) {
+  router.push({
+    path: '/bi/drilldown',
+    query: { type, ...toRangeQuery(dateRange.value) },
+  })
+}
+
+function exportThisMonth() {
+  router.push({
+    path: '/expense/export',
+    query: { startDate: dateRange.value.startDate, endDate: dateRange.value.endDate },
+  })
+}
+
+watch(
+  () => [route.query.range, route.query.startDate, route.query.endDate],
+  () => {
+    dateRange.value = parseRouteRange(route.query as Record<string, string>)
+  },
+)
+
 onMounted(async () => {
   try {
     await auth.fetchMe()
     await auth.fetchWorkerStatus()
-    const [dash, week, month, expenses, logs] = await Promise.all([
-      api.get('/stats/home'),
-      api.get('/expenses/summary?period=week'),
-      api.get('/expenses/summary?period=month'),
-      api.get('/expenses?pageSize=5'),
-      api.get('/operation-logs?pageSize=5'),
-    ])
-    dashboard.value = dash.data.data
-    weekAmount.value = week.data.data.totalAmount || 0
-    monthAmount.value = month.data.data.totalAmount || 0
-    recentExpenses.value = expenses.data.data.items
-    recentLogs.value = logs.data.data.items
+    syncRouteQuery()
+    await loadDashboard()
   } catch {
     loadError.value = '数据没查出来，刷新试试'
   }
 })
 
-function exportThisMonth() {
-  const now = new Date()
-  const start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-  const end = now.toISOString().slice(0, 10)
-  router.push({ path: '/expense/export', query: { startDate: start, endDate: end } })
+const heroSubtitle = () => {
+  const label = rangeLabel(dateRange.value)
+  return `经营总览 · ${label} · 点卡片看明细`
 }
 </script>
 
 <template>
   <div class="home-page page-enter" data-testid="home-page">
-    <PageHero title="今天店里情况" subtitle="经营总览 · 一眼看清今天花了多少、卖了多少、大概赚了多少" test-id="home-hero" />
+    <PageHero title="店里经营情况" :subtitle="heroSubtitle()" test-id="home-hero" />
     <div class="show-mobile-only home-page__worker">
       <WorkerStatus :status="auth.workerStatus" compact />
     </div>
 
+    <DateRangePicker v-model="dateRange" @change="onRangeChange" />
+
     <p v-if="loadError" class="home-page__error">{{ loadError }}</p>
 
     <LuxuryCard dark :stagger="0" padding="18px 16px 16px">
-      <div class="section-title">今日简况</div>
-      <div class="home-page__today-grid">
-        <MoneyCard label="今天花了多少钱" :value="dashboard?.todayExpenseAmount ?? 0" :stagger="1" />
-        <MoneyCard label="今天卖了多少钱" :value="dashboard?.todaySaleAmount ?? 0" :stagger="2" />
-        <MoneyCard label="今天大概赚了多少" :value="dashboard?.todayProfit ?? 0" :stagger="3" />
-        <div class="home-page__pending" @click="router.push('/reimbursements')">
+      <div class="section-title">{{ rangeLabel(dateRange) }}简况</div>
+      <div class="home-page__kpi-grid">
+        <button
+          type="button"
+          class="home-page__kpi"
+          data-testid="kpi-sales"
+          @click="drill('sales')"
+        >
+          <MoneyCard label="卖了多少钱" :value="summary?.saleAmount ?? 0" :stagger="1" />
+          <span class="home-page__kpi-hint">查看明细</span>
+        </button>
+        <button
+          type="button"
+          class="home-page__kpi"
+          data-testid="kpi-expenses"
+          @click="drill('expenses')"
+        >
+          <MoneyCard label="花了多少钱" :value="summary?.expenseAmount ?? 0" :stagger="2" />
+          <span class="home-page__kpi-hint">查看明细</span>
+        </button>
+        <button
+          type="button"
+          class="home-page__kpi"
+          data-testid="kpi-profit"
+          @click="drill('profit')"
+        >
+          <MoneyCard label="大概赚了多少" :value="summary?.netProfit ?? 0" :stagger="3" />
+          <span class="home-page__kpi-hint">查看明细</span>
+        </button>
+        <button
+          type="button"
+          class="home-page__kpi"
+          data-testid="kpi-customer-payments"
+          @click="drill('customer-payments')"
+        >
+          <MoneyCard label="客户返款/补偿" :value="summary?.customerPaymentAmount ?? 0" :stagger="4" />
+          <span class="home-page__kpi-hint">查看明细</span>
+        </button>
+        <button
+          type="button"
+          class="home-page__kpi"
+          data-testid="kpi-refunds"
+          @click="drill('refunds')"
+        >
+          <MoneyCard label="退款金额" :value="summary?.refundAmount ?? 0" :stagger="5" />
+          <span class="home-page__kpi-hint">查看明细</span>
+        </button>
+        <button
+          type="button"
+          class="home-page__kpi"
+          data-testid="kpi-reimbursements"
+          @click="drill('reimbursements')"
+        >
           <MoneyCard
             label="还有多少没报销"
-            :value="dashboard?.pendingReimbursementAmount ?? 0"
-            :sub="`${dashboard?.pendingReimbursementCount ?? 0} 笔待处理`"
+            :value="summary?.pendingReimbursementAmount ?? 0"
+            :sub="`${summary?.pendingReimbursementCount ?? 0} 笔待处理`"
             highlight
-            :stagger="4"
+            :stagger="6"
           />
-        </div>
-      </div>
-    </LuxuryCard>
-
-    <LuxuryCard :stagger="2" padding="16px">
-      <div class="home-page__period-grid">
-        <MoneyCard label="本周支出" :value="weekAmount" compact />
-        <MoneyCard label="本月支出" :value="monthAmount" compact />
+          <span class="home-page__kpi-hint">查看明细</span>
+        </button>
+        <button
+          type="button"
+          class="home-page__kpi"
+          data-testid="kpi-inventory"
+          @click="drill('inventory')"
+        >
+          <MoneyCard
+            label="在库货品"
+            :value="summary?.inventoryCost ?? 0"
+            :sub="`${summary?.inventoryCount ?? 0} 件在库`"
+            :stagger="7"
+          />
+          <span class="home-page__kpi-hint">查看明细</span>
+        </button>
+        <button
+          type="button"
+          class="home-page__kpi"
+          data-testid="kpi-effective-sales"
+          @click="drill('effective-sales')"
+        >
+          <MoneyCard
+            label="有效成交金额"
+            :value="summary?.effectiveSaleAmount ?? 0"
+            :sub="`${summary?.effectiveOrderCount ?? 0} 单有效`"
+            :stagger="8"
+          />
+          <span class="home-page__kpi-hint">查看明细</span>
+        </button>
       </div>
     </LuxuryCard>
 
@@ -162,32 +285,47 @@ function exportThisMonth() {
   overflow-x: hidden;
   max-width: 100%;
 }
-.home-page__header { margin-bottom: 4px; }
-.home-page__title {
-  margin: 0 0 8px;
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--color-text-main);
-}
 .home-page__error {
   color: #c45c00;
   font-size: 14px;
   margin: 0 0 12px;
 }
-.home-page__today-grid {
+.home-page__kpi-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+@media (min-width: 768px) {
+  .home-page__kpi-grid { grid-template-columns: repeat(3, 1fr); }
 }
 @media (min-width: 1200px) {
-  .home-page__today-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
+  .home-page__kpi-grid { grid-template-columns: repeat(4, 1fr); }
 }
-.home-page__period-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+.home-page__kpi {
+  position: relative;
+  border: none;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  min-height: 88px;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+@media (hover: hover) {
+  .home-page__kpi:hover { transform: translateY(-3px); }
+}
+.home-page__kpi :deep(.money-card) {
+  width: 100%;
+  height: 100%;
+}
+.home-page__kpi-hint {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-size: 10px;
+  color: var(--color-gold);
+  opacity: 0.85;
+  pointer-events: none;
 }
 .home-page__actions {
   display: grid;
@@ -195,9 +333,7 @@ function exportThisMonth() {
   gap: 10px;
 }
 @media (min-width: 1200px) {
-  .home-page__actions {
-    grid-template-columns: repeat(6, 1fr);
-  }
+  .home-page__actions { grid-template-columns: repeat(6, 1fr); }
 }
 .home-page__action {
   display: flex;
@@ -231,6 +367,5 @@ function exportThisMonth() {
   line-height: 1.5;
 }
 .home-page__log:last-child { border-bottom: none; }
-.home-page__pending { cursor: pointer; }
 .home-page__expense-row { cursor: pointer; }
 </style>

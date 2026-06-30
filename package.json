@@ -35,6 +35,8 @@
     "acceptance:remote": "node scripts/remote-acceptance.mjs",
     "test:subpath": "node scripts/test-subpath-refresh.mjs",
     "test:login": "node scripts/test-login.mjs",
+    "test:bi-drilldown": "node scripts/test-bi-drilldown.mjs",
+    "test:drag-drop-upload": "node scripts/test-drag-drop-upload.mjs",
     "test:white-screen": "node scripts/test-white-screen.mjs",
     "test:responsive": "node scripts/test-responsive.mjs",
     "test:worker-upload-readiness": "node scripts/test-worker-upload-readiness.mjs",

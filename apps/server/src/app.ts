@@ -18,6 +18,7 @@ import { maintenanceRouter } from './routes/maintenance.routes'
 import { scanRouter } from './routes/scan.routes'
 import { goodsRouter } from './routes/goods.routes'
 import { statsRouter } from './routes/stats.routes'
+import { biRouter } from './routes/bi.routes'
 import { workerApiRouter } from './routes/worker.routes'
 import { userRouter } from './routes/user.routes'
 import { getSystemStatus } from './services/system-status.service'
@@ -68,6 +69,7 @@ export function createApp() {
   app.use('/api/scan', scanRouter)
   app.use('/api/goods', goodsRouter)
   app.use('/api/stats', statsRouter)
+  app.use('/api/bi', biRouter)
 
   attachAccountWeb(app)
 

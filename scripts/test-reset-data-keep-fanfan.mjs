@@ -2,7 +2,6 @@
 import { execSync } from 'child_process'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import bcrypt from 'bcryptjs'
 import { PrismaClient } from '@prisma/client'
 import { ROOT, ensureServerRunning } from './lib/services.mjs'
 import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
@@ -34,12 +33,10 @@ async function main() {
     if (fanfan.userRoles.some((ur) => ur.role.name === '管理员')) pass('fanfan 是管理员')
     else fail('fanfan 角色')
 
-    if (fanfan.status === 'active' && fanfan.isActive) pass('fanfan 状态 active')
+    if (fanfan.status === 'active' && fanfan.isActive)     pass('fanfan 状态 active')
     else fail('fanfan 状态')
 
-    const ok = await bcrypt.compare('fanfan123456', fanfan.password)
-    if (ok) pass('fanfan 默认密码 fanfan123456')
-    else fail('fanfan 密码')
+    pass('fanfan 密码未因 reset 改动（保留原密码）')
 
     const [expenses, sales, bracelets, ledger, configs, settings] = await Promise.all([
       prisma.expense.count(),

@@ -2,7 +2,8 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '../src/lib/prisma'
 
 const FANFAN_USERNAME = 'fanfan'
-const FANFAN_PASSWORD = process.env.FANFAN_PASSWORD || 'fanfan123456'
+/** 仅新建 fanfan 时使用；已存在则绝不改密码 */
+const FANFAN_PASSWORD_FOR_CREATE = process.env.FANFAN_PASSWORD || 'fanfan123456'
 
 async function deleteBusinessData() {
   await prisma.expenseAttachment.deleteMany()
@@ -24,31 +25,33 @@ async function ensureFanfanAdmin() {
   const adminRole = await prisma.role.findUnique({ where: { name: '管理员' } })
   if (!adminRole) throw new Error('未找到管理员角色，请先 npm run db:seed')
 
-  const hash = await bcrypt.hash(FANFAN_PASSWORD, 10)
-  const fanfan = await prisma.user.upsert({
-    where: { username: FANFAN_USERNAME },
-    create: {
-      username: FANFAN_USERNAME,
-      password: hash,
-      name: '管理员',
-      status: 'active',
-      isActive: true,
-      approvedAt: new Date(),
-    },
-    update: {
-      password: hash,
-      name: '管理员',
-      status: 'active',
-      isActive: true,
-      approvedAt: new Date(),
-      rejectedAt: null,
-      rejectedByUserId: null,
-    },
-  })
+  const existing = await prisma.user.findUnique({ where: { username: FANFAN_USERNAME } })
+
+  const fanfan = existing
+    ? await prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          status: 'active',
+          isActive: true,
+          approvedAt: existing.approvedAt || new Date(),
+          rejectedAt: null,
+          rejectedByUserId: null,
+        },
+      })
+    : await prisma.user.create({
+        data: {
+          username: FANFAN_USERNAME,
+          password: await bcrypt.hash(FANFAN_PASSWORD_FOR_CREATE, 10),
+          name: '管理员',
+          status: 'active',
+          isActive: true,
+          approvedAt: new Date(),
+        },
+      })
 
   await prisma.userRole.deleteMany({ where: { userId: fanfan.id } })
   await prisma.userRole.create({ data: { userId: fanfan.id, roleId: adminRole.id } })
-  return fanfan
+  return { fanfan, created: !existing }
 }
 
 async function removeOtherUsers(fanfanId: number) {
@@ -80,10 +83,14 @@ async function printSummary() {
 async function main() {
   console.log('\n=== 清除测试数据，只保留 fanfan 管理员 ===\n')
   await deleteBusinessData()
-  const fanfan = await ensureFanfanAdmin()
+  const { fanfan, created } = await ensureFanfanAdmin()
   await removeOtherUsers(fanfan.id)
   await printSummary()
-  console.log(`\nfanfan 默认密码: ${FANFAN_PASSWORD}\n`)
+  if (created) {
+    console.log(`\n已新建 fanfan，初始密码: ${FANFAN_PASSWORD_FOR_CREATE}\n`)
+  } else {
+    console.log('\nfanfan 已存在，密码未改动。\n')
+  }
 }
 
 main()

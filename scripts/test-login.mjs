@@ -6,6 +6,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { RECOMMENDED_URL } from './lib/deploy-env.mjs'
+import { resolveAcceptanceWebBase } from './lib/services.mjs'
 import { installScriptTimeout, TIMEOUTS, fetchWithTimeout } from './lib/script-timeout.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -29,67 +30,91 @@ async function fetchJson(url, opts = {}) {
   return { res, json, text }
 }
 
-function readAdminPassword() {
+function readSecretsPassword() {
   const file = path.join(ROOT, 'secrets/initial-admin-password.txt')
   if (!fs.existsSync(file)) return ''
   return fs.readFileSync(file, 'utf-8').match(/密码:\s*(.+)/)?.[1]?.trim() || ''
 }
 
+function resolveTestCredentials() {
+  const username = process.env.TEST_LOGIN_USERNAME?.trim() || 'fanfan'
+  const passwordCandidates = [
+    process.env.TEST_LOGIN_PASSWORD?.trim(),
+    readSecretsPassword(),
+    'fanfan123456',
+    'fanfan9724',
+  ].filter(Boolean)
+  return { username, passwordCandidates }
+}
+
 installScriptTimeout('test:login', TIMEOUTS.login)
 
 async function main() {
-  console.log(`\n========== 登录专项验收 (${SERVER}) ==========\n`)
+  const { username, passwordCandidates } = resolveTestCredentials()
+  const WEB = (await resolveAcceptanceWebBase()).replace(/\/$/, '')
+  console.log(`\n========== 登录专项验收 (API: ${SERVER}, Web: ${WEB}) ==========`)
+  console.log(`测试账号: ${username}\n`)
 
   // 1. SPA 页面
-  const loginPage = await fetchWithTimeout(`${SERVER}/login`, {}, 30000)
+  const loginPage = await fetchWithTimeout(`${WEB}/login`, {}, 30000)
   const loginHtml = await loginPage.text()
   ok('打开 /account/login 返回 SPA', loginPage.status === 200 && loginHtml.includes('id="app"'))
   ok('登录页含 viewport（手机端）', loginHtml.includes('viewport'))
 
   // 2. 前端空表单校验
-  function validateLoginForm(username, password) {
-    if (!username.trim() || !password) return '请输入用户名和密码'
+  function validateLoginForm(u, password) {
+    if (!u.trim() || !password) return '请输入用户名和密码'
     return null
   }
   ok('空用户名/空密码前端提示', validateLoginForm('', '') === '请输入用户名和密码')
-  ok('空密码前端提示', validateLoginForm('admin', '') === '请输入用户名和密码')
+  ok('空密码前端提示', validateLoginForm(username, '') === '请输入用户名和密码')
 
-  // 3. 错误密码 API
+  // 3. 错误密码 API（用 fanfan，不要求 admin 存在）
   const bad = await fetchJson(`${SERVER}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'wrong-password-xyz' }),
+    body: JSON.stringify({ username, password: 'wrong-password-xyz' }),
   })
   ok('错误密码返回 401', bad.res.status === 401)
   ok('错误密码有明确 message', bad.json.message === '用户名或密码错误', bad.json.message || '')
 
   // 4. 正确密码登录 + /me
-  const pwd = readAdminPassword()
-  if (!pwd) {
-    ok('读取本地 admin 密码', false, 'secrets/initial-admin-password.txt 不存在')
-  } else {
+  let loggedIn = false
+  for (const pwd of passwordCandidates) {
     const good = await fetchJson(`${SERVER}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: 'admin', password: pwd }),
+      body: JSON.stringify({ username, password: pwd }),
     })
-    ok('正确密码登录成功', good.res.ok && good.json.success && !!good.json.data?.token)
-    const token = good.json.data?.token
-    if (token) {
+    if (good.res.ok && good.json.success && good.json.data?.token) {
+      ok(`正确密码登录成功 (${username})`, true)
+      loggedIn = true
+      const token = good.json.data.token
       const me = await fetchJson(`${SERVER}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       ok('登录后 /auth/me 成功', me.res.ok && me.json.success && !!me.json.data?.user)
-    }
 
-    // 5. 错误 token
-    const badMe = await fetchJson(`${SERVER}/api/auth/me`, {
-      headers: { Authorization: 'Bearer invalid-token-xyz' },
-    })
-    ok('错误 token /auth/me 返回 401', badMe.res.status === 401)
+      const badMe = await fetchJson(`${SERVER}/api/auth/me`, {
+        headers: { Authorization: 'Bearer invalid-token-xyz' },
+      })
+      ok('错误 token /auth/me 返回 401', badMe.res.status === 401)
+      break
+    }
+  }
+  if (!loggedIn) {
+    ok(`正确密码登录成功 (${username})`, false, `尝试了 ${passwordCandidates.length} 组密码均失败`)
   }
 
-  // 6. 源码结构检查（底部导航 / 登录页）
+  // 5. admin 不存在不应导致失败 — 仅记录
+  const adminTry = await fetchJson(`${SERVER}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'admin', password: 'any' }),
+  })
+  ok('admin 账号不存在时不影响本测试', adminTry.res.status === 401 || adminTry.res.ok, `status=${adminTry.res.status}`)
+
+  // 6. 源码结构检查
   const layoutVue = fs.readFileSync(path.join(ROOT, 'apps/web/src/components/ResponsiveLayout.vue'), 'utf-8')
   ok('ResponsiveLayout hideMobileTab 使用 computed', layoutVue.includes('computed') && layoutVue.includes('hideMobileTab'))
   ok('登录页路由隐藏底部导航', layoutVue.includes("route.path === '/login'"))
@@ -106,8 +131,11 @@ async function main() {
   const authTs = fs.readFileSync(path.join(ROOT, 'apps/web/src/stores/auth.ts'), 'utf-8')
   ok('auth.initSession 存在', authTs.includes('initSession'))
 
-  // 7. 首页 SPA（需登录后由 acceptance:full 覆盖；此处只验公开页）
-  const homePublic = await fetchWithTimeout(`${SERVER}/`, {}, 30000)
+  const testLoginSrc = fs.readFileSync(path.join(__dirname, 'test-login.mjs'), 'utf-8')
+  const usesFanfanDefault = testLoginSrc.includes("|| 'fanfan'") || testLoginSrc.includes("'fanfan'")
+  ok('test-login 默认 fanfan', usesFanfanDefault && testLoginSrc.includes('TEST_LOGIN_USERNAME'))
+
+  const homePublic = await fetchWithTimeout(`${WEB}/`, {}, 30000)
   ok('首页 SPA 可访问', homePublic.status === 200)
 
   console.log(`\n${failed ? 'FAIL' : 'PASS'} — ${results.length - failed}/${results.length} 通过\n`)
