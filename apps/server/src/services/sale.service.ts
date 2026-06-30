@@ -6,7 +6,7 @@ import { writeOperationLog } from './operation-log.service'
 import { resolveBraceletBinding } from '../lib/bracelet-bind'
 import { clampPage, clampPageSize } from '../lib/pagination'
 import { startOfDay, endOfDay } from '../lib/utils'
-import { saleProfitRow } from './stats.service'
+import { saleProfitRow, PROFIT_DEDUCT_EXPENSE_INCLUDE } from './stats.service'
 
 export async function calculateSaleCost(braceletId: number) {
   const bracelet = await prisma.bracelet.findUnique({ where: { id: braceletId } })
@@ -196,9 +196,7 @@ export async function listSales(filter: {
       where,
       include: {
         refunds: true,
-        expenses: {
-          where: { isVoided: false, expenseType: { in: ['客户补偿', '售后补偿'] } },
-        },
+        expenses: PROFIT_DEDUCT_EXPENSE_INCLUDE,
       },
       orderBy: { soldAt: 'desc' },
       skip: (page - 1) * pageSize,
@@ -295,4 +293,69 @@ export async function createCostAdjustment(
   })
 
   return record
+}
+
+export async function lookupSales(filter: {
+  externalOrderNo?: string
+  logisticsNo?: string
+  braceletCode?: string
+  keyword?: string
+}) {
+  const where: Record<string, unknown> = { isTrialRun: false }
+  const or: Record<string, unknown>[] = []
+
+  if (filter.externalOrderNo?.trim()) {
+    or.push({ externalOrderNo: filter.externalOrderNo.trim() })
+  }
+  if (filter.logisticsNo?.trim()) {
+    or.push({ logisticsNo: { contains: filter.logisticsNo.trim() } })
+  }
+  if (filter.braceletCode?.trim()) {
+    or.push({ braceletCode: { contains: filter.braceletCode.trim().toUpperCase() } })
+  }
+  if (filter.keyword?.trim()) {
+    const kw = filter.keyword.trim()
+    or.push(
+      { externalOrderNo: { contains: kw } },
+      { logisticsNo: { contains: kw } },
+      { braceletCode: { contains: kw } },
+      { customerName: { contains: kw } },
+      { saleNo: { contains: kw } },
+    )
+  }
+
+  if (!or.length) return []
+
+  where.OR = or
+
+  const sales = await prisma.sale.findMany({
+    where,
+    include: {
+      refunds: true,
+      expenses: PROFIT_DEDUCT_EXPENSE_INCLUDE,
+    },
+    orderBy: { soldAt: 'desc' },
+    take: 20,
+  })
+
+  return sales.map((s) => {
+    const profitRow = saleProfitRow(s)
+    return {
+      saleId: s.id,
+      platform: s.platform,
+      externalOrderNo: s.externalOrderNo,
+      logisticsNo: s.logisticsNo,
+      saleAmount: profitRow.saleAmount,
+      afterSaleStatus: s.afterSaleStatus,
+      status: s.status,
+      braceletId: s.braceletId,
+      braceletCode: s.braceletCode,
+      customerName: s.customerName,
+      profit: profitRow.profit,
+      profitMargin: profitRow.profitMargin,
+      refundAmount: profitRow.refundAmount,
+      customerPaymentDeduction: profitRow.customerPaymentDeduction,
+      soldAt: s.soldAt,
+    }
+  })
 }

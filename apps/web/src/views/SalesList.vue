@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
+import { loadQianfanConfig, useQianfan } from '../composables/useQianfan'
 import { useBreakpoint } from '../composables/useBreakpoint'
 import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
@@ -9,6 +10,7 @@ import ActionButton from '../components/ActionButton.vue'
 
 const router = useRouter()
 const { isDesktop } = useBreakpoint()
+const { qianfanEnabled, openQianfan } = useQianfan()
 const items = ref<any[]>([])
 const filter = ref({
   startDate: '',
@@ -30,7 +32,10 @@ async function load() {
   items.value = res.data.data.items
 }
 
-onMounted(load)
+onMounted(async () => {
+  await loadQianfanConfig(api)
+  load()
+})
 </script>
 
 <template>
@@ -57,6 +62,7 @@ onMounted(load)
       <table v-if="isDesktop && items.length" class="data-table" data-testid="sales-table">
         <thead>
           <tr>
+            <th>小红书订单号</th>
             <th>货品编号</th>
             <th>销售金额</th>
             <th>成本</th>
@@ -69,6 +75,7 @@ onMounted(load)
         </thead>
         <tbody>
           <tr v-for="item in items" :key="item.id" @click="router.push(`/sales/${item.id}`)">
+            <td>{{ item.externalOrderNo || '-' }}</td>
             <td>{{ item.braceletCode }}</td>
             <td class="money">¥{{ Number(item.saleAmount).toFixed(2) }}</td>
             <td>¥{{ Number(item.cost ?? item.totalCostSnapshot).toFixed(2) }}</td>

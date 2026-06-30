@@ -8,6 +8,7 @@ import {
   createExpense,
   getExpense,
   getExpenseSummary,
+  linkExpense,
   listExpenses,
   listPendingReimbursements,
   updateExpense,
@@ -31,6 +32,10 @@ expenseRouter.get('/', requirePermission('expense:view'), async (req, res) => {
     reimbursementStatus: req.query.reimbursementStatus as string,
     reimbursementPerson: req.query.reimbursementPerson as string,
     braceletCode: req.query.braceletCode as string,
+    businessType: req.query.businessType as string,
+    externalOrderNo: req.query.externalOrderNo as string,
+    customerPaymentStatus: req.query.customerPaymentStatus as string,
+    pendingLinkStatus: req.query.pendingLinkStatus as string,
     onlyWithBracelet: req.query.onlyWithBracelet === 'true',
     needsAttachment: req.query.needsAttachment === 'true',
     page: Number(req.query.page || 1),
@@ -94,6 +99,16 @@ expenseRouter.post('/', requirePermission('expense:create'), async (req: AuthReq
 expenseRouter.patch('/:id', requirePermission('expense:update'), async (req: AuthRequest, res) => {
   try {
     const expense = await updateExpense(Number(req.params.id), req.body, req.user!)
+    res.json({ success: true, data: expense })
+  } catch (err) {
+    const e = err as Error & { code?: string }
+    res.status(400).json({ success: false, code: e.code, message: e.message })
+  }
+})
+
+expenseRouter.post('/:id/link', requirePermission('expense:update'), async (req: AuthRequest, res) => {
+  try {
+    const expense = await linkExpense(Number(req.params.id), req.body, req.user!)
     res.json({ success: true, data: expense })
   } catch (err) {
     const e = err as Error & { code?: string }

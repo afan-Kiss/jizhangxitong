@@ -1,24 +1,44 @@
-import { isEffectiveSale, EFFECTIVE_SALES_RULE_HINT, isConfirmedRefund } from '@jade-account/shared'
+import {
+  isEffectiveSale,
+  EFFECTIVE_SALES_RULE_HINT,
+  isConfirmedRefund,
+  PROFIT_DEDUCTING_EXPENSE_TYPES,
+  isProfitDeductingExpense,
+} from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
 import { toNumber, startOfDay, endOfDay, startOfMonth } from '../lib/utils'
 import { getExpenseSummary } from './expense.service'
 
-const COMPENSATION_TYPES = ['客户补偿', '售后补偿']
-
-export const COMPENSATION_EXPENSE_INCLUDE = {
+export const PROFIT_DEDUCT_EXPENSE_INCLUDE = {
   where: {
     isVoided: false,
-    expenseType: { in: COMPENSATION_TYPES },
+    OR: [
+      { expenseType: { in: [...PROFIT_DEDUCTING_EXPENSE_TYPES] } },
+      {
+        businessType: {
+          in: ['customer_refund', 'customer_compensation', 'after_sale_compensation', 'platform_fee'],
+        },
+      },
+    ],
   },
 }
 
-function resolveCompensationAmount(sale: {
+/** @deprecated use PROFIT_DEDUCT_EXPENSE_INCLUDE */
+export const COMPENSATION_EXPENSE_INCLUDE = PROFIT_DEDUCT_EXPENSE_INCLUDE
+
+function resolveCustomerPaymentDeductions(sale: {
   compensationAmount?: unknown
-  expenses?: { expenseType: string; amount: unknown; isVoided?: boolean }[]
+  expenses?: {
+    expenseType: string
+    amount: unknown
+    isVoided?: boolean
+    businessType?: string | null
+    saleId?: number | null
+  }[]
 }): number {
   if (sale.expenses?.length) {
     return sale.expenses
-      .filter((e) => !e.isVoided && COMPENSATION_TYPES.includes(e.expenseType))
+      .filter((e) => !e.isVoided && isProfitDeductingExpense(e))
       .reduce((s, e) => s + toNumber(e.amount as string | number), 0)
   }
   return toNumber(sale.compensationAmount as string | number)
@@ -38,21 +58,28 @@ function saleProfitRow(sale: {
   compensationAmount?: unknown
   status: string
   refunds?: { refundAmount: unknown; status?: string | null }[]
-  expenses?: { expenseType: string; amount: unknown; isVoided?: boolean }[]
+  expenses?: {
+    expenseType: string
+    amount: unknown
+    isVoided?: boolean
+    businessType?: string | null
+    saleId?: number | null
+  }[]
 }) {
   const refundSum = confirmedRefundSum(sale.refunds)
   const saleAmount = toNumber(sale.saleAmount as string | number)
   const cost = toNumber(sale.totalCostSnapshot as string | number)
   const gross = toNumber(sale.grossProfit as string | number)
-  const compensationAmount = resolveCompensationAmount(sale)
-  const profit = gross - refundSum - compensationAmount
+  const customerPaymentDeduction = resolveCustomerPaymentDeductions(sale)
+  const profit = gross - refundSum - customerPaymentDeduction
   const margin = saleAmount > 0 ? (profit / saleAmount) * 100 : 0
   return {
     saleAmount,
     cost,
     grossProfit: gross,
     refundAmount: refundSum,
-    compensationAmount,
+    compensationAmount: customerPaymentDeduction,
+    customerPaymentDeduction,
     profit,
     profitMargin: Math.round(margin * 100) / 100,
   }
@@ -72,7 +99,7 @@ export async function getHomeDashboard() {
     },
     include: {
       refunds: true,
-      expenses: COMPENSATION_EXPENSE_INCLUDE,
+      expenses: PROFIT_DEDUCT_EXPENSE_INCLUDE,
     },
   })
 
@@ -126,7 +153,7 @@ export async function getSalesSummary(period?: string, startDate?: string, endDa
     },
     include: {
       refunds: true,
-      expenses: COMPENSATION_EXPENSE_INCLUDE,
+      expenses: PROFIT_DEDUCT_EXPENSE_INCLUDE,
     },
   })
 

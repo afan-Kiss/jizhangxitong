@@ -193,6 +193,7 @@ async function main() {
     ['test:subpath', `node scripts/test-subpath-refresh.mjs`, TIMEOUTS.subpath + 30000],
     ['test:scan-binding', `node scripts/test-scan-binding.mjs`, TIMEOUTS.acceptanceFull + 60000],
     ['test:scan-workbench', `node scripts/test-scan-workbench.mjs`, TIMEOUTS.acceptanceFull + 60000],
+    ['test:customer-payments', `node scripts/test-customer-payments.mjs`, TIMEOUTS.acceptanceFull + 120000],
     ['test:accounting-flow', `node scripts/test-accounting-flow.mjs`, TIMEOUTS.acceptanceFull + 60000],
     ['test:effective-sales', `node scripts/test-effective-sales.mjs`, TIMEOUTS.acceptanceBasic + 30000],
     ['test:reimbursement-export', `node scripts/test-reimbursement-export.mjs`, TIMEOUTS.acceptanceBasic + 120000],

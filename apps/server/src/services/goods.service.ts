@@ -1,10 +1,11 @@
+import { countsTowardBraceletCost, isProfitDeductingExpense } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
 import { toNumber } from '../lib/utils'
 import { AuthRequest } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
 import { findBraceletByExactCode, presentBracelet } from './bracelet.service'
 import { calculateSaleCost } from './sale.service'
-import { saleProfitRow } from './stats.service'
+import { saleProfitRow, PROFIT_DEDUCT_EXPENSE_INCLUDE } from './stats.service'
 
 function buildGoodsProfitHint(saleStatus: string, profit: number): string {
   if (saleStatus === 'refunded') return '这件已经退款，利润按退款后计算'
@@ -51,11 +52,12 @@ export function presentGoods(bracelet: {
 }
 
 export async function refreshBraceletCostTotal(braceletId: number) {
-  const agg = await prisma.expense.aggregate({
+  const agg = await prisma.expense.findMany({
     where: { braceletId, isVoided: false },
-    _sum: { amount: true },
   })
-  const expenseSum = toNumber(agg._sum.amount)
+  const expenseSum = agg
+    .filter((e) => countsTowardBraceletCost(e))
+    .reduce((s, e) => s + toNumber(e.amount), 0)
   const bracelet = await prisma.bracelet.findUnique({ where: { id: braceletId } })
   if (!bracelet) return null
   const costTotal = expenseSum + toNumber(bracelet.inboundCost)
@@ -155,7 +157,9 @@ export async function getGoodsProfit(braceletId: number) {
     include: { attachments: true },
   })
 
-  const expenseCost = expenses.reduce((s, e) => s + toNumber(e.amount), 0)
+  const expenseCost = expenses
+    .filter((e) => countsTowardBraceletCost(e))
+    .reduce((s, e) => s + toNumber(e.amount), 0)
   const adjustments = await prisma.costAdjustment.findMany({ where: { braceletId } })
   const adjustmentCost = adjustments.reduce((s, a) => s + toNumber(a.amount), 0)
   const inboundCost = toNumber(refreshed.inboundCost)
@@ -165,12 +169,13 @@ export async function getGoodsProfit(braceletId: number) {
     where: { braceletId, status: { in: ['sold', 'refunded'] } },
     include: {
       refunds: true,
-      expenses: {
-        where: { isVoided: false, expenseType: { in: ['客户补偿', '售后补偿'] } },
-      },
+      expenses: PROFIT_DEDUCT_EXPENSE_INCLUDE,
     },
     orderBy: { soldAt: 'desc' },
   })
+
+  const customerExpenses = expenses.filter((e) => isProfitDeductingExpense(e))
+  const customerPaymentTotal = customerExpenses.reduce((s, e) => s + toNumber(e.amount), 0)
 
   let saleInfo: Record<string, unknown> | null = null
   let summary: Record<string, unknown> = {
@@ -199,6 +204,8 @@ export async function getGoodsProfit(braceletId: number) {
     summary = {
       costTotal,
       expenseCount: expenses.length,
+      customerPaymentTotal,
+      customerExpenseCount: customerExpenses.length,
       isSold: true,
       finalProfit: row.profit,
       profitMargin: row.profitMargin,
@@ -215,6 +222,16 @@ export async function getGoodsProfit(braceletId: number) {
       adjustmentCost,
       costTotal,
     },
+    customerExpenses: customerExpenses.map((e) => ({
+      id: e.id,
+      occurredAt: e.occurredAt,
+      expenseType: e.expenseType,
+      businessType: e.businessType,
+      amount: toNumber(e.amount),
+      externalOrderNo: e.externalOrderNo,
+      customerPaymentStatus: e.customerPaymentStatus,
+      attachmentCount: e.attachments.length,
+    })),
     expenses: expenses.map((e) => ({
       id: e.id,
       occurredAt: e.occurredAt,

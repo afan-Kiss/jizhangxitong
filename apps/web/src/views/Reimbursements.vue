@@ -17,12 +17,27 @@ const filter = ref({
   startDate: '',
   endDate: '',
   expenseType: '',
+  businessType: '',
+  externalOrderNo: '',
+  braceletCode: '',
+  customerPaymentStatus: '',
   paySource: '',
   reimbursementStatus: '',
   reimbursementPerson: '',
   page: 1,
   pageSize: 30,
 })
+
+const businessLabels: Record<string, string> = {
+  normal: '普通支出',
+  item_cost: '货品成本',
+  customer_refund: '客户返款',
+  customer_compensation: '客户补偿',
+  after_sale_compensation: '售后补偿',
+  platform_fee: '平台扣款',
+  staff_reimbursement: '员工垫付',
+  manual_pending: '待补关联',
+}
 
 const statusLabels: Record<string, string> = {
   pending: '未报销',
@@ -58,7 +73,10 @@ watch(filter, load, { deep: true })
       <div class="filter-grid">
         <van-field v-model="filter.startDate" label="开始日期" type="date" />
         <van-field v-model="filter.endDate" label="结束日期" type="date" />
-        <van-field v-model="filter.expenseType" label="分类" placeholder="全部" />
+        <van-field v-model="filter.businessType" label="业务类型" placeholder="customer_refund 等" />
+        <van-field v-model="filter.externalOrderNo" label="小红书订单号" />
+        <van-field v-model="filter.braceletCode" label="货品编号" />
+        <van-field v-model="filter.customerPaymentStatus" label="打款状态" placeholder="unpaid/paid" />
         <van-field v-model="filter.paySource" label="账户" placeholder="全部" />
         <van-field v-model="filter.reimbursementStatus" label="报销状态" placeholder="pending/reimbursed" />
         <van-field v-model="filter.reimbursementPerson" label="经手人" />
@@ -70,6 +88,10 @@ watch(filter, load, { deep: true })
       <table v-if="isDesktop && items.length" class="data-table" data-testid="expense-list-table">
         <thead>
           <tr>
+            <th>业务类型</th>
+            <th>小红书订单号</th>
+            <th>货品编号</th>
+            <th>打款状态</th>
             <th>日期</th>
             <th>金额</th>
             <th>分类</th>
@@ -81,6 +103,10 @@ watch(filter, load, { deep: true })
         </thead>
         <tbody>
           <tr v-for="item in items" :key="item.id" @click="router.push(`/expense/${item.id}`)">
+            <td>{{ businessLabels[item.businessType] || item.businessType || '-' }}</td>
+            <td>{{ item.externalOrderNo || '-' }}</td>
+            <td>{{ item.braceletCode || '-' }}</td>
+            <td>{{ item.customerPaymentStatus || '-' }}</td>
             <td>{{ item.occurredAt?.slice(0, 10) }}</td>
             <td class="money">¥{{ Number(item.amount).toFixed(2) }}</td>
             <td>{{ item.expenseType }}</td>

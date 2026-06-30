@@ -1,22 +1,33 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import api, { fileThumbUrl } from '../api'
 import { useAuthStore } from '../stores/auth'
+import { useQianfan, loadQianfanConfig } from '../composables/useQianfan'
+import { EXPENSE_BUSINESS_LABELS } from '@jade-account/shared'
+import ActionButton from '../components/ActionButton.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { qianfanEnabled, copyOrderNo, openQianfan } = useQianfan()
+
 const expense = ref<any>(null)
 const statusLabels: Record<string, string> = {
   pending: '未报销',
   reimbursed: '已报销',
   not_required: '不需要报销',
+  unpaid: '未打款',
+  paid: '已打款',
+  failed: '打款失败',
 }
 const thumbUrls = ref<Record<number, string>>({})
 
+const orderNo = computed(() => expense.value?.externalOrderNo || expense.value?.sale?.externalOrderNo || '')
+
 onMounted(async () => {
+  await loadQianfanConfig(api)
   const res = await api.get(`/expenses/${route.params.id}`)
   expense.value = res.data.data
   for (const att of expense.value.attachments || []) {
@@ -39,27 +50,63 @@ async function updateReimbursement(status: string) {
   const res = await api.get(`/expenses/${route.params.id}`)
   expense.value = res.data.data
 }
+
+async function linkOrder() {
+  const no = prompt('输入小红书订单号补关联', orderNo.value || '')
+  if (!no?.trim()) return
+  try {
+    const res = await api.post(`/expenses/${route.params.id}/link`, { externalOrderNo: no.trim() })
+    expense.value = res.data.data
+    showToast('已补关联')
+  } catch (err: any) {
+    showToast(err.response?.data?.message || '关联失败')
+  }
+}
 </script>
 
 <template>
-  <div class="page" v-if="expense">
+  <div class="page expense-detail" v-if="expense" data-testid="expense-detail-page">
     <van-nav-bar title="支出详情" left-arrow @click-left="router.back()" />
     <div class="card">
       <div class="stat-value">¥{{ Number(expense.amount).toFixed(2) }}</div>
       <div>{{ expense.expenseType }} · {{ expense.paySource }}</div>
+      <div v-if="expense.businessType" class="muted">
+        {{ EXPENSE_BUSINESS_LABELS[expense.businessType as keyof typeof EXPENSE_BUSINESS_LABELS] || expense.businessType }}
+      </div>
       <div class="muted">{{ expense.occurredAt?.slice(0, 10) }}</div>
       <div v-if="expense.isVoided" style="color:#ee0a24;">已作废: {{ expense.voidReason }}</div>
+      <div v-if="expense.affectsProfit" class="profit-tag">影响订单/货品利润</div>
     </div>
     <van-cell-group inset>
+      <van-cell v-if="orderNo" title="小红书订单号" :value="orderNo" data-testid="expense-detail-order-no">
+        <template #extra>
+          <ActionButton size="md" plain data-testid="expense-copy-order" @click="copyOrderNo(orderNo)">复制</ActionButton>
+          <ActionButton
+            v-if="qianfanEnabled && orderNo"
+            size="md"
+            plain
+            data-testid="expense-open-qianfan"
+            @click="openQianfan(orderNo)"
+          >打开千帆</ActionButton>
+        </template>
+      </van-cell>
+      <van-cell v-else-if="expense.pendingLinkStatus === 'pending_order'" title="关联状态" value="待关联订单">
+        <template #extra>
+          <ActionButton size="md" plain data-testid="expense-link-order" @click="linkOrder">补关联</ActionButton>
+        </template>
+      </van-cell>
+      <p v-if="orderNo && !qianfanEnabled" class="qianfan-hint muted">千帆链接还没配置，先复制订单号去千帆查</p>
       <van-cell title="报销人" :value="expense.reimbursementPerson || '-'" />
       <van-cell title="报销状态" :value="statusLabels[expense.reimbursementStatus] || expense.reimbursementStatus" />
-      <van-cell title="镯子编号" :value="expense.braceletCode || '未绑定'" />
+      <van-cell v-if="expense.customerPaymentStatus" title="打款状态" :value="statusLabels[expense.customerPaymentStatus] || expense.customerPaymentStatus" />
+      <van-cell title="货品编号" :value="expense.braceletCode || '未绑定'" />
+      <van-cell v-if="expense.saleId" title="关联销售" :value="`#${expense.saleId}`" is-link @click="router.push(`/sales/${expense.saleId}`)" />
       <van-cell title="摘要" :value="expense.expenseSummary || '-'" />
       <van-cell title="备注" :value="expense.remark || '-'" />
     </van-cell-group>
 
     <div class="card" v-if="auth.hasPermission('expense:attachment:view')">
-      <h4>凭证图片</h4>
+      <h4>凭证图片（{{ expense.attachments?.length || 0 }}）</h4>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <img v-for="att in expense.attachments" :key="att.id"
           :src="thumbUrls[att.fileId]" style="width:80px;height:80px;object-fit:cover;border-radius:6px;" />
@@ -75,3 +122,9 @@ async function updateReimbursement(status: string) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.expense-detail { overflow-x: hidden; max-width: 100%; }
+.profit-tag { color: #c45c00; font-size: 13px; margin-top: 6px; }
+.qianfan-hint { padding: 0 16px 8px; font-size: 12px; }
+</style>

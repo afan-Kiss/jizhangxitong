@@ -35,10 +35,12 @@ export function createApp() {
 
   app.get('/api/health', (_req, res) => {
     const version = process.env.APP_VERSION?.trim()
+    const qianfanTemplate = config.qianfanOrderDetailUrlTemplate?.trim()
     res.json({
       success: true,
       message: '和田玉镯子记账系统运行中',
       scanWorkbenchEnabled: config.scanWorkbenchEnabled,
+      qianfanOrderLinkEnabled: !!qianfanTemplate && qianfanTemplate.includes('{orderNo}'),
       ...(version ? { version } : {}),
     })
   })

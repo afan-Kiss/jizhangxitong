@@ -126,6 +126,22 @@ function goExpense(goods?: { id: number; code: string }) {
   router.push({ path: '/expense/create', query: { goodsId: String(g.id), goodsCode: g.code } })
 }
 
+function goCustomerExpense(businessType: string) {
+  const order = result.value?.order
+  const query: Record<string, string> = { businessType }
+  if (order?.orderNo) query.externalOrderNo = order.orderNo
+  if (order?.saleId) query.saleId = String(order.saleId)
+  router.push({ path: '/expense/create', query })
+}
+
+function goOrderProfit() {
+  const order = result.value?.order
+  if (order?.saleId) router.push(`/sales/${order.saleId}`)
+  else if (order?.orderNo) {
+    router.push({ path: '/expense/create', query: { externalOrderNo: order.orderNo, businessType: 'customer_refund' } })
+  }
+}
+
 function goSale(goods?: { id: number; code: string }) {
   const g = goods || result.value?.goods
   if (!g?.id) return
@@ -225,13 +241,19 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <div v-if="result.order" class="scan-workbench__order">
+            <div v-if="result.order" class="scan-workbench__order" data-testid="scan-order-card">
               <div class="section-title">订单</div>
-              <div>订单号：{{ result.order.orderNo }}</div>
+              <div>小红书订单号：{{ result.order.orderNo }}</div>
               <div v-if="result.order.logisticsNo">物流：{{ result.order.logisticsNo }}</div>
               <div>状态：{{ result.order.orderStatus }}</div>
               <div v-if="result.order.afterSaleStatus">售后：{{ result.order.afterSaleStatus }}</div>
               <div v-if="result.order.braceletCode">关联货品：{{ result.order.braceletCode }}</div>
+              <div class="scan-workbench__actions">
+                <ActionButton block data-testid="scan-customer-refund-btn" @click="goCustomerExpense('customer_refund')">记客户返款</ActionButton>
+                <ActionButton block plain data-testid="scan-customer-comp-btn" @click="goCustomerExpense('customer_compensation')">记客户补偿</ActionButton>
+                <ActionButton block plain data-testid="scan-after-sale-btn" @click="goCustomerExpense('after_sale_compensation')">记售后补偿</ActionButton>
+                <ActionButton block plain data-testid="scan-order-profit-btn" @click="goOrderProfit">查看订单利润</ActionButton>
+              </div>
               <div v-if="result.order.needsGoodsBinding" class="scan-workbench__bind-row">
                 <input v-model="bindGoodsCode" class="scan-workbench__bind-input" placeholder="输入货品码关联" />
                 <ActionButton data-testid="scan-bind-goods-btn" @click="bindOrderGoods">关联这个货品</ActionButton>
@@ -240,6 +262,7 @@ onUnmounted(() => {
 
             <div v-if="!result.matched && result.scanType === 'unknown'" class="scan-workbench__unknown">
               <p>暂时没识别出来</p>
+              <ActionButton block plain @click="router.push('/expense/create')">手动记账</ActionButton>
               <ActionButton block plain @click="createGoods">用这个编码新建货品</ActionButton>
             </div>
           </LuxuryCard>

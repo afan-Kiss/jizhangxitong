@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { authMiddleware, requirePermission, AuthRequest } from '../middleware/auth'
-import { createSale, getSale, listSales, refundSale, calculateSaleCost } from '../services/sale.service'
+import { createSale, getSale, listSales, lookupSales, refundSale, calculateSaleCost } from '../services/sale.service'
 
 export const saleRouter = Router()
 saleRouter.use(authMiddleware)
@@ -17,6 +17,16 @@ saleRouter.get('/', requirePermission('sale:view'), async (req, res) => {
     endDate: req.query.endDate as string,
     logisticsNo: req.query.logisticsNo as string,
     externalOrderNo: req.query.externalOrderNo as string,
+  })
+  res.json({ success: true, data })
+})
+
+saleRouter.get('/lookup', requirePermission('sale:view'), async (req, res) => {
+  const data = await lookupSales({
+    externalOrderNo: req.query.externalOrderNo as string,
+    logisticsNo: req.query.logisticsNo as string,
+    braceletCode: req.query.braceletCode as string,
+    keyword: req.query.keyword as string,
   })
   res.json({ success: true, data })
 })

@@ -132,7 +132,7 @@ async function runViewportInner(browser, vp, password) {
   if (vp.desktop) {
     await check('记支出页两栏布局', async () => {
       await gotoStable(page, `${BASE}/expense/create`)
-      const layout = await page.locator('[data-testid="expense-create-layout"]').evaluate((el) => {
+      const layout = await page.locator('[data-testid="expense-create-page"]').evaluate((el) => {
         const style = getComputedStyle(el)
         return { flexDirection: style.flexDirection }
       })

@@ -79,7 +79,7 @@ function buildRemark(expense: {
 
 export async function previewReimbursementExport(filter: ExpenseFilter) {
   validateExportDates(filter)
-  const where = buildWhere({ ...filter, isVoided: false })
+  const where = buildWhere({ ...filter, isVoided: false, paySource: '员工垫付' })
   const expenses = await prisma.expense.findMany({
     where,
     include: { attachments: { include: { file: true }, orderBy: { sortOrder: 'asc' } } },
@@ -135,7 +135,7 @@ export async function createReimbursementExport(
   })
 
   try {
-    const where = buildWhere({ ...filter, isVoided: false })
+    const where = buildWhere({ ...filter, isVoided: false, paySource: '员工垫付' })
     const expenses = await prisma.expense.findMany({
       where,
       include: { attachments: { include: { file: true }, orderBy: { sortOrder: 'asc' } } },

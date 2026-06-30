@@ -29,6 +29,7 @@ export const config = {
   get scanBindingEnabled() {
     return this.scanWorkbenchEnabled
   },
+  qianfanOrderDetailUrlTemplate: process.env.QIANFAN_ORDER_DETAIL_URL_TEMPLATE || '',
 }
 
 export function validateProductionConfig(): string[] {

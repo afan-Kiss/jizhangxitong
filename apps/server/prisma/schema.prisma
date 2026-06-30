@@ -102,12 +102,26 @@ model Expense {
   voidReason           String?
   voidedAt             DateTime?
   voidedBy             Int?
+  businessType         String?
+  externalOrderNo      String?
+  logisticsNo          String?
+  qianfanOrderUrl      String?
+  pendingLinkStatus    String   @default("linked")
+  customerPaymentStatus String?
+  paidAt               DateTime?
+  payeeName            String?
+  payeeAccountMasked   String?
+  linkNote             String?
   createdBy            Int
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
   bracelet             Bracelet?           @relation(fields: [braceletId], references: [id])
   sale                 Sale?               @relation(fields: [saleId], references: [id])
   attachments          ExpenseAttachment[]
+
+  @@index([externalOrderNo])
+  @@index([businessType])
+  @@index([pendingLinkStatus])
 }
 
 model ExpenseAttachment {

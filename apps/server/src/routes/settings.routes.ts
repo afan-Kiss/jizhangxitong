@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { authMiddleware, requirePermission, AuthRequest } from '../middleware/auth'
 import { getConfigOptions, getSettings, updateSetting } from '../services/settings.service'
 import { writeOperationLog } from '../services/operation-log.service'
+import { config } from '../lib/config'
 import { prisma } from '../lib/prisma'
 import { PERMISSIONS, PERMISSION_LABELS } from '@jade-account/shared'
 import { sanitizeUser, sanitizeUsers } from '../lib/serialize'
@@ -13,7 +14,15 @@ settingsRouter.get('/', async (_req, res) => {
   const settings = await getSettings()
   const expenseTypes = await getConfigOptions('expense_type')
   const paySources = await getConfigOptions('pay_source')
-  res.json({ success: true, data: { settings, expenseTypes, paySources } })
+  res.json({
+    success: true,
+    data: {
+      settings,
+      expenseTypes,
+      paySources,
+      qianfanOrderLinkEnabled: !!config.qianfanOrderDetailUrlTemplate?.trim()?.includes('{orderNo}'),
+    },
+  })
 })
 
 settingsRouter.patch('/:key', requirePermission('setting:update'), async (req: AuthRequest, res) => {
