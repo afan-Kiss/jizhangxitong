@@ -76,5 +76,7 @@ TEMP_UPLOAD_DIR="/www/wwwroot/jade-accounting/apps/server/tmp-uploads"
 EXPORT_TOKEN_TTL_MINUTES=30
 WORKER_RPC_TIMEOUT_MS=30000
 PUBLIC_WEB_DIR="/www/wwwroot/jade-accounting/web"
+SCAN_WORKBENCH_ENABLED=true
+SCAN_BINDING_ENABLED=true
 """
     return env, jwt, worker

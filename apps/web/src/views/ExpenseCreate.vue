@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import api from '../api'
 import { useAuthStore } from '../stores/auth'
@@ -15,9 +15,11 @@ import { resolveApiErrorMessage } from '../utils/api-errors'
 const STORAGE_KEY = 'jade-expense-prefs'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const { isDesktop } = useBreakpoint()
 const settings = ref<any>({})
+const linkedGoods = ref<any>(null)
 const form = ref({
   amount: '',
   expenseType: '',
@@ -45,6 +47,17 @@ onMounted(async () => {
   await auth.fetchWorkerStatus()
   const res = await api.get('/settings')
   settings.value = res.data.data
+  const goodsId = route.query.goodsId as string
+  const goodsCode = route.query.goodsCode as string
+  if (goodsId || goodsCode) {
+    try {
+      const gRes = goodsId
+        ? await api.get(`/goods/${goodsId}`)
+        : await api.get(`/goods/by-code/${encodeURIComponent(goodsCode)}`)
+      linkedGoods.value = gRes.data.data
+      form.value.braceletCode = linkedGoods.value.code
+    } catch { /* optional */ }
+  }
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
     if (saved.expenseType) form.value.expenseType = saved.expenseType
@@ -100,21 +113,25 @@ async function onSubmit() {
     const res = await api.post('/expenses', {
       ...form.value,
       amount,
+      braceletId: linkedGoods.value?.id,
+      braceletCode: linkedGoods.value?.code || form.value.braceletCode || undefined,
       attachments: uploadedFiles.value.map((f) => ({ fileId: f.fileId, fileType: f.fileType })),
       needsAttachment,
       reimbursementStatus: form.value.paySource === '员工垫付' ? form.value.reimbursementStatus : 'not_required',
     })
     savePrefs()
     const expenseId = res.data.data.id
+    const goodsId = linkedGoods.value?.id
     try {
       await showConfirmDialog({
         title: '已记账',
-        message: '接下来要做什么？',
-        confirmButtonText: '查看这笔支出',
-        cancelButtonText: '继续记一笔',
+        message: goodsId ? '接下来要做什么？' : '接下来要做什么？',
+        confirmButtonText: goodsId ? '查看这件货利润' : '查看这笔支出',
+        cancelButtonText: goodsId ? '继续给这件货记支出' : '继续记一笔',
         confirmButtonColor: '#1F4D3A',
       })
-      router.push(`/expense/${expenseId}`)
+      if (goodsId) router.push(`/bracelets/${linkedGoods.value.code}`)
+      else router.push(`/expense/${expenseId}`)
     } catch {
       form.value.amount = ''
       form.value.expenseSummary = ''
@@ -133,6 +150,10 @@ async function onSubmit() {
 
 <template>
   <AppShell title="记支出" show-back no-tab-pad :fixed-bottom="!isDesktop" @back="router.back()">
+    <LuxuryCard v-if="linkedGoods" gold data-testid="expense-linked-goods">
+      <div class="section-title">已带入货品</div>
+      <div>{{ linkedGoods.name || linkedGoods.code }}（{{ linkedGoods.code }}）</div>
+    </LuxuryCard>
     <div class="desktop-two-column expense-create" data-testid="expense-create-layout">
       <div class="desktop-two-column__main">
         <LuxuryCard gold padding="20px 16px">

@@ -19,6 +19,7 @@ export const mobileTabs: NavItem[] = [
 export const desktopNav: NavItem[] = [
   { path: '/', label: '首页', icon: 'home-o' },
   { path: '/expense/create', label: '记支出', icon: 'balance-list-o' },
+  { path: '/scan', label: '扫码工作台', icon: 'scan' },
   { path: '/reimbursements', label: '报销列表', icon: 'bill-o' },
   { path: '/sales', label: '销售', icon: 'orders-o' },
   { path: '/bracelets', label: '镯子', icon: '', custom: true },

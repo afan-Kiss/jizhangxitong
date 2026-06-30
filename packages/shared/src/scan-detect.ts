@@ -35,6 +35,10 @@ export function detectScanCodeType(raw: string): { scanType: ScanType; normalize
     return { scanType: 'order_no', normalizedCode: upper }
   }
 
+  if (/^\d{6,9}$/.test(normalizedCode)) {
+    return { scanType: 'unknown', normalizedCode: upper }
+  }
+
   return { scanType: 'unknown', normalizedCode: upper }
 }
 

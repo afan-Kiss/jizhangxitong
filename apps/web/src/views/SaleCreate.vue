@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import api from '../api'
 import { useBreakpoint } from '../composables/useBreakpoint'
@@ -9,7 +9,9 @@ import LuxuryCard from '../components/LuxuryCard.vue'
 import ActionButton from '../components/ActionButton.vue'
 
 const router = useRouter()
+const route = useRoute()
 const { isDesktop } = useBreakpoint()
+const linkedGoods = ref<any>(null)
 const form = ref({
   platform: '小红书',
   externalOrderNo: '',
@@ -24,6 +26,22 @@ const form = ref({
 })
 const costPreview = ref<any>(null)
 const loading = ref(false)
+
+async function loadGoodsFromQuery() {
+  const goodsId = route.query.goodsId as string
+  const goodsCode = route.query.goodsCode as string
+  if (!goodsId && !goodsCode) return
+  try {
+    const gRes = goodsId
+      ? await api.get(`/goods/${goodsId}`)
+      : await api.get(`/goods/by-code/${encodeURIComponent(goodsCode)}`)
+    linkedGoods.value = gRes.data.data
+    form.value.braceletCode = linkedGoods.value.code
+    await syncBracelet()
+  } catch { /* optional */ }
+}
+
+onMounted(loadGoodsFromQuery)
 
 async function syncBracelet() {
   if (!form.value.braceletCode) return
@@ -79,6 +97,10 @@ async function onSubmit() {
 
 <template>
   <AppShell title="销售登记" :show-back="!isDesktop" no-tab-pad @back="router.back()">
+    <LuxuryCard v-if="linkedGoods" gold data-testid="sale-linked-goods">
+      <div class="section-title">已带入货品</div>
+      <div>{{ linkedGoods.name || linkedGoods.code }}（{{ linkedGoods.code }}）</div>
+    </LuxuryCard>
     <div class="desktop-two-column">
       <div class="desktop-two-column__main">
         <LuxuryCard>

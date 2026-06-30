@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
 import { findBraceletByExactCode, presentBracelet } from './bracelet.service'
 import { calculateSaleCost } from './sale.service'
+import { saleProfitRow } from './stats.service'
 
 const STATUS_LABELS: Record<string, string> = {
   in_stock: '在库',
@@ -129,6 +130,92 @@ export async function getGoodsCostDetail(braceletId: number) {
     saleCost = null
   }
   return { goods, expenses, saleCost }
+}
+
+export async function getGoodsProfit(braceletId: number) {
+  const bracelet = await prisma.bracelet.findUnique({ where: { id: braceletId } })
+  if (!bracelet || /^PENDING-/i.test(bracelet.braceletCode)) {
+    throw new Error('没找到这个货品')
+  }
+
+  await refreshBraceletCostTotal(braceletId)
+  const refreshed = await prisma.bracelet.findUnique({ where: { id: braceletId } })
+  const goods = await getGoodsById(braceletId)
+  if (!goods || !refreshed) throw new Error('没找到这个货品')
+
+  const expenses = await prisma.expense.findMany({
+    where: { braceletId, isVoided: false },
+    orderBy: { occurredAt: 'desc' },
+    include: { attachments: true },
+  })
+
+  const expenseCost = expenses.reduce((s, e) => s + toNumber(e.amount), 0)
+  const adjustments = await prisma.costAdjustment.findMany({ where: { braceletId } })
+  const adjustmentCost = adjustments.reduce((s, a) => s + toNumber(a.amount), 0)
+  const inboundCost = toNumber(refreshed.inboundCost)
+  const costTotal = toNumber(refreshed.costTotal)
+
+  const sale = await prisma.sale.findFirst({
+    where: { braceletId, status: { in: ['sold', 'refunded'] } },
+    include: { refunds: true },
+    orderBy: { soldAt: 'desc' },
+  })
+
+  let saleInfo: Record<string, unknown> | null = null
+  let summary: Record<string, unknown> = {
+    costTotal,
+    expenseCount: expenses.length,
+    isSold: false,
+    finalProfit: null as number | null,
+    profitMargin: null as number | null,
+    isLoss: false,
+    hint: '还没卖出，预计利润要等登记销售后才知道',
+  }
+
+  if (sale && sale.status === 'sold') {
+    const row = saleProfitRow(sale)
+    saleInfo = {
+      id: sale.id,
+      saleAmount: row.saleAmount,
+      totalCostSnapshot: row.cost,
+      refundAmount: row.refundAmount,
+      compensationAmount: row.compensationAmount,
+      finalProfit: row.profit,
+      profitMargin: row.profitMargin,
+      soldAt: sale.soldAt,
+    }
+    summary = {
+      costTotal,
+      expenseCount: expenses.length,
+      isSold: true,
+      finalProfit: row.profit,
+      profitMargin: row.profitMargin,
+      isLoss: row.profit < 0,
+      hint: row.profit < 0 ? '这件目前是亏的' : `扣掉退款和补偿后赚 ¥${row.profit.toFixed(2)}`,
+    }
+  }
+
+  return {
+    goods,
+    costs: {
+      inboundCost,
+      expenseCost,
+      adjustmentCost,
+      costTotal,
+    },
+    expenses: expenses.map((e) => ({
+      id: e.id,
+      occurredAt: e.occurredAt,
+      expenseType: e.expenseType,
+      paySource: e.paySource,
+      amount: toNumber(e.amount),
+      reimbursementPerson: e.reimbursementPerson,
+      remark: e.remark,
+      attachmentCount: e.attachments.length,
+    })),
+    sale: saleInfo,
+    summary,
+  }
 }
 
 export { presentBracelet }

@@ -10,24 +10,41 @@ import {
   bindOrderToGoods,
 } from '../services/scan-binding.service'
 
-export const SCAN_BINDING_PAUSED_MSG = '扫码绑定功能已暂停'
+export const SCAN_WORKBENCH_DISABLED_MSG = '扫码工作台未启用'
 
 export const scanRouter = Router()
 scanRouter.use(authMiddleware)
 
-function requireScanBindingEnabled(req: Request, res: Response, next: NextFunction) {
-  if (config.scanBindingEnabled) {
+function requireScanWorkbenchEnabled(req: Request, res: Response, next: NextFunction) {
+  if (config.scanWorkbenchEnabled) {
     next()
     return
   }
   res.status(503).json({
     success: false,
-    message: SCAN_BINDING_PAUSED_MSG,
+    message: SCAN_WORKBENCH_DISABLED_MSG,
     paused: true,
+    enabled: false,
   })
 }
 
-scanRouter.post('/recognize', requirePermission('bracelet:view'), requireScanBindingEnabled, async (req: AuthRequest, res) => {
+scanRouter.get('/status', requirePermission('bracelet:view'), async (_req, res) => {
+  let scannerOnline = false
+  try {
+    const scannerUrl = process.env.SCANNER_API_URL || 'http://127.0.0.1:7789'
+    const h = await fetch(`${scannerUrl}/api/health`, { signal: AbortSignal.timeout(3000) })
+    scannerOnline = h.ok
+  } catch { /* offline */ }
+  res.json({
+    success: true,
+    data: {
+      enabled: config.scanWorkbenchEnabled,
+      scannerOnline,
+    },
+  })
+})
+
+scanRouter.post('/recognize', requirePermission('bracelet:view'), requireScanWorkbenchEnabled, async (req: AuthRequest, res) => {
   try {
     const code = String(req.body.code || '')
     const source = (req.body.source || 'manual') as 'scanner' | 'manual' | 'paste'
@@ -41,7 +58,7 @@ scanRouter.post('/recognize', requirePermission('bracelet:view'), requireScanBin
   }
 })
 
-scanRouter.post('/bind', requirePermission('bracelet:sync'), requireScanBindingEnabled, async (req: AuthRequest, res) => {
+scanRouter.post('/bind', requirePermission('bracelet:sync'), requireScanWorkbenchEnabled, async (req: AuthRequest, res) => {
   try {
     const data = await bindScan(req.body, req.user)
     res.json({ success: true, data, message: '绑定成功' })
@@ -53,7 +70,7 @@ scanRouter.post('/bind', requirePermission('bracelet:sync'), requireScanBindingE
   }
 })
 
-scanRouter.post('/orders/bind-goods', requirePermission('sale:create'), requireScanBindingEnabled, async (req: AuthRequest, res) => {
+scanRouter.post('/orders/bind-goods', requirePermission('sale:create'), requireScanWorkbenchEnabled, async (req: AuthRequest, res) => {
   try {
     const data = await bindOrderToGoods(req.body, req.user)
     res.json({ success: true, data, message: '已绑定货品' })
@@ -66,8 +83,8 @@ scanRouter.post('/orders/bind-goods', requirePermission('sale:create'), requireS
 })
 
 scanRouter.get('/recent', requirePermission('bracelet:view'), async (req, res) => {
-  if (!config.scanBindingEnabled) {
-    res.json({ success: true, data: [], message: SCAN_BINDING_PAUSED_MSG, paused: true })
+  if (!config.scanWorkbenchEnabled) {
+    res.json({ success: true, data: [], message: SCAN_WORKBENCH_DISABLED_MSG, paused: true, enabled: false })
     return
   }
   const limit = Math.min(Number(req.query.limit || 20), 50)
@@ -75,7 +92,7 @@ scanRouter.get('/recent', requirePermission('bracelet:view'), async (req, res) =
   res.json({ success: true, data })
 })
 
-scanRouter.post('/orders/simple', requirePermission('sale:create'), requireScanBindingEnabled, async (req: AuthRequest, res) => {
+scanRouter.post('/orders/simple', requirePermission('sale:create'), requireScanWorkbenchEnabled, async (req: AuthRequest, res) => {
   try {
     const data = await createSimpleOrderFromScan(req.body, req.user)
     const isDraft = data.isDraft
@@ -92,7 +109,7 @@ scanRouter.post('/orders/simple', requirePermission('sale:create'), requireScanB
   }
 })
 
-scanRouter.post('/expenses/:id/bind-goods', requirePermission('expense:update'), requireScanBindingEnabled, async (req: AuthRequest, res) => {
+scanRouter.post('/expenses/:id/bind-goods', requirePermission('expense:update'), requireScanWorkbenchEnabled, async (req: AuthRequest, res) => {
   try {
     const expenseId = Number(req.params.id)
     const goodsId = Number(req.body.goodsId)

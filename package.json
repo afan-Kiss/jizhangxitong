@@ -41,6 +41,7 @@
     "cleanup:stuck-tests": "node scripts/cleanup-stuck-tests.mjs",
     "guard:no-networkidle": "node scripts/guard-no-networkidle.mjs",
     "test:scan-binding": "node scripts/test-scan-binding.mjs",
+    "test:scan-workbench": "node scripts/test-scan-workbench.mjs",
     "test:accounting-flow": "node scripts/test-accounting-flow.mjs",
     "test:effective-sales": "node scripts/test-effective-sales.mjs",
     "test:reimbursement-export": "node scripts/test-reimbursement-export.mjs",

@@ -3,6 +3,7 @@
  */
 import { spawn, execSync } from 'child_process'
 import fs from 'fs/promises'
+import { existsSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import net from 'net'
@@ -136,6 +137,53 @@ export async function ensureServerRunning(logFn) {
   childProcesses.push(proc)
   await waitForHttp(`${SERVER}/api/health`, 45, '记账服务端')
   logFn('startup', '服务端启动成功')
+}
+
+export const WEB_DEV = 'http://127.0.0.1:5173'
+
+export async function ensureWebDevRunning(logFn = () => {}) {
+  for (let i = 0; i < 3; i++) {
+    try {
+      const r = await fetch(WEB_DEV)
+      if (r.ok) {
+        logFn('startup', `Web 已运行 ${WEB_DEV}`)
+        return WEB_DEV
+      }
+    } catch { /* retry */ }
+    await sleep(500)
+  }
+
+  logFn('startup', '自动启动 Web preview...')
+  const distIndex = path.join(ROOT, 'apps/web/dist/index.html')
+  if (!existsSync(distIndex)) {
+    logFn('startup', '构建 Web dist...')
+    execSync('npm run build -w @jade-account/web', { cwd: ROOT, stdio: 'inherit', timeout: 180000 })
+  }
+  const proc = spawn('npx', ['vite', 'preview', '--port', '5173', '--host', '127.0.0.1'], {
+    cwd: path.join(ROOT, 'apps/web'),
+    shell: true,
+    stdio: 'ignore',
+    detached: true,
+  })
+  proc.unref()
+  childProcesses.push(proc)
+  await waitForHttp(WEB_DEV, 30, 'Web preview')
+  logFn('startup', 'Web 启动成功')
+  return WEB_DEV
+}
+
+/** 浏览器验收基址：远程 /account/；本地仅 API 时用 Vite dev（/scan 无 /account 前缀） */
+export async function resolveAcceptanceWebBase(logFn = () => {}) {
+  if (process.env.ACCEPTANCE_WEB) {
+    return process.env.ACCEPTANCE_WEB.replace(/\/$/, '')
+  }
+  const server = (process.env.ACCEPTANCE_SERVER || 'http://127.0.0.1:3001').replace(/\/$/, '')
+  const isLocal = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(server)
+  if (!isLocal) {
+    if (/\/account$/i.test(server)) return server
+    return server.includes('/account') ? server : `${server}/account`
+  }
+  return ensureWebDevRunning(logFn)
 }
 
 export async function ensureWorkerRunning(logFn) {

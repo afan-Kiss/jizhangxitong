@@ -104,6 +104,10 @@ function exportThisMonth() {
           <van-icon name="balance-pay" size="22" />
           <span>记一笔</span>
         </button>
+        <button class="home-page__action" data-testid="home-scan-btn" @click="router.push('/scan')">
+          <van-icon name="scan" size="22" />
+          <span>扫码工作台</span>
+        </button>
         <button class="home-page__action" @click="router.push('/sales/create')">
           <van-icon name="shopping-cart-o" size="22" />
           <span>销售登记</span>
@@ -193,7 +197,7 @@ function exportThisMonth() {
 }
 @media (min-width: 1200px) {
   .home-page__actions {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
   }
 }
 .home-page__action {

@@ -44,4 +44,11 @@ export default defineConfig({
       '/api': 'http://localhost:3001',
     },
   },
+  preview: {
+    port: 5173,
+    host: '127.0.0.1',
+    proxy: {
+      '/api': 'http://localhost:3001',
+    },
+  },
 })

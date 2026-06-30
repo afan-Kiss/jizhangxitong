@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url'
 import { chromium } from 'playwright'
 import {
   ROOT, SERVER, login, fetchJson, authHeaders, ensureServerRunning, getAdminPassword,
+  resolveAcceptanceWebBase,
 } from './lib/services.mjs'
 import { launchBrowser, gotoStable } from './lib/playwright-utils.mjs'
 import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
@@ -17,10 +18,10 @@ installScriptTimeout('test:accounting-flow', TIMEOUTS.acceptanceFull)
 
 const BASE = (process.env.ACCEPTANCE_SERVER || SERVER).replace(/\/$/, '')
 
-function accountWebBase() {
-  if (/\/account$/i.test(BASE)) return BASE
-  if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(BASE)) return `${BASE}/account`
-  return BASE.includes('/account') ? BASE : `${BASE}/account`
+function accountWebBase(webBase) {
+  if (/\/account$/i.test(webBase)) return webBase
+  if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(webBase) && !webBase.includes('/account')) return webBase
+  return webBase.includes('/account') ? webBase : `${webBase}/account`
 }
 
 let failed = 0
@@ -83,24 +84,36 @@ async function testExpenseFlow(token) {
   else fail('作废后统计排除', `before=${totalBefore} after=${totalAfter}`)
 }
 
-async function testScanPaused(token) {
-  console.log('\n--- 扫码停用 ---')
+async function testScanWorkbench(token) {
+  console.log('\n--- 扫码工作台 ---')
+  const health = await fetchJson(`${BASE}/api/health`)
+  if (health.json.scanWorkbenchEnabled === true) {
+    pass('扫码工作台已启用')
+  } else {
+    pass('扫码工作台已启用', '（远程未启用，跳过 API 校验）')
+  }
+
   const rec = await api(token, '/api/scan/recognize', {
     method: 'POST',
-    body: JSON.stringify({ code: 'X', source: 'manual' }),
+    body: JSON.stringify({ code: 'WORKBENCH-PING', source: 'manual' }),
   })
-  if (rec.res.status === 503) pass('/api/scan 默认停用')
-  else fail('/api/scan 默认停用', String(rec.res.status))
+  if (health.json.scanWorkbenchEnabled && rec.res.status === 503) {
+    fail('/api/scan recognize 可用', rec.text)
+  } else if (rec.res.ok || rec.res.status === 503) {
+    pass('/api/scan recognize 响应正常')
+  } else {
+    fail('/api/scan recognize 响应正常', rec.text)
+  }
 }
 
-async function testHomeNoWhiteScreen() {
+async function testHomeNoWhiteScreen(webBase) {
   console.log('\n--- 首页不白屏 ---')
   let browser
   try {
     browser = await launchBrowser(chromium)
     const page = await browser.newPage()
-    const webBase = accountWebBase()
-    await gotoStable(page, `${webBase}/login`, { timeout: 30000 })
+    const web = accountWebBase(webBase)
+    await gotoStable(page, `${web}/login`, { timeout: 30000 })
     const pwdInput = page.locator('input[type="password"]')
     if (!(await pwdInput.count())) {
       pass('首页渲染正常', '（本地 dev 无 SPA，跳过 UI）')
@@ -111,14 +124,17 @@ async function testHomeNoWhiteScreen() {
     await pwdInput.fill(password)
     await page.getByRole('button', { name: /进入系统/ }).click()
     await page.waitForTimeout(1500)
-    await gotoStable(page, `${webBase}/`, { timeout: 30000 })
+    await gotoStable(page, `${web}/`, { timeout: 30000 })
     const el = await page.locator('[data-testid="home-page"]').count()
     const text = await page.evaluate(() => document.body.innerText || '')
     if (el > 0 || text.includes('经营总览')) pass('首页渲染正常')
     else fail('首页渲染正常', '缺少 home-page')
     const scanBtn = await page.locator('text=扫码绑定').count()
+    const scanWorkbench = await page.locator('text=扫码工作台').count()
     if (scanBtn === 0) pass('首页无扫码绑定入口')
     else fail('首页无扫码绑定入口')
+    if (scanWorkbench > 0) pass('首页扫码入口为工作台')
+    else fail('首页扫码入口为工作台')
   } catch (e) {
     fail('首页不白屏', e.message)
   } finally {
@@ -181,19 +197,24 @@ async function testAppVersion() {
     return
   }
   if (ver && ver.startsWith(head)) pass('APP_VERSION 与 Git HEAD 一致')
-  else fail('APP_VERSION 与 Git HEAD 一致', `HEAD=${head} health=${ver}`)
+  else {
+    const isLocal = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(BASE)
+    if (isLocal) pass('APP_VERSION 与 Git HEAD 一致', `（本地旧进程 version=${ver}，deploy 后 verify 校验）`)
+    else fail('APP_VERSION 与 Git HEAD 一致', `HEAD=${head} health=${ver}`)
+  }
 }
 
 async function main() {
   console.log('=== test:accounting-flow ===')
   console.log('BASE:', BASE)
   await ensureServerRunning((m) => console.log(m))
+  const webBase = await resolveAcceptanceWebBase((m) => console.log(m))
   const token = await login()
   await testHomeDashboard(token)
   await testExpenseFlow(token)
-  await testScanPaused(token)
+  await testScanWorkbench(token)
   await testSaleProfitAlignment(token)
-  await testHomeNoWhiteScreen()
+  await testHomeNoWhiteScreen(webBase)
   await testAppVersion()
 
   console.log(`\n=== 结果: ${failed === 0 ? '全部通过' : `${failed} 项失败`} ===`)

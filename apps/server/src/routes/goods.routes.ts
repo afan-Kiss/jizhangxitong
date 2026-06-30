@@ -5,6 +5,7 @@ import {
   getGoodsById,
   getGoodsByCode,
   getGoodsCostDetail,
+  getGoodsProfit,
 } from '../services/goods.service'
 
 export const goodsRouter = Router()
@@ -30,6 +31,18 @@ goodsRouter.get('/by-code/:code', requirePermission('bracelet:view'), async (req
     return
   }
   res.json({ success: true, data })
+})
+
+goodsRouter.get('/:id/profit', requirePermission('bracelet:cost:view'), async (req, res) => {
+  try {
+    const data = await getGoodsProfit(Number(req.params.id))
+    res.json({ success: true, data })
+  } catch (err) {
+    res.status(404).json({
+      success: false,
+      message: (err as Error).message || '没找到这个货品',
+    })
+  }
 })
 
 goodsRouter.get('/:id/cost', requirePermission('bracelet:cost:view'), async (req, res) => {

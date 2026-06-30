@@ -1,77 +1,317 @@
 <script setup lang="ts">
+import { onMounted, onUnmounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+import { showToast } from 'vant'
+import api from '../api'
+import { useAuthStore } from '../stores/auth'
+import { useBreakpoint } from '../composables/useBreakpoint'
+import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import ActionButton from '../components/ActionButton.vue'
+import BraceletCard from '../components/BraceletCard.vue'
 
 const router = useRouter()
+const auth = useAuthStore()
+const { isDesktop } = useBreakpoint()
+
+const enabled = ref(true)
+const scanInput = ref('')
+const inputRef = ref<HTMLInputElement | null>(null)
+const recognizing = ref(false)
+const result = ref<any>(null)
+const profit = ref<any>(null)
+const recent = ref<any[]>([])
+const scannerOnline = ref(false)
+const bindGoodsCode = ref('')
+const lastPollCode = ref('')
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+async function loadStatus() {
+  try {
+    const [st, rec] = await Promise.all([
+      api.get('/scan/status'),
+      api.get('/scan/recent?limit=20'),
+    ])
+    enabled.value = st.data.data?.enabled !== false
+    scannerOnline.value = !!st.data.data?.scannerOnline
+    recent.value = rec.data.data || []
+  } catch {
+    enabled.value = false
+  }
+}
+
+async function loadProfit(goodsId: number) {
+  try {
+    const res = await api.get(`/goods/${goodsId}/profit`)
+    profit.value = res.data.data
+  } catch {
+    profit.value = null
+  }
+}
+
+async function recognize(code?: string) {
+  const raw = (code ?? scanInput.value).trim()
+  if (!raw) return
+  if (!enabled.value) {
+    showToast('扫码工作台未启用')
+    return
+  }
+  recognizing.value = true
+  result.value = null
+  profit.value = null
+  try {
+    const res = await api.post('/scan/recognize', { code: raw, source: 'manual' })
+    result.value = res.data.data
+    scanInput.value = res.data.data.normalizedCode || raw
+    if (res.data.data.goods?.id) {
+      await loadProfit(res.data.data.goods.id)
+    }
+    await loadRecent()
+  } catch (err: any) {
+    showToast(err.response?.data?.message || '识别失败，再试一次')
+  } finally {
+    recognizing.value = false
+  }
+}
+
+async function loadRecent() {
+  try {
+    const res = await api.get('/scan/recent?limit=20')
+    recent.value = res.data.data || []
+  } catch { /* ignore */ }
+}
+
+function onEnter() {
+  recognize()
+}
+
+async function createGoods() {
+  const code = result.value?.normalizedCode || scanInput.value.trim()
+  if (!code) return
+  try {
+    await api.post('/goods', { code })
+    showToast('货品已创建')
+    await recognize(code)
+  } catch (err: any) {
+    showToast(err.response?.data?.message || '创建失败')
+  }
+}
+
+async function bindOrderGoods() {
+  const order = result.value?.order
+  const code = bindGoodsCode.value.trim().toUpperCase()
+  if (!order || !code) {
+    showToast('请输入货品码')
+    return
+  }
+  try {
+    await api.post('/scan/orders/bind-goods', {
+      orderId: order.id || undefined,
+      draftId: order.draftId || undefined,
+      orderNo: order.orderNo,
+      goodsCode: code,
+    })
+    showToast('已关联货品')
+    bindGoodsCode.value = ''
+    await recognize(order.orderNo || scanInput.value)
+  } catch (err: any) {
+    showToast(err.response?.data?.message || '关联失败')
+  }
+}
+
+function goExpense(goods?: { id: number; code: string }) {
+  const g = goods || result.value?.goods
+  if (!g?.id) return
+  router.push({ path: '/expense/create', query: { goodsId: String(g.id), goodsCode: g.code } })
+}
+
+function goSale(goods?: { id: number; code: string }) {
+  const g = goods || result.value?.goods
+  if (!g?.id) return
+  router.push({ path: '/sales/create', query: { goodsId: String(g.id), goodsCode: g.code } })
+}
+
+function goDetail(goods?: { id: number; code: string }) {
+  const g = goods || result.value?.goods
+  if (!g?.code) return
+  router.push(`/bracelets/${g.code}`)
+}
+
+async function pollScannerHealth() {
+  try {
+    const st = await api.get('/scan/status')
+    scannerOnline.value = !!st.data.data?.scannerOnline
+  } catch { /* ignore */ }
+}
+
+onMounted(async () => {
+  await auth.fetchWorkerStatus()
+  await loadStatus()
+  await nextTick()
+  inputRef.value?.focus()
+  pollTimer = setInterval(pollScannerHealth, 2000)
+})
+
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer)
+})
 </script>
 
 <template>
-  <div class="scan-paused page-enter" data-testid="scan-binding-page">
-    <LuxuryCard padding="20px 16px">
-      <h1 class="scan-paused__title">扫码绑定功能已暂停</h1>
-      <p class="scan-paused__lead">现在先直接记账，少一步操作。</p>
-      <p class="scan-paused__hint muted">
-        请直接使用记支出、销售登记、镯子查询。需要查货品时，请去镯子查询；需要登记成交时，请去销售登记。
-      </p>
+  <AppShell title="扫码工作台" :show-back="!isDesktop" no-tab-pad data-testid="scan-workbench-page">
+    <div class="scan-workbench" :class="{ 'scan-workbench--desktop': isDesktop }">
+      <div class="scan-workbench__main">
+        <LuxuryCard v-if="!enabled" gold data-testid="scan-workbench-disabled">
+          <div class="section-title">扫码工作台未启用</div>
+          <p class="muted">请联系管理员开启。你仍可以直接记支出、登记销售。</p>
+          <ActionButton block data-testid="scan-paused-expense-btn" @click="router.push('/expense/create')">去记支出</ActionButton>
+        </LuxuryCard>
 
-      <div class="scan-paused__ops">
-        <ActionButton
-          block
-          data-testid="scan-paused-expense-btn"
-          @click="router.push('/expense/create')"
-        >
-          去记支出
-        </ActionButton>
-        <ActionButton
-          block
-          plain
-          data-testid="scan-paused-sale-btn"
-          @click="router.push('/sales/create')"
-        >
-          去销售登记
-        </ActionButton>
-        <ActionButton
-          block
-          plain
-          data-testid="scan-paused-bracelet-btn"
-          @click="router.push('/bracelets')"
-        >
-          去镯子查询
-        </ActionButton>
+        <template v-else>
+          <LuxuryCard padding="16px">
+            <p class="scan-workbench__hint muted">
+              扫货品码、订单号、物流单号都可以。扫到货品后，可以直接记支出、登记销售、查利润。
+            </p>
+            <div class="scan-workbench__scanner-status">
+              <span :class="scannerOnline ? 'ok' : 'warn'">
+                {{ scannerOnline ? '扫码枪已连接' : '扫码枪没连上，仍可手动输入' }}
+              </span>
+            </div>
+            <div class="scan-workbench__input-row">
+              <input
+                ref="inputRef"
+                v-model="scanInput"
+                class="scan-workbench__input"
+                data-testid="scan-input"
+                placeholder="扫码或输入货品码 / 订单号 / 物流单号"
+                @keydown.enter.prevent="onEnter"
+              />
+              <ActionButton :loading="recognizing" data-testid="scan-recognize-btn" @click="recognize()">识别</ActionButton>
+            </div>
+          </LuxuryCard>
+
+          <LuxuryCard v-if="result" gold data-testid="scan-result-card">
+            <div class="section-title">识别结果</div>
+            <div class="scan-workbench__meta">
+              <span>类型：{{ result.scanTypeLabel }}</span>
+              <span>编码：{{ result.normalizedCode }}</span>
+              <span>{{ result.matched ? '已找到记录' : '未找到记录' }}</span>
+            </div>
+            <p class="scan-workbench__suggestion">{{ result.suggestion }}</p>
+
+            <div v-if="result.goods" class="scan-workbench__goods" data-testid="scan-goods-card">
+              <div class="section-title">货品</div>
+              <BraceletCard
+                :code="result.goods.code"
+                :status="result.goods.status"
+                :inbound-cost="result.goods.costTotal"
+                show-cost
+              />
+              <div v-if="profit?.summary" class="scan-workbench__profit-summary">
+                <div>当前成本：¥{{ Number(profit.costs?.costTotal ?? 0).toFixed(2) }}</div>
+                <div>支出 {{ profit.summary.expenseCount }} 笔</div>
+                <div v-if="profit.summary.isSold">
+                  最终利润：¥{{ Number(profit.summary.finalProfit).toFixed(2) }}
+                </div>
+                <div v-if="profit.summary.isLoss" class="loss-tag" data-testid="scan-loss-hint">
+                  这件目前是亏的
+                </div>
+              </div>
+              <div class="scan-workbench__actions">
+                <ActionButton block data-testid="scan-expense-btn" @click="goExpense()">记一笔支出</ActionButton>
+                <ActionButton block plain data-testid="scan-sale-btn" @click="goSale()">登记销售</ActionButton>
+                <ActionButton block plain data-testid="scan-profit-btn" @click="goDetail()">查看货品详情</ActionButton>
+              </div>
+            </div>
+
+            <div v-if="result.order" class="scan-workbench__order">
+              <div class="section-title">订单</div>
+              <div>订单号：{{ result.order.orderNo }}</div>
+              <div v-if="result.order.logisticsNo">物流：{{ result.order.logisticsNo }}</div>
+              <div>状态：{{ result.order.orderStatus }}</div>
+              <div v-if="result.order.afterSaleStatus">售后：{{ result.order.afterSaleStatus }}</div>
+              <div v-if="result.order.braceletCode">关联货品：{{ result.order.braceletCode }}</div>
+              <div v-if="result.order.needsGoodsBinding" class="scan-workbench__bind-row">
+                <input v-model="bindGoodsCode" class="scan-workbench__bind-input" placeholder="输入货品码关联" />
+                <ActionButton data-testid="scan-bind-goods-btn" @click="bindOrderGoods">关联这个货品</ActionButton>
+              </div>
+            </div>
+
+            <div v-if="!result.matched && result.scanType === 'unknown'" class="scan-workbench__unknown">
+              <p>暂时没识别出来</p>
+              <ActionButton block plain @click="createGoods">用这个编码新建货品</ActionButton>
+            </div>
+          </LuxuryCard>
+        </template>
       </div>
-    </LuxuryCard>
-  </div>
+
+      <div v-if="enabled" class="scan-workbench__aside">
+        <LuxuryCard>
+          <div class="section-title">最近扫码</div>
+          <div v-if="!recent.length" class="muted">暂无</div>
+          <div
+            v-for="item in recent"
+            :key="item.id"
+            class="scan-workbench__recent-item"
+            data-testid="scan-recent-item"
+            @click="scanInput = item.scanCode; recognize(item.scanCode)"
+          >
+            <div>{{ item.scanCode }}</div>
+            <div class="muted">{{ item.scanTypeLabel }} · {{ item.statusLabel }}</div>
+          </div>
+        </LuxuryCard>
+      </div>
+    </div>
+  </AppShell>
 </template>
 
 <style scoped>
-.scan-paused {
+.scan-workbench {
   overflow-x: hidden;
   max-width: 100%;
-}
-
-.scan-paused__title {
-  font-size: 22px;
-  font-weight: 700;
-  margin: 0 0 12px;
-  color: var(--color-text, #333);
-}
-
-.scan-paused__lead {
-  font-size: 16px;
-  margin: 0 0 8px;
-  line-height: 1.5;
-}
-
-.scan-paused__hint {
-  font-size: 14px;
-  line-height: 1.6;
-  margin: 0 0 20px;
-}
-
-.scan-paused__ops {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
+.scan-workbench--desktop {
+  flex-direction: row;
+  align-items: flex-start;
+}
+.scan-workbench__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.scan-workbench__aside { width: 100%; }
+@media (min-width: 1200px) {
+  .scan-workbench__aside { width: 320px; flex-shrink: 0; }
+}
+.scan-workbench__hint { margin: 0 0 12px; line-height: 1.5; font-size: 14px; }
+.scan-workbench__scanner-status { margin-bottom: 12px; font-size: 13px; }
+.scan-workbench__scanner-status .ok { color: #1F4D3A; }
+.scan-workbench__scanner-status .warn { color: #c45c00; }
+.scan-workbench__input-row { display: flex; flex-direction: column; gap: 10px; }
+.scan-workbench__input {
+  width: 100%;
+  font-size: 18px;
+  padding: 14px 12px;
+  border: 1px solid rgba(198, 161, 91, 0.4);
+  border-radius: 12px;
+  box-sizing: border-box;
+}
+.scan-workbench__meta { display: flex; flex-direction: column; gap: 4px; font-size: 14px; margin-bottom: 8px; }
+.scan-workbench__suggestion { font-size: 15px; margin: 0 0 16px; line-height: 1.5; }
+.scan-workbench__actions { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.scan-workbench__profit-summary { margin: 12px 0; font-size: 14px; line-height: 1.6; }
+.loss-tag { color: #ee0a24; font-weight: 600; margin-top: 6px; }
+.scan-workbench__bind-row { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.scan-workbench__bind-input {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  font-size: 16px;
+}
+.scan-workbench__recent-item {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  cursor: pointer;
+}
+.scan-workbench__recent-item:last-child { border-bottom: none; }
 </style>

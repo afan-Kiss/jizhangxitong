@@ -122,23 +122,23 @@ function buildNextActions(input: {
 
   if (scanType === 'goods_code') {
     if (matched && goods) {
-      actions.push('bind_order', 'create_expense', 'view_cost')
+      actions.push('create_expense', 'register_sale', 'view_profit', 'view_cost')
     } else {
       actions.push('create_goods')
     }
   } else if (scanType === 'order_no') {
     if (matched && order) {
       if (needsBind) actions.push('bind_goods')
-      else actions.push('view_goods', 'create_expense')
+      else actions.push('view_goods', 'create_expense', 'register_sale', 'view_profit')
     } else {
       actions.push('create_order', 'bind_goods')
     }
   } else if (scanType === 'logistics_no') {
     if (matched && order) {
       if (needsBind) actions.push('bind_goods')
-      else actions.push('view_order', 'view_goods')
+      else actions.push('view_order', 'view_goods', 'view_profit')
     } else {
-      actions.push('bind_order', 'create_binding')
+      actions.push('create_order', 'bind_goods')
     }
   } else {
     actions.push('create_goods', 'bind_goods', 'bind_order')
@@ -159,26 +159,26 @@ function buildSuggestion(input: {
     : ''
 
   if (scanType === 'goods_code' || (effectiveType === 'goods_code' && matched)) {
-    if (matched && goods) return `已找到货品「${goods.name}」，可以绑定订单或记支出${typeHint}`
-    return '暂时没找到对应记录，可以新建货品'
+    if (matched && goods) return `找到了这个货品，可以直接记支出或登记销售${typeHint}`
+    return '暂时没找到这个编码，可以新建货品'
   }
   if (scanType === 'order_no' || effectiveType === 'order_no') {
     if (matched && order) {
       return orderNeedsGoodsBinding(order)
-        ? '这个订单还没绑定货品，请输入货品码后点绑定'
-        : `已找到订单，已绑定货品 ${order.braceletCode}${typeHint}`
+        ? '这个订单还没关联货品，可以输入货品码关联'
+        : `找到了这个订单，已关联货品 ${order.braceletCode}${typeHint}`
     }
-    return '暂时没找到这个订单，可以先创建待绑定订单（需后续绑货品）'
+    return '暂时没找到这个订单，可以先保存待处理记录'
   }
   if (scanType === 'logistics_no' || effectiveType === 'logistics_no') {
     if (matched && order) {
       return orderNeedsGoodsBinding(order)
-        ? '物流单号已匹配到待绑定订单，请绑定货品'
+        ? '物流单号已匹配到订单，请关联货品'
         : `物流单号已匹配到订单，可查看关联货品${typeHint}`
     }
-    return '暂时没找到对应订单，可以先保存绑定记录'
+    return '没找到这个物流单号，可以先记一条待处理记录'
   }
-  return '暂时没找到对应记录，可以新建绑定'
+  return '暂时没识别出来，可以新建货品或关联到已有记录'
 }
 
 async function recordScan(input: {

@@ -2,6 +2,12 @@ import path from 'path'
 
 const isProd = process.env.NODE_ENV === 'production'
 
+function resolveScanWorkbenchEnabled(): boolean {
+  if (process.env.SCAN_WORKBENCH_ENABLED === 'true') return true
+  if (process.env.SCAN_BINDING_ENABLED === 'true') return true
+  return false
+}
+
 export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isProd,
@@ -17,8 +23,12 @@ export const config = {
   workerRpcTimeoutMs: Number(process.env.WORKER_RPC_TIMEOUT_MS || 30000),
   databaseUrl: process.env.DATABASE_URL || '',
   publicWebDir: process.env.PUBLIC_WEB_DIR || '',
-  /** 扫码绑定功能开关，默认关闭 */
-  scanBindingEnabled: process.env.SCAN_BINDING_ENABLED === 'true',
+  /** 扫码工作台开关（兼容 SCAN_BINDING_ENABLED） */
+  scanWorkbenchEnabled: resolveScanWorkbenchEnabled(),
+  /** @deprecated 使用 scanWorkbenchEnabled */
+  get scanBindingEnabled() {
+    return this.scanWorkbenchEnabled
+  },
 }
 
 export function validateProductionConfig(): string[] {

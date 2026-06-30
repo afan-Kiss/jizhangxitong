@@ -38,6 +38,7 @@ export function createApp() {
     res.json({
       success: true,
       message: '和田玉镯子记账系统运行中',
+      scanWorkbenchEnabled: config.scanWorkbenchEnabled,
       ...(version ? { version } : {}),
     })
   })

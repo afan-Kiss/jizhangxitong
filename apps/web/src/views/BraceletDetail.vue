@@ -15,6 +15,7 @@ const { isDesktop } = useBreakpoint()
 const router = useRouter()
 const auth = useAuthStore()
 const detail = ref<any>(null)
+const profit = ref<any>(null)
 const imageUrl = ref('')
 const imageError = ref('')
 
@@ -29,6 +30,10 @@ onMounted(async () => {
     }
     const d = await api.get(`/bracelets/detail/${b.id}`)
     detail.value = d.data.data
+    try {
+      const p = await api.get(`/goods/${b.id}/profit`)
+      profit.value = p.data.data
+    } catch { profit.value = null }
     if (detail.value.bracelet.hasImage) {
       imageUrl.value = await braceletImageUrl(detail.value.bracelet.id)
     }
@@ -71,6 +76,22 @@ function onImageError() {
       </div>
 
       <div class="desktop-two-column__aside">
+        <LuxuryCard v-if="profit" gold data-testid="bracelet-profit-card">
+          <div class="section-title">一物一账</div>
+          <div class="profit-line">这件货一共花了多少：¥{{ Number(profit.costs?.costTotal ?? 0).toFixed(2) }}</div>
+          <div class="profit-line">支出 {{ profit.summary?.expenseCount ?? 0 }} 笔</div>
+          <div v-if="profit.summary?.isSold" class="profit-line">
+            这件货卖了多少：¥{{ Number(profit.sale?.saleAmount ?? 0).toFixed(2) }}
+          </div>
+          <div v-if="profit.summary?.isSold" class="profit-line">
+            扣掉退款和补偿后赚了多少：¥{{ Number(profit.summary?.finalProfit ?? 0).toFixed(2) }}
+          </div>
+          <div v-if="profit.summary?.isLoss" class="profit-loss">这件目前是亏的</div>
+          <div v-if="profit.sale?.refundAmount" class="profit-line muted">
+            退款影响：¥{{ Number(profit.sale.refundAmount).toFixed(2) }}
+          </div>
+        </LuxuryCard>
+
         <LuxuryCard>
           <div class="section-title">支出记录</div>
           <ExpenseItem
@@ -112,4 +133,6 @@ function onImageError() {
   cursor: pointer;
 }
 .detail-row:last-child { border-bottom: none; }
+.profit-line { padding: 8px 0; font-size: 14px; line-height: 1.5; }
+.profit-loss { color: #ee0a24; font-weight: 600; margin-top: 8px; }
 </style>
