@@ -146,22 +146,9 @@ function goManualOrderExpense() {
 
 function goOrderProfit() {
   const order = result.value?.order
-  if (order?.saleId) router.push(`/sales/${order.saleId}`)
-  else if (order?.orderNo) {
-    router.push({ path: '/expense/create', query: { externalOrderNo: order.orderNo, businessType: 'customer_refund' } })
+  if (order?.orderNo) {
+    router.push({ path: '/expense/create', query: { externalOrderNo: order.orderNo } })
   }
-}
-
-function goSale(goods?: { id: number; code: string }) {
-  const g = goods || result.value?.goods
-  if (!g?.id) return
-  router.push({ path: '/sales/create', query: { goodsId: String(g.id), goodsCode: g.code } })
-}
-
-function goDetail(goods?: { id: number; code: string }) {
-  const g = goods || result.value?.goods
-  if (!g?.code) return
-  router.push(`/bracelets/${g.code}`)
 }
 
 async function pollScannerHealth() {
@@ -191,14 +178,14 @@ onUnmounted(() => {
       <div class="scan-workbench__main">
         <LuxuryCard v-if="!enabled" gold data-testid="scan-workbench-disabled">
           <div class="section-title">扫码工作台未启用</div>
-          <p class="muted">请联系管理员开启。你仍可以直接记支出、登记销售。</p>
+          <p class="muted">请联系管理员开启。你仍可以直接记支出。</p>
           <ActionButton block data-testid="scan-paused-expense-btn" @click="router.push('/expense/create')">去记支出</ActionButton>
         </LuxuryCard>
 
         <template v-else>
           <LuxuryCard padding="16px">
             <p class="scan-workbench__hint muted">
-              扫货品码、订单号、物流单号都可以。扫到货品后，可以直接记支出、登记销售、查利润。
+              扫货品码、订单号、物流单号都可以。扫到货品或订单后，可以直接记支出、记客户返款/补偿。
             </p>
             <div class="scan-workbench__scanner-status" data-testid="scan-scanner-status">
               <span :class="scannerOnline ? 'ok' : 'warn'">
@@ -256,8 +243,6 @@ onUnmounted(() => {
               </div>
               <div class="scan-workbench__actions">
                 <ActionButton block data-testid="scan-expense-btn" @click="goExpense()">记一笔支出</ActionButton>
-                <ActionButton block plain data-testid="scan-sale-btn" @click="goSale()">登记销售</ActionButton>
-                <ActionButton block plain data-testid="scan-profit-btn" @click="goDetail()">查看货品详情</ActionButton>
               </div>
             </div>
 
@@ -274,7 +259,7 @@ onUnmounted(() => {
                 <ActionButton block data-testid="scan-customer-refund-btn" @click="goCustomerExpense('customer_refund')">记客户返款</ActionButton>
                 <ActionButton block plain data-testid="scan-customer-comp-btn" @click="goCustomerExpense('customer_compensation')">记客户补偿</ActionButton>
                 <ActionButton block plain data-testid="scan-after-sale-btn" @click="goCustomerExpense('after_sale_compensation')">记售后补偿</ActionButton>
-                <ActionButton block plain data-testid="scan-order-profit-btn" @click="goOrderProfit">查看订单利润</ActionButton>
+                <ActionButton block plain data-testid="scan-order-profit-btn" @click="goOrderProfit">按这个订单记账</ActionButton>
               </div>
               <div v-if="result.order.needsGoodsBinding" class="scan-workbench__bind-row">
                 <input v-model="bindGoodsCode" class="scan-workbench__bind-input" placeholder="输入货品码关联" />

@@ -63,21 +63,25 @@ async function removeOtherUsers(fanfanId: number) {
 }
 
 async function printSummary() {
-  const [users, expenses, sales, bracelets, ledger, files] = await Promise.all([
+  const [users, expenses, sales, bracelets, ledger, files, logs, fanfan] = await Promise.all([
     prisma.user.count(),
     prisma.expense.count(),
     prisma.sale.count(),
     prisma.bracelet.count(),
     prisma.financeLedger.count(),
     prisma.file.count(),
+    prisma.operationLog.count(),
+    prisma.user.findUnique({ where: { username: FANFAN_USERNAME } }),
   ])
   console.log('--- 清理结果 ---')
   console.log(`保留用户数量: ${users}`)
+  console.log(`fanfan 状态: ${fanfan?.status || 'missing'} / active=${fanfan?.isActive}`)
   console.log(`支出数量: ${expenses}`)
   console.log(`销售数量: ${sales}`)
   console.log(`货品数量: ${bracelets}`)
   console.log(`财务分录数量: ${ledger}`)
   console.log(`文件数量: ${files}`)
+  console.log(`操作日志数量: ${logs}`)
 }
 
 async function main() {

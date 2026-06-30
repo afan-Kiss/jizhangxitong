@@ -5,7 +5,7 @@
 import { chromium } from 'playwright'
 import {
   SERVER, login, fetchJson, authHeaders, ensureServerRunning,
-  resolveAcceptanceWebBase, getAdminPassword,
+  resolveAcceptanceWebBase, getAdminPassword, localDateString, monthStartDateString,
 } from './lib/services.mjs'
 import { launchBrowser, gotoStable } from './lib/playwright-utils.mjs'
 import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
@@ -39,7 +39,7 @@ async function main() {
   console.log('=== test:customer-payments ===')
   await ensureServerRunning((m) => console.log(m))
   const token = await login()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDateString()
 
   // 健康检查千帆开关
   const health = await fetchJson(`${BASE}/api/health`)
@@ -261,7 +261,7 @@ async function main() {
   }
 
   // 15. 报销导出不含公司直付客户打款
-  const start = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`
+  const start = monthStartDateString()
   const preview = await api(token, '/api/expenses/export/reimbursement-excel/preview', {
     method: 'POST',
     body: JSON.stringify({ startDate: start, endDate: today, reimbursementStatus: 'all' }),

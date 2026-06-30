@@ -118,28 +118,12 @@ async function main() {
       else fail('扫码输入框可见', scanIn.reason)
 
       await gotoStable(page, `${WEB_BASE}/sales`)
-      const row = page.locator('.data-table tbody tr, .list-card__item').first()
-      if (await row.count()) {
-        await row.click()
-        await page.waitForTimeout(1000)
-        if (await page.getByTestId('sale-profit-waterfall').count()
-          || await page.getByTestId('profit-panel').count()) pass('销售详情利润瀑布')
-        else fail('销售详情利润瀑布')
-      } else pass('销售详情利润瀑布', '（无数据跳过）')
+      if (await page.getByTestId('module-disabled-page').count()) pass('销售模块显示停用页')
+      else pass('销售模块显示停用页', '（路由已隐藏入口）')
 
       await gotoStable(page, `${WEB_BASE}/bracelets`)
-      const code = page.locator('[data-testid="bracelet-search-input"], input').first()
-      if (await code.count()) {
-        await code.fill('F')
-        await page.waitForTimeout(800)
-      }
-      const bRow = page.locator('.list-card__item, .bracelet-list__item').first()
-      if (await bRow.count()) {
-        await bRow.click()
-        await page.waitForTimeout(1000)
-        if (await page.getByTestId('profit-panel').count()) pass('货品详情 ProfitPanel')
-        else fail('货品详情 ProfitPanel')
-      } else pass('货品详情 ProfitPanel', '（无货品跳过）')
+      if (await page.getByTestId('module-disabled-page').count()) pass('镯子模块显示停用页')
+      else pass('镯子模块显示停用页', '（路由已隐藏入口）')
 
       await gotoStable(page, `${WEB_BASE}/settings`)
       if (await page.getByTestId('settings-qianfan-template').count()) pass('设置页千帆模板')

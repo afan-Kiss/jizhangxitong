@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url'
 import { chromium } from 'playwright'
 import {
   ROOT, SERVER, login, fetchJson, authHeaders, ensureServerRunning, getAdminPassword,
-  resolveAcceptanceWebBase,
+  resolveAcceptanceWebBase, localDateString,
 } from './lib/services.mjs'
 import { launchBrowser, gotoStable } from './lib/playwright-utils.mjs'
 import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
@@ -50,7 +50,7 @@ async function testHomeDashboard(token) {
 
 async function testExpenseFlow(token) {
   console.log('\n--- 记支出 ---')
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDateString()
   const create = await api(token, '/api/expenses', {
     method: 'POST',
     body: JSON.stringify({

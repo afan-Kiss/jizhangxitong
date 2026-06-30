@@ -10,8 +10,8 @@ export type NavItem = {
 export const mobileTabs: NavItem[] = [
   { path: '/', label: '首页', icon: 'home-o' },
   { path: '/expense/create', label: '记支出', icon: 'balance-list-o' },
-  { path: '/sales', label: '销售', icon: 'orders-o' },
-  { path: '/bracelets', label: '镯子', icon: '', custom: true },
+  { path: '/scan', label: '扫码', icon: 'scan' },
+  { path: '/reimbursements', label: '报销', icon: 'bill-o' },
   { path: '/settings', label: '我的', icon: 'user-o' },
 ]
 
@@ -21,8 +21,6 @@ export const desktopNav: NavItem[] = [
   { path: '/expense/create', label: '记支出', icon: 'balance-list-o' },
   { path: '/scan', label: '扫码工作台', icon: 'scan' },
   { path: '/reimbursements', label: '报销列表', icon: 'bill-o' },
-  { path: '/sales', label: '销售', icon: 'orders-o' },
-  { path: '/bracelets', label: '镯子', icon: '', custom: true },
   { path: '/expense/export', label: '导出 Excel', icon: 'down' },
   { path: '/expense/stats', label: '支出统计', icon: 'chart-trending-o' },
   { path: '/settings', label: '我的', icon: 'user-o' },

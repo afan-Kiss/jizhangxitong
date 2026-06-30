@@ -28,18 +28,7 @@ const loadError = ref('')
 const loading = ref(false)
 
 function formatLog(log: any): string {
-  const name = log.operatorName || '有人'
-  const actionMap: Record<string, string> = {
-    create_expense: '新增支出',
-    update_expense: '修改支出',
-    void_expense: '作废支出',
-    create_sale: '登记销售',
-    sync_bracelet: '同步镯子',
-    export_reimbursement_excel: '导出报销表',
-  }
-  const action = actionMap[log.action] || log.action
-  const code = log.targetCode ? `，${log.targetCode}` : ''
-  return `${name}${action}${code}`
+  return log.formattedMessage || log.summary || '有操作记录'
 }
 
 function syncRouteQuery() {
@@ -230,13 +219,9 @@ const heroSubtitle = () => {
           <van-icon name="scan" size="22" />
           <span>扫码工作台</span>
         </button>
-        <button class="home-page__action" @click="router.push('/sales/create')">
-          <van-icon name="shopping-cart-o" size="22" />
-          <span>销售登记</span>
-        </button>
-        <button class="home-page__action" @click="router.push('/bracelets')">
-          <van-icon name="gem-o" size="22" />
-          <span>查镯子</span>
+        <button class="home-page__action" @click="router.push('/reimbursements')">
+          <van-icon name="bill-o" size="22" />
+          <span>报销列表</span>
         </button>
         <button class="home-page__action" @click="exportThisMonth">
           <van-icon name="down" size="22" />
@@ -333,7 +318,7 @@ const heroSubtitle = () => {
   gap: 10px;
 }
 @media (min-width: 1200px) {
-  .home-page__actions { grid-template-columns: repeat(6, 1fr); }
+  .home-page__actions { grid-template-columns: repeat(4, 1fr); }
 }
 .home-page__action {
   display: flex;

@@ -6,7 +6,7 @@ import { chromium } from 'playwright'
 import { RECOMMENDED_URL } from './lib/deploy-env.mjs'
 import {
   SERVER, login, fetchJson, authHeaders, ensureServerRunning,
-  resolveAcceptanceWebBase, getAdminCredentials,
+  resolveAcceptanceWebBase, getAdminCredentials, localDateString, monthStartDateString,
 } from './lib/services.mjs'
 import {
   launchBrowser, gotoStable, gotoLoginStable, attachPageDiagnostics,
@@ -91,7 +91,7 @@ async function testApiFlow(token) {
   if (rec.res.ok && rec.json.data?.goods?.code === goodsCode) pass('D. 手动输入货品码识别')
   else fail('D. 手动输入货品码识别', rec.text)
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDateString()
   const exp = await api(token, '/api/expenses', {
     method: 'POST',
     body: JSON.stringify({
@@ -203,7 +203,7 @@ async function testApiFlow(token) {
   if (health.json.qianfanOrderLinkEnabled) pass('O. 千帆有模板可打开')
   else pass('O. 千帆无模板可复制', 'health=false')
 
-  const start = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`
+  const start = monthStartDateString()
   const preview = await api(token, '/api/expenses/export/reimbursement-excel/preview', {
     method: 'POST',
     body: JSON.stringify({ startDate: start, endDate: today, reimbursementStatus: 'all' }),
@@ -261,11 +261,15 @@ async function testUiFlow() {
       }
 
       if (await page.locator('[data-testid="desktop-sidebar"]').isVisible()) {
-        for (const label of ['首页', '记支出', '扫码工作台', '销售', '镯子', '支出统计', '我的']) {
+        for (const label of ['首页', '记支出', '扫码工作台', '报销列表', '支出统计', '我的']) {
           const link = page.locator('.desktop-sidebar__link', { hasText: label })
           if (await link.count()) pass(`侧边栏 ${label}`)
           else fail(`侧边栏 ${label}`)
         }
+        const salesLink = page.locator('.desktop-sidebar__link', { hasText: '销售' })
+        const braceletLink = page.locator('.desktop-sidebar__link', { hasText: '镯子' })
+        if (!(await salesLink.count()) && !(await braceletLink.count())) pass('侧边栏无销售/镯子')
+        else fail('侧边栏无销售/镯子')
         await page.locator('.desktop-sidebar__link', { hasText: '扫码工作台' }).click()
       } else {
         await gotoStable(page, `${webBase}/scan`)

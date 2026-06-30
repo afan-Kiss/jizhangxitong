@@ -38,16 +38,21 @@ async function main() {
 
     pass('fanfan 密码未因 reset 改动（保留原密码）')
 
-    const [expenses, sales, bracelets, ledger, configs, settings] = await Promise.all([
+    const [expenses, sales, bracelets, ledger, files, logs, configs, settings] = await Promise.all([
       prisma.expense.count(),
       prisma.sale.count(),
       prisma.bracelet.count(),
       prisma.financeLedger.count(),
+      prisma.file.count(),
+      prisma.operationLog.count(),
       prisma.configOption.count(),
       prisma.systemSetting.count(),
     ])
-    if (expenses === 0 && sales === 0 && bracelets === 0 && ledger === 0) pass('业务表已清空')
-    else fail('业务表', `${expenses}/${sales}/${bracelets}/${ledger}`)
+    if (expenses === 0 && sales === 0 && bracelets === 0 && ledger === 0 && files === 0 && logs === 0) {
+      pass('业务表已清空')
+    } else {
+      fail('业务表', `${expenses}/${sales}/${bracelets}/${ledger}/${files}/${logs}`)
+    }
     if (configs > 0 && settings > 0) pass('基础配置保留')
     else fail('基础配置')
   } finally {

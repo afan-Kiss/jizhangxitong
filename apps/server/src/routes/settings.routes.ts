@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { authMiddleware, requirePermission, AuthRequest } from '../middleware/auth'
 import { getConfigOptions, getSettings, updateSetting, isQianfanOrderLinkEnabled } from '../services/settings.service'
 import { writeOperationLog } from '../services/operation-log.service'
+import { formatOperationLogEntry } from '../services/audit.service'
 import { prisma } from '../lib/prisma'
 import { PERMISSIONS, PERMISSION_LABELS } from '@jade-account/shared'
 import { sanitizeUser, sanitizeUsers } from '../lib/serialize'
@@ -54,7 +55,15 @@ logRouter.get('/', async (req, res) => {
     }),
     prisma.operationLog.count(),
   ])
-  res.json({ success: true, data: { items, total, page, pageSize } })
+  res.json({
+    success: true,
+    data: {
+      items: items.map(formatOperationLogEntry),
+      total,
+      page,
+      pageSize,
+    },
+  })
 })
 
 export const permissionRouter = Router()

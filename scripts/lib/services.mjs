@@ -48,6 +48,16 @@ export function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+/** 本地日历日期 yyyy-mm-dd（避免 UTC toISOString 在凌晨跨日导致验收失败） */
+export function localDateString(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function monthStartDateString(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+}
+
 export async function fetchJson(url, opts = {}) {
   const res = await fetch(url, opts)
   const text = await res.text()

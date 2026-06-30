@@ -99,10 +99,6 @@ async function supplementAttachments() {
   }
 }
 
-function goGoodsProfit() {
-  const code = expense.value?.braceletCode
-  if (code) router.push(`/bracelets/${code}`)
-}
 </script>
 
 <template>
@@ -147,8 +143,17 @@ function goGoodsProfit() {
         <span class="muted">作废人</span>
         <span>{{ expense.voidedByUser.displayName }}</span>
       </div>
-      <div v-for="log in expense.operationLogs || []" :key="log.id" class="expense-detail__log muted">
-        {{ log.summary }} · {{ log.createdAt?.slice(0, 16).replace('T', ' ') }}
+      <div class="expense-detail__logs" data-testid="expense-operation-logs">
+        <div
+          v-for="log in expense.operationLogs || []"
+          :key="log.id"
+          class="expense-detail__log-card"
+          data-testid="expense-log-item"
+        >
+          <div class="expense-detail__log-time">{{ log.createdAt?.slice(0, 16).replace('T', ' ') }}</div>
+          <div class="expense-detail__log-msg">{{ log.formattedMessage || log.summary }}</div>
+          <div v-if="log.targetLabel" class="expense-detail__log-target muted">{{ log.targetLabel }}</div>
+        </div>
       </div>
     </LuxuryCard>
 
@@ -170,9 +175,9 @@ function goGoodsProfit() {
         <span class="muted">货品编号</span>
         <span>{{ expense.braceletCode || '未绑定' }}</span>
       </div>
-      <div v-if="expense.saleId" class="expense-detail__row expense-detail__row--link" @click="router.push(`/sales/${expense.saleId}`)">
+      <div v-if="expense.saleId" class="expense-detail__row">
         <span class="muted">关联销售</span>
-        <span>#{{ expense.saleId }} →</span>
+        <span>#{{ expense.saleId }}</span>
       </div>
       <div v-if="expense.expenseSummary" class="expense-detail__row">
         <span class="muted">摘要</span>
@@ -211,12 +216,6 @@ function goGoodsProfit() {
     <div class="expense-detail__nav" data-testid="expense-detail-nav">
       <ActionButton plain data-testid="expense-continue-btn" @click="router.push('/expense/create')">继续记一笔</ActionButton>
       <ActionButton plain data-testid="expense-home-btn" @click="router.push('/')">返回首页</ActionButton>
-      <ActionButton
-        v-if="expense.braceletCode"
-        plain
-        data-testid="expense-goods-profit-btn"
-        @click="goGoodsProfit"
-      >查看这件货利润</ActionButton>
     </div>
 
     <div class="expense-detail__actions">
@@ -291,5 +290,32 @@ function goGoodsProfit() {
   gap: 10px;
   flex-wrap: wrap;
   padding: 8px 0 24px;
+}
+.expense-detail__logs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+.expense-detail__log-card {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: var(--border-glass);
+  background: rgba(255, 255, 255, 0.03);
+}
+.expense-detail__log-time {
+  font-size: 11px;
+  color: var(--color-text-sub);
+  margin-bottom: 4px;
+}
+.expense-detail__log-msg {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-light);
+  word-break: break-word;
+}
+.expense-detail__log-target {
+  margin-top: 4px;
+  font-size: 11px;
 }
 </style>

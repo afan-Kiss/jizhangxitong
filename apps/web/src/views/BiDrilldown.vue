@@ -84,7 +84,9 @@ function goBack() {
 }
 
 function goDetail(path: string) {
-  if (path) router.push(path)
+  if (!path) return
+  if (path.startsWith('/sales') || path.startsWith('/bracelets')) return
+  router.push(path)
 }
 
 function onSearch() {
@@ -295,10 +297,7 @@ onMounted(() => fetchData(true))
             <div class="bi-drill__row-meta muted">
               收入 ¥{{ formatMoney(item.income) }} · 成本 ¥{{ formatMoney(item.cost) }} · 退款 ¥{{ formatMoney(item.refund) }} · 补偿 ¥{{ formatMoney(item.compensation) }}
             </div>
-            <div class="bi-drill__row-links">
-              <button type="button" @click="goDetail(item.saleDetailPath)">销售详情</button>
-              <button type="button" @click="goDetail(item.braceletDetailPath)">货品详情</button>
-            </div>
+            <div class="bi-drill__row-foot muted">订单 {{ item.externalOrderNo || '无' }} · 货品 {{ item.braceletCode }}</div>
           </div>
         </template>
 
