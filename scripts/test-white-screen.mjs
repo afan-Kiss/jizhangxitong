@@ -79,7 +79,7 @@ async function main() {
     const page = await context.newPage()
 
     const home = await checkPage(page, 'home', `${BASE}/`, {
-      expectText: ['和田玉', '经营总览', '登录', '进入系统'],
+      expectText: ['和田玉', '今天店里情况', '经营总览', '今日简况', '登录', '进入系统'],
     })
     console.log('[home]', home.issues.length ? 'FAIL' : 'OK', home.bodyText.slice(0, 80))
     if (home.issues.length) {
@@ -139,7 +139,7 @@ async function main() {
       await page.waitForURL(/\/account\/?$/, { timeout: PAGE_TIMEOUT_MS }).catch(() => null)
       await page.waitForTimeout(1000)
       const afterLogin = await page.evaluate(() => document.body.innerText)
-      if (!afterLogin.includes('经营总览')) {
+      if (!afterLogin.includes('今天店里情况') && !afterLogin.includes('经营总览') && !afterLogin.includes('今日简况')) {
         failed++
         console.log('FAIL 登录后未见首页')
       } else {
@@ -152,7 +152,7 @@ async function main() {
       await page.reload({ waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT_MS })
       await page.waitForTimeout(800)
       const reloadText = await page.evaluate(() => document.body.innerText)
-      if (!reloadText.includes('经营总览')) {
+      if (!reloadText.includes('今天店里情况') && !reloadText.includes('经营总览') && !reloadText.includes('今日简况')) {
         failed++
         console.log('FAIL 刷新首页白屏')
       } else {

@@ -118,6 +118,9 @@ async function testUi(webBase) {
       await loginAndGotoScan(page, webBase, password)
       await page.waitForSelector('[data-testid="scan-workbench-page"]', { timeout: 15000 }).catch(() => {})
 
+      const hasScannerStatus = await page.getByTestId('scan-scanner-status').count()
+      if (hasScannerStatus) pass(`${name} 扫码枪状态卡可见`)
+
       const text = await page.evaluate(() => document.body.innerText)
       const hasTitle = text.includes('扫码工作台') && !text.includes('扫码绑定功能已暂停')
       const hasInput = await page.locator('[data-testid="scan-input"]').count()
@@ -189,7 +192,9 @@ async function main() {
   console.log(`  Web UI: ${webBase}`)
   const token = await login()
   await testApi(token)
-  await testUi(webBase)
+  const uiBase = REMOTE_BASE.replace(/\/$/, '')
+  console.log(`  Web UI (acceptance): ${uiBase}`)
+  await testUi(uiBase)
 
   try {
     const h = await fetch(`${SCANNER}/api/health`)

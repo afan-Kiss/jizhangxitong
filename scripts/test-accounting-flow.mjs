@@ -128,7 +128,7 @@ async function testHomeNoWhiteScreen(webBase) {
     await gotoStable(page, `${web}/`, { timeout: 30000 })
     const el = await page.locator('[data-testid="home-page"]').count()
     const text = await page.evaluate(() => document.body.innerText || '')
-    if (el > 0 || text.includes('经营总览')) pass('首页渲染正常')
+    if (el > 0 || text.includes('今天店里情况') || text.includes('经营总览') || text.includes('今日简况')) pass('首页渲染正常')
     else fail('首页渲染正常', '缺少 home-page')
     const scanBtn = await page.locator('text=扫码绑定').count()
     const scanWorkbench = await page.locator('text=扫码工作台').count()
