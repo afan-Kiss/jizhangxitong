@@ -2,8 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import api, { fileViewUrl } from '../api'
+import api, { fileViewUrl, fileThumbUrl } from '../api'
 import { useAuthStore } from '../stores/auth'
+import { useBreakpoint } from '../composables/useBreakpoint'
 import { loadQianfanConfig } from '../composables/useQianfan'
 import { EXPENSE_BUSINESS_LABELS } from '@jade-account/shared'
 import AppShell from '../components/AppShell.vue'
@@ -11,14 +12,16 @@ import LuxuryCard from '../components/LuxuryCard.vue'
 import ActionButton from '../components/ActionButton.vue'
 import OrderLink from '../components/OrderLink.vue'
 import ImageUploader from '../components/ImageUploader.vue'
+import ImagePreviewModal from '../components/ImagePreviewModal.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { isDesktop } = useBreakpoint()
 
 const expense = ref<any>(null)
 const statusLabels: Record<string, string> = {
-  pending: '未报销',
+  pending: '待报销',
   reimbursed: '已报销',
   not_required: '不需要报销',
   unpaid: '未打款',
@@ -26,27 +29,66 @@ const statusLabels: Record<string, string> = {
   failed: '打款失败',
 }
 const imageUrls = ref<Record<number, string>>({})
+const thumbUrls = ref<Record<number, string>>({})
+const previewOpen = ref(false)
+const previewSrc = ref<string | null>(null)
+const previewAlt = ref('凭证图片')
 const supplementFiles = ref<Array<{ fileId: number; fileType: string; name: string }>>([])
 const supplementing = ref(false)
+const logsExpanded = ref(false)
+const showSupplementUploader = ref(false)
 
 const orderNo = computed(() => expense.value?.externalOrderNo || expense.value?.sale?.externalOrderNo || '')
+const attachmentCount = computed(() => expense.value?.attachments?.length || 0)
+const logCount = computed(() => expense.value?.operationLogs?.length || 0)
 
-const profitImpactHint = computed(() => {
+const expenseTypeLabel = computed(() => {
   if (!expense.value) return ''
-  if (expense.value.affectsProfit) return '这笔钱会扣这单利润'
-  if (expense.value.paySource === '员工垫付') return '员工垫付，会进报销流程'
-  if (expense.value.reimbursementStatus === 'not_required') return '公司直接支出，不进员工报销'
-  return ''
+  const bt = expense.value.businessType
+  if (bt && EXPENSE_BUSINESS_LABELS[bt as keyof typeof EXPENSE_BUSINESS_LABELS]) {
+    return EXPENSE_BUSINESS_LABELS[bt as keyof typeof EXPENSE_BUSINESS_LABELS]
+  }
+  return expense.value.expenseType || '支出'
 })
+
+const profitImpactText = computed(() => {
+  if (!expense.value) return ''
+  if (expense.value.affectsProfit) return '会扣这单利润'
+  if (expense.value.paySource === '员工垫付') return '员工垫付，走报销'
+  return '不影响订单利润'
+})
+
+const showReimbursementFields = computed(() => {
+  if (!expense.value) return false
+  return expense.value.paySource === '员工垫付' || expense.value.reimbursementStatus !== 'not_required'
+})
+
+const canMarkReimbursed = computed(() =>
+  auth.hasPermission('reimbursement:update')
+  && expense.value?.paySource === '员工垫付'
+  && expense.value?.reimbursementStatus === 'pending'
+  && !expense.value?.isVoided,
+)
 
 onMounted(async () => {
   await loadQianfanConfig(api)
   const res = await api.get(`/expenses/${route.params.id}`)
   expense.value = res.data.data
   for (const att of expense.value.attachments || []) {
+    thumbUrls.value[att.fileId] = await fileThumbUrl(att.fileId)
     imageUrls.value[att.fileId] = await fileViewUrl(att.fileId)
   }
 })
+
+async function openAttachmentPreview(att: { fileId: number; fileType?: string }) {
+  previewAlt.value = att.fileType || '凭证图片'
+  try {
+    previewSrc.value = imageUrls.value[att.fileId] || await fileViewUrl(att.fileId)
+  } catch {
+    previewSrc.value = thumbUrls.value[att.fileId] || null
+  }
+  if (previewSrc.value) previewOpen.value = true
+}
 
 async function voidExpense() {
   try {
@@ -85,10 +127,12 @@ async function supplementAttachments() {
     })
     showToast('凭证已补传')
     supplementFiles.value = []
+    showSupplementUploader.value = false
     const res = await api.get(`/expenses/${route.params.id}`)
     expense.value = res.data.data
     for (const att of expense.value.attachments || []) {
       if (!imageUrls.value[att.fileId]) {
+        thumbUrls.value[att.fileId] = await fileThumbUrl(att.fileId)
         imageUrls.value[att.fileId] = await fileViewUrl(att.fileId)
       }
     }
@@ -99,163 +143,278 @@ async function supplementAttachments() {
   }
 }
 
+function toggleSupplement() {
+  showSupplementUploader.value = !showSupplementUploader.value
+  if (!showSupplementUploader.value) supplementFiles.value = []
+}
 </script>
 
 <template>
   <AppShell v-if="expense" title="支出详情" show-back data-testid="expense-detail-page">
-    <LuxuryCard dark gold :stagger="0" padding="20px 18px" data-testid="expense-amount-card">
-      <div class="expense-detail__amount money">¥{{ Number(expense.amount).toFixed(2) }}</div>
-      <div class="expense-detail__type">
-        {{ expense.expenseType }} · {{ expense.paySource }}
-      </div>
-      <div v-if="expense.businessType" class="muted">
-        {{ EXPENSE_BUSINESS_LABELS[expense.businessType as keyof typeof EXPENSE_BUSINESS_LABELS] || expense.businessType }}
-      </div>
-      <div class="muted">{{ expense.occurredAt?.slice(0, 10) }}</div>
-      <div v-if="expense.isVoided" class="expense-detail__void">已作废: {{ expense.voidReason }}</div>
-      <div v-if="profitImpactHint" class="expense-detail__impact" data-testid="expense-profit-impact">
-        {{ profitImpactHint }}
-      </div>
-    </LuxuryCard>
+    <div class="expense-detail" :class="{ 'expense-detail--desktop': isDesktop }">
+      <div class="expense-detail__main">
+        <LuxuryCard dark gold :stagger="0" padding="20px 18px" data-testid="expense-amount-card">
+          <div v-if="expense.isVoided" class="expense-detail__void-badge" data-testid="expense-void-badge">
+            已作废<span v-if="expense.voidReason"> · {{ expense.voidReason }}</span>
+          </div>
+          <div class="expense-detail__amount money" data-testid="expense-amount">¥{{ Number(expense.amount).toFixed(2) }}</div>
+          <div class="expense-detail__subtitle" data-testid="expense-type-pay">
+            {{ expenseTypeLabel }} · {{ expense.paySource }}
+          </div>
+          <div class="expense-detail__date muted" data-testid="expense-date">{{ expense.occurredAt?.slice(0, 10) }}</div>
+          <div class="expense-detail__impact" data-testid="expense-profit-impact">{{ profitImpactText }}</div>
+          <div class="expense-detail__tags" data-testid="expense-status-tags">
+            <span v-if="orderNo" class="expense-detail__tag">已关联订单</span>
+            <span v-else-if="expense.pendingLinkStatus === 'pending_order'" class="expense-detail__tag expense-detail__tag--warn">待关联订单</span>
+            <span class="expense-detail__tag">
+              {{ statusLabels[expense.reimbursementStatus] || expense.reimbursementStatus }}
+            </span>
+            <span class="expense-detail__tag">
+              {{ attachmentCount ? `有 ${attachmentCount} 张凭证` : '暂无凭证' }}
+            </span>
+          </div>
+        </LuxuryCard>
 
-    <LuxuryCard v-if="orderNo" :stagger="1" data-testid="expense-order-card">
-      <div class="section-title">订单信息</div>
-      <OrderLink :order-no="orderNo" data-testid="expense-detail-order-no" />
-    </LuxuryCard>
+        <LuxuryCard v-if="orderNo" :stagger="1" data-testid="expense-order-card">
+          <div class="section-title">关联订单</div>
+          <OrderLink :order-no="orderNo" hide-hint data-testid="expense-detail-order-no" />
+        </LuxuryCard>
 
-    <LuxuryCard v-else-if="expense.pendingLinkStatus === 'pending_order'" :stagger="1">
-      <div class="section-title">关联状态</div>
-      <p class="muted">待关联订单，可先保存后补关联</p>
-      <ActionButton plain data-testid="expense-link-order" @click="linkOrder">补关联订单号</ActionButton>
-    </LuxuryCard>
+        <LuxuryCard v-else-if="expense.pendingLinkStatus === 'pending_order'" :stagger="1" data-testid="expense-pending-order-card">
+          <div class="section-title">关联订单</div>
+          <p class="muted">待关联订单，可先保存后补关联</p>
+          <ActionButton plain data-testid="expense-link-order" @click="linkOrder">补关联订单号</ActionButton>
+        </LuxuryCard>
 
-    <LuxuryCard :stagger="2">
-      <div class="section-title">操作记录</div>
-      <div class="expense-detail__row">
-        <span class="muted">创建人</span>
-        <span>{{ expense.createdByUser?.displayName || '历史数据，未记录操作人' }}</span>
+        <LuxuryCard v-if="auth.hasPermission('expense:attachment:view')" :stagger="2" data-testid="expense-voucher-card">
+          <div class="section-title">凭证图片（{{ attachmentCount }}）</div>
+          <div v-if="attachmentCount" class="expense-detail__thumb-grid">
+            <button
+              v-for="att in expense.attachments"
+              :key="att.id"
+              type="button"
+              class="expense-detail__thumb-btn"
+              data-testid="expense-voucher-thumb"
+              @click="openAttachmentPreview(att)"
+            >
+              <img :src="thumbUrls[att.fileId]" alt="凭证" class="expense-detail__thumb" />
+            </button>
+          </div>
+          <div v-else class="muted">暂无凭证</div>
+          <div
+            v-if="auth.hasPermission('expense:attachment:upload') && !expense.isVoided"
+            class="expense-detail__supplement"
+          >
+            <ActionButton
+              plain
+              size="md"
+              data-testid="expense-supplement-toggle"
+              @click="toggleSupplement"
+            >
+              {{ showSupplementUploader ? '收起补传' : '补传凭证' }}
+            </ActionButton>
+            <div v-if="showSupplementUploader" class="expense-detail__supplement-panel">
+              <ImageUploader v-model="supplementFiles" />
+              <ActionButton
+                v-if="supplementFiles.length"
+                plain
+                :loading="supplementing"
+                data-testid="expense-supplement-upload"
+                @click="supplementAttachments"
+              >保存补传图片</ActionButton>
+            </div>
+          </div>
+        </LuxuryCard>
       </div>
-      <div v-if="expense.updatedByUser" class="expense-detail__row">
-        <span class="muted">最近修改</span>
-        <span>{{ expense.updatedByUser.displayName }}</span>
-      </div>
-      <div v-if="expense.voidedByUser" class="expense-detail__row">
-        <span class="muted">作废人</span>
-        <span>{{ expense.voidedByUser.displayName }}</span>
-      </div>
-      <div class="expense-detail__logs" data-testid="expense-operation-logs">
-        <div
-          v-for="log in expense.operationLogs || []"
-          :key="log.id"
-          class="expense-detail__log-card"
-          data-testid="expense-log-item"
-        >
-          <div class="expense-detail__log-time">{{ log.createdAt?.slice(0, 16).replace('T', ' ') }}</div>
-          <div class="expense-detail__log-msg">{{ log.formattedMessage || log.summary }}</div>
-          <div v-if="log.targetLabel" class="expense-detail__log-target muted">{{ log.targetLabel }}</div>
+
+      <div class="expense-detail__side">
+        <LuxuryCard :stagger="3" data-testid="expense-purpose-card">
+          <div class="section-title">这笔钱的用途</div>
+          <div class="expense-detail__row">
+            <span class="muted">支出类型</span>
+            <span>{{ expenseTypeLabel }}</span>
+          </div>
+          <div class="expense-detail__row">
+            <span class="muted">支付方式</span>
+            <span data-testid="expense-pay-source">{{ expense.paySource }}</span>
+          </div>
+          <div class="expense-detail__row">
+            <span class="muted">发生日期</span>
+            <span>{{ expense.occurredAt?.slice(0, 10) }}</span>
+          </div>
+          <div class="expense-detail__row">
+            <span class="muted">是否影响利润</span>
+            <span>{{ profitImpactText }}</span>
+          </div>
+          <div v-if="expense.expenseSummary" class="expense-detail__row">
+            <span class="muted">摘要</span>
+            <span>{{ expense.expenseSummary }}</span>
+          </div>
+          <div v-if="expense.remark" class="expense-detail__row">
+            <span class="muted">备注</span>
+            <span>{{ expense.remark }}</span>
+          </div>
+          <div v-if="showReimbursementFields" class="expense-detail__row">
+            <span class="muted">报销状态</span>
+            <span>{{ statusLabels[expense.reimbursementStatus] || expense.reimbursementStatus }}</span>
+          </div>
+          <div v-if="expense.reimbursementPerson" class="expense-detail__row">
+            <span class="muted">报销人</span>
+            <span>{{ expense.reimbursementPerson }}</span>
+          </div>
+          <div v-if="expense.customerPaymentStatus" class="expense-detail__row" data-testid="expense-payment-status">
+            <span class="muted">打款状态</span>
+            <span>{{ statusLabels[expense.customerPaymentStatus] || expense.customerPaymentStatus }}</span>
+          </div>
+          <div v-if="expense.braceletCode" class="expense-detail__row">
+            <span class="muted">货品编号</span>
+            <span>{{ expense.braceletCode }}</span>
+          </div>
+          <div v-if="expense.saleId" class="expense-detail__row">
+            <span class="muted">关联销售</span>
+            <span>#{{ expense.saleId }}</span>
+          </div>
+          <div v-if="canMarkReimbursed" class="expense-detail__reimburse-action">
+            <ActionButton variant="secondary" data-testid="expense-mark-reimbursed" @click="updateReimbursement('reimbursed')">
+              标记已报销
+            </ActionButton>
+          </div>
+        </LuxuryCard>
+
+        <LuxuryCard :stagger="4">
+          <button
+            type="button"
+            class="expense-detail__logs-toggle"
+            data-testid="expense-logs-toggle"
+            @click="logsExpanded = !logsExpanded"
+          >
+            <span class="section-title expense-detail__logs-title">操作记录（{{ logCount }}条）</span>
+            <span class="expense-detail__logs-arrow">{{ logsExpanded ? '收起' : '展开' }}</span>
+          </button>
+          <div v-if="logsExpanded" class="expense-detail__logs-body">
+            <div class="expense-detail__row">
+              <span class="muted">创建人</span>
+              <span>{{ expense.createdByUser?.displayName || '历史数据，未记录操作人' }}</span>
+            </div>
+            <div v-if="expense.updatedByUser" class="expense-detail__row">
+              <span class="muted">最近修改</span>
+              <span>{{ expense.updatedByUser.displayName }}</span>
+            </div>
+            <div v-if="expense.voidedByUser" class="expense-detail__row">
+              <span class="muted">作废人</span>
+              <span>{{ expense.voidedByUser.displayName }}</span>
+            </div>
+            <div v-if="logCount" class="expense-detail__logs" data-testid="expense-operation-logs">
+              <div
+                v-for="log in expense.operationLogs"
+                :key="log.id"
+                class="expense-detail__log-card"
+                data-testid="expense-log-item"
+              >
+                <div class="expense-detail__log-time">{{ log.createdAt?.slice(0, 16).replace('T', ' ') }}</div>
+                <div class="expense-detail__log-msg">{{ log.formattedMessage || log.summary }}</div>
+                <div v-if="log.targetLabel" class="expense-detail__log-target muted">{{ log.targetLabel }}</div>
+              </div>
+            </div>
+            <div v-else class="muted">暂无操作记录</div>
+          </div>
+        </LuxuryCard>
+
+        <div class="expense-detail__footer" data-testid="expense-detail-nav">
+          <ActionButton data-testid="expense-continue-btn" @click="router.push('/expense/create')">继续记一笔</ActionButton>
+          <ActionButton plain data-testid="expense-back-btn" @click="router.back()">返回上一页</ActionButton>
+          <ActionButton
+            v-if="auth.hasPermission('expense:void') && !expense.isVoided"
+            variant="danger"
+            data-testid="expense-void-btn"
+            @click="voidExpense"
+          >作废这笔</ActionButton>
         </div>
       </div>
-    </LuxuryCard>
-
-    <LuxuryCard :stagger="3">
-      <div class="section-title">详情</div>
-      <div class="expense-detail__row">
-        <span class="muted">报销人</span>
-        <span>{{ expense.reimbursementPerson || '-' }}</span>
-      </div>
-      <div class="expense-detail__row">
-        <span class="muted">报销状态</span>
-        <span>{{ statusLabels[expense.reimbursementStatus] || expense.reimbursementStatus }}</span>
-      </div>
-      <div v-if="expense.customerPaymentStatus" class="expense-detail__row" data-testid="expense-payment-status">
-        <span class="muted">打款状态</span>
-        <span>{{ statusLabels[expense.customerPaymentStatus] || expense.customerPaymentStatus }}</span>
-      </div>
-      <div class="expense-detail__row">
-        <span class="muted">货品编号</span>
-        <span>{{ expense.braceletCode || '未绑定' }}</span>
-      </div>
-      <div v-if="expense.saleId" class="expense-detail__row">
-        <span class="muted">关联销售</span>
-        <span>#{{ expense.saleId }}</span>
-      </div>
-      <div v-if="expense.expenseSummary" class="expense-detail__row">
-        <span class="muted">摘要</span>
-        <span>{{ expense.expenseSummary }}</span>
-      </div>
-      <div v-if="expense.remark" class="expense-detail__row">
-        <span class="muted">备注</span>
-        <span>{{ expense.remark }}</span>
-      </div>
-    </LuxuryCard>
-
-    <LuxuryCard v-if="auth.hasPermission('expense:attachment:view')" :stagger="4" data-testid="expense-voucher-card">
-      <div class="section-title">凭证图片（{{ expense.attachments?.length || 0 }}）</div>
-      <div class="expense-detail__thumbs">
-        <img
-          v-for="att in expense.attachments"
-          :key="att.id"
-          :src="imageUrls[att.fileId]"
-          alt="凭证"
-        />
-      </div>
-      <div v-if="!expense.attachments?.length" class="muted">暂无凭证</div>
-      <div v-if="auth.hasPermission('expense:attachment:upload') && !expense.isVoided" class="expense-detail__supplement">
-        <div class="section-title" style="margin-top:16px">补传凭证</div>
-        <ImageUploader v-model="supplementFiles" />
-        <ActionButton
-          v-if="supplementFiles.length"
-          plain
-          :loading="supplementing"
-          data-testid="expense-supplement-upload"
-          @click="supplementAttachments"
-        >保存补传图片</ActionButton>
-      </div>
-    </LuxuryCard>
-
-    <div class="expense-detail__nav" data-testid="expense-detail-nav">
-      <ActionButton plain data-testid="expense-continue-btn" @click="router.push('/expense/create')">继续记一笔</ActionButton>
-      <ActionButton plain data-testid="expense-home-btn" @click="router.push('/')">返回首页</ActionButton>
-    </div>
-
-    <div class="expense-detail__actions">
-      <ActionButton
-        v-if="auth.hasPermission('reimbursement:update') && expense.paySource === '员工垫付'"
-        variant="secondary"
-        @click="updateReimbursement('reimbursed')"
-      >标记已报销</ActionButton>
-      <ActionButton
-        v-if="auth.hasPermission('expense:void') && !expense.isVoided"
-        variant="danger"
-        @click="voidExpense"
-      >作废</ActionButton>
     </div>
   </AppShell>
+
+  <ImagePreviewModal
+    :open="previewOpen"
+    :src="previewSrc"
+    :alt="previewAlt"
+    @close="previewOpen = false"
+  />
 </template>
 
 <style scoped>
+.expense-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.expense-detail--desktop {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 16px;
+  max-width: 1080px;
+  align-items: start;
+}
+.expense-detail__main,
+.expense-detail__side {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+.expense-detail__void-badge {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #ffd4d4;
+  background: rgba(180, 60, 60, 0.22);
+  border: 1px solid rgba(220, 120, 120, 0.35);
+}
 .expense-detail__amount {
-  font-size: 32px;
+  font-size: 36px;
   font-weight: 700;
   color: var(--color-text-light);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  line-height: 1.1;
 }
-.expense-detail__type {
-  font-size: 15px;
+.expense-detail__subtitle {
+  font-size: 16px;
   color: var(--color-gold-light);
+  margin-bottom: 4px;
 }
-.expense-detail__void {
-  color: #ffb4b4;
-  font-size: 13px;
-  margin-top: 8px;
+.expense-detail__date {
+  font-size: 14px;
+  margin-bottom: 10px;
 }
 .expense-detail__impact {
-  margin-top: 12px;
+  margin-top: 4px;
   padding: 8px 12px;
   border-radius: 10px;
   background: rgba(198, 161, 91, 0.15);
   color: var(--color-gold-light);
   font-size: 13px;
+}
+.expense-detail__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.expense-detail__tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--color-text-light);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(198, 161, 91, 0.25);
+}
+.expense-detail__tag--warn {
+  color: var(--color-gold-light);
+  border-color: rgba(198, 161, 91, 0.45);
 }
 .expense-detail__row {
   display: flex;
@@ -266,30 +425,67 @@ async function supplementAttachments() {
   font-size: 14px;
 }
 .expense-detail__row:last-child { border-bottom: none; }
-.expense-detail__row--link { cursor: pointer; color: var(--color-jade-deep); }
-.expense-detail__thumbs {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+.expense-detail__row span:last-child {
+  text-align: right;
+  word-break: break-word;
 }
-.expense-detail__thumbs img {
-  width: 80px;
-  height: 80px;
+.expense-detail__thumb-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+@media (min-width: 1200px) {
+  .expense-detail__thumb-grid { grid-template-columns: repeat(4, 1fr); }
+}
+.expense-detail__thumb-btn {
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.expense-detail__thumb {
+  width: 100%;
+  aspect-ratio: 1;
   object-fit: cover;
   border-radius: 10px;
   border: var(--border-gold);
+  display: block;
 }
-.expense-detail__nav {
+.expense-detail__supplement {
+  margin-top: 14px;
+}
+.expense-detail__supplement-panel {
+  margin-top: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: 16px;
 }
-.expense-detail__actions {
+.expense-detail__reimburse-action {
+  margin-top: 12px;
+}
+.expense-detail__logs-toggle {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 8px 0 24px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.expense-detail__logs-title {
+  margin: 0;
+}
+.expense-detail__logs-arrow {
+  font-size: 13px;
+  color: var(--color-gold);
+  flex-shrink: 0;
+}
+.expense-detail__logs-body {
+  margin-top: 12px;
 }
 .expense-detail__logs {
   display: flex;
@@ -317,5 +513,12 @@ async function supplementAttachments() {
 .expense-detail__log-target {
   margin-top: 4px;
   font-size: 11px;
+}
+.expense-detail__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  padding-bottom: 24px;
 }
 </style>

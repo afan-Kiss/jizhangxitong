@@ -115,6 +115,8 @@ async function main() {
     await page.getByTestId('login-submit').click()
     await page.waitForTimeout(1000)
     await gotoStable(page, `${WEB_BASE}/expense/${normalId}`)
+    await page.waitForSelector('[data-testid="expense-logs-toggle"]', { timeout: 15000 })
+    await page.getByTestId('expense-logs-toggle').click()
     await page.waitForSelector('[data-testid="expense-operation-logs"]', { timeout: 15000 })
     const logText = await page.getByTestId('expense-operation-logs').textContent()
     if (logText && !logText.includes('create_expense')) pass('详情页展示 formattedMessage')

@@ -4,7 +4,9 @@ import { useQianfan } from '../composables/useQianfan'
 
 defineProps<{
   orderNo?: string | null
+  shopKey?: string | null
   compact?: boolean
+  hideHint?: boolean
 }>()
 
 const { qianfanEnabled, copyOrderNo, openQianfan } = useQianfan()
@@ -24,11 +26,11 @@ const { qianfanEnabled, copyOrderNo, openQianfan } = useQianfan()
         v-if="qianfanEnabled"
         variant="secondary"
         data-testid="order-open-qianfan-btn"
-        @click="openQianfan(orderNo)"
-      >打开千帆</ActionButton>
+        @click="openQianfan(orderNo, shopKey)"
+      >千帆订单详情</ActionButton>
     </div>
-    <p v-if="!qianfanEnabled" class="order-link__hint muted" data-testid="qianfan-hint">
-      千帆链接还没配置，先复制订单号去千帆查
+    <p v-if="!qianfanEnabled && !hideHint" class="order-link__hint muted" data-testid="qianfan-hint">
+      千帆 Cookie 未就绪，可先复制订单号去千帆查
     </p>
   </div>
 </template>
