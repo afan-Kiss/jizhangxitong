@@ -70,7 +70,7 @@ async function main() {
     { headers: authHeaders(token) },
   )
   const hasTest = testExpenses.json.data?.items?.some(
-    (e: { isVoided?: boolean; remark?: string; expenseSummary?: string; externalOrderNo?: string }) =>
+    (e) =>
       !e.isVoided && (
         (e.remark?.includes('test_auto_check') || e.expenseSummary?.includes('test_auto_check'))
         || e.remark?.includes('test-accounting-flow')
