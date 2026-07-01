@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { showConfirmDialog, showToast } from 'vant'
+import { showToast } from 'vant'
 import api from '../api'
+import { confirmAction } from '../utils/confirm-dialog'
 
 const users = ref<any[]>([])
 const loading = ref(false)
@@ -36,7 +37,8 @@ async function approve(user: any) {
 }
 
 async function reject(user: any) {
-  await showConfirmDialog({ title: '拒绝账号', message: `确定拒绝 ${user.username} 吗？` })
+  const ok = await confirmAction({ title: '拒绝账号', message: `确定拒绝 ${user.username} 吗？` })
+  if (!ok) return
   await api.post(`/users/${user.id}/reject`)
   showToast('已拒绝')
   await load()
@@ -51,7 +53,8 @@ async function toggleDisable(user: any) {
     await api.post(`/users/${user.id}/enable`)
     showToast('已启用')
   } else {
-    await showConfirmDialog({ title: '禁用账号', message: `确定禁用 ${user.username} 吗？` })
+    const ok = await confirmAction({ title: '禁用账号', message: `确定禁用 ${user.username} 吗？` })
+    if (!ok) return
     await api.post(`/users/${user.id}/disable`)
     showToast('已禁用')
   }
@@ -78,10 +81,14 @@ async function saveRole(user: any) {
     return
   }
   const label = roleName === '管理员' ? '管理员' : '员工'
-  await showConfirmDialog({
+  const ok = await confirmAction({
     title: '调整权限',
     message: `确定把 ${user.username} 设为「${label}」吗？`,
   })
+  if (!ok) {
+    user._rolePick = current
+    return
+  }
   try {
     await api.patch(`/users/${user.id}`, { roleName })
     showToast(`已设为${label}`)

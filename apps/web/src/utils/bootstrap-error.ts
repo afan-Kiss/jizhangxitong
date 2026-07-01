@@ -26,6 +26,7 @@ export function showBootstrapError(message: string) {
 export function registerGlobalErrorHandlers(app: import('vue').App) {
   app.config.errorHandler = (err) => {
     console.error('[vue-error]', err)
+    if (isBenignUiError(err)) return
     showBootstrapError('页面加载失败，请刷新重试；如果还不行，请联系管理员。')
   }
 
@@ -39,8 +40,19 @@ export function registerGlobalErrorHandlers(app: import('vue').App) {
   window.addEventListener('unhandledrejection', (event) => {
     const msg = String(event.reason?.message || event.reason || '')
     console.error('[unhandledrejection]', event.reason)
+    if (isBenignUiError(event.reason)) {
+      event.preventDefault()
+      return
+    }
     if (/Failed to fetch dynamically imported module|Loading chunk|Importing a module script failed/i.test(msg)) {
       showBootstrapError('页面加载失败，请刷新重试；如果还不行，请联系管理员。')
     }
   })
+}
+
+function isBenignUiError(reason: unknown): boolean {
+  if (reason === undefined || reason === null) return true
+  if (reason === 'cancel') return true
+  const msg = String((reason as Error)?.message ?? reason)
+  return msg === 'cancel' || /cancel/i.test(msg)
 }
