@@ -58,6 +58,24 @@ async function main() {
   if (approve.res.ok) pass('fanfan 审核通过')
   else fail('审核通过', approve.text)
 
+  const promote = await fetchJson(`${BASE}/api/users/${target.id}`, {
+    method: 'PATCH',
+    headers: authHeaders(adminToken),
+    body: JSON.stringify({ roleName: '管理员' }),
+  })
+  const usersAfterPromote = await fetchJson(`${BASE}/api/users`, { headers: authHeaders(adminToken) })
+  const promoted = usersAfterPromote.json.data?.find((u) => u.id === target.id)
+  if (promote.res.ok && promoted?.roles?.includes('管理员')) pass('管理员可把用户升为管理员')
+  else fail('升为管理员', promote.text || JSON.stringify(promoted?.roles))
+
+  const demote = await fetchJson(`${BASE}/api/users/${target.id}`, {
+    method: 'PATCH',
+    headers: authHeaders(adminToken),
+    body: JSON.stringify({ roleName: '员工' }),
+  })
+  if (demote.res.ok) pass('管理员可把用户改回员工')
+  else fail('改回员工', demote.text)
+
   const userLogin = await fetchJson(`${BASE}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
