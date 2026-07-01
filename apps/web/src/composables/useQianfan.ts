@@ -25,7 +25,7 @@ export async function loadQianfanConfig(api: { get: (url: string) => Promise<{ d
   }
 }
 
-export function orderDetailUrl(orderNo?: string | null): string | null {
+export function orderDetailUrl(orderNo?: string | null, _shopKey?: string | null): string | null {
   if (!orderNo?.trim()) return null
   if (qianfanTemplate.value) {
     return buildQianfanOrderUrl(qianfanTemplate.value, orderNo)
@@ -45,8 +45,8 @@ export function copyOrderNo(orderNo?: string | null) {
   })
 }
 
-export function openQianfan(orderNo?: string | null) {
-  const url = orderDetailUrl(orderNo)
+export function openQianfan(orderNo?: string | null, shopKey?: string | null) {
+  const url = orderDetailUrl(orderNo, shopKey)
   if (url) window.open(url, '_blank', 'noopener')
   else copyOrderNo(orderNo)
 }
