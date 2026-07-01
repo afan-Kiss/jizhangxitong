@@ -51,9 +51,9 @@ export async function getHomeDashboard() {
     todaySaleAmount,
     todayProfit,
     labels: {
-      expense: '今天花了多少钱',
-      sale: '今天卖了多少钱',
-      profit: '今天大概赚了多少',
+      expense: '今日经费支出',
+      sale: '今日卖了多少钱',
+      profit: '今日净利润',
     },
   }
 }

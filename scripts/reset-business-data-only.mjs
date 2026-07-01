@@ -6,6 +6,9 @@ import { execSync } from 'child_process'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { ROOT } from './lib/services.mjs'
+import { assertSafeDatabaseUrl } from './lib/prod-db-guard.mjs'
+
+assertSafeDatabaseUrl(process.env.DATABASE_URL)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 

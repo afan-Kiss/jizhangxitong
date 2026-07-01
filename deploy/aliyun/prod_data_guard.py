@@ -62,12 +62,28 @@ def shell_preserve_production_data(deploy_dir: str) -> str:
     data_dir = f"{deploy_dir}/{PRODUCTION_DATA_REL}"
     return f"""
 DATA_PRESERVE=/tmp/jade-data-preserve-$$
-if [ -d {data_dir} ]; then
+if [ -f {data_dir}/accounting.db ]; then
+  OLD_SIZE=$(stat -c%s "{data_dir}/accounting.db" 2>/dev/null || echo 0)
+  echo "[deploy][DATA] 发现旧 accounting.db (${{OLD_SIZE}} bytes)"
   mkdir -p "$DATA_PRESERVE"
-  cp -a {data_dir}/. "$DATA_PRESERVE/" 2>/dev/null || true
-  if [ -f "$DATA_PRESERVE/accounting.db" ]; then
-    echo "[deploy][DATA] 已保全线上 accounting.db ($(stat -c%s "$DATA_PRESERVE/accounting.db" 2>/dev/null || echo ?) bytes)"
+  if ! cp -a {data_dir}/. "$DATA_PRESERVE/"; then
+    echo "[deploy][FATAL] 保全线上 data 目录失败" >&2
+    exit 1
   fi
+  if [ ! -f "$DATA_PRESERVE/accounting.db" ]; then
+    echo "[deploy][FATAL] 保全后 accounting.db 不存在" >&2
+    exit 1
+  fi
+  PRESERVE_SIZE=$(stat -c%s "$DATA_PRESERVE/accounting.db" 2>/dev/null || echo 0)
+  if [ "$PRESERVE_SIZE" -le 0 ]; then
+    echo "[deploy][FATAL] 保全后 accounting.db 大小为 0" >&2
+    exit 1
+  fi
+  echo "[deploy][DATA] 已保全线上 accounting.db (${{PRESERVE_SIZE}} bytes)"
+elif [ -d {data_dir} ]; then
+  echo "[deploy][DATA] data 目录存在但无 accounting.db，全新部署"
+else
+  echo "[deploy][DATA] 无历史 accounting.db，全新部署"
 fi
 """
 
@@ -76,13 +92,26 @@ def shell_restore_preserved_data(deploy_dir: str) -> str:
     data_dir = f"{deploy_dir}/{PRODUCTION_DATA_REL}"
     return f"""
 mkdir -p {data_dir}
-if [ -d "$DATA_PRESERVE" ] && [ -f "$DATA_PRESERVE/accounting.db" ]; then
-  cp -a "$DATA_PRESERVE/." {data_dir}/
-  rm -rf "$DATA_PRESERVE"
-  echo "[deploy][DATA] 已恢复线上 accounting.db（拒绝本地/上传包覆盖）"
-elif [ -f /tmp/jade-upload/accounting.db ]; then
+if [ -f /tmp/jade-upload/accounting.db ]; then
   echo "[deploy][FATAL] 检测到上传 accounting.db，生产环境禁止覆盖线上数据库" >&2
   exit 1
+fi
+if [ -d "$DATA_PRESERVE" ] && [ -f "$DATA_PRESERVE/accounting.db" ]; then
+  if ! cp -a "$DATA_PRESERVE/." {data_dir}/; then
+    echo "[deploy][FATAL] 恢复 accounting.db 失败" >&2
+    exit 1
+  fi
+  if [ ! -f {data_dir}/accounting.db ]; then
+    echo "[deploy][FATAL] 恢复后 accounting.db 不存在" >&2
+    exit 1
+  fi
+  RESTORE_SIZE=$(stat -c%s "{data_dir}/accounting.db" 2>/dev/null || echo 0)
+  if [ "$RESTORE_SIZE" -le 0 ]; then
+    echo "[deploy][FATAL] 恢复后 accounting.db 大小为 0" >&2
+    exit 1
+  fi
+  rm -rf "$DATA_PRESERVE"
+  echo "[deploy][DATA] 已恢复线上 accounting.db (${{RESTORE_SIZE}} bytes)"
 else
   echo "[deploy][DATA] 无历史 accounting.db，保留空 data 目录"
 fi

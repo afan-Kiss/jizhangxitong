@@ -194,6 +194,8 @@ async function main() {
     ['test:customer-payments', `node scripts/test-customer-payments.mjs`, TIMEOUTS.acceptanceFull + 120000],
     ['test:accounting-flow', `node scripts/test-accounting-flow.mjs`, TIMEOUTS.acceptanceFull + 60000],
     ['test:effective-sales', `node scripts/test-effective-sales.mjs`, TIMEOUTS.acceptanceBasic + 30000],
+    ['test:fund-expense', `node scripts/test-fund-expense.mjs`, TIMEOUTS.acceptanceBasic + 60000],
+    ['test:reimbursement-offline', `node scripts/test-reimbursement-offline.mjs`, TIMEOUTS.acceptanceBasic + 120000],
   ]
   for (const [label, script, timeout] of coreTests) {
     try {

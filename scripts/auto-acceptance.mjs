@@ -179,7 +179,7 @@ async function main() {
     body: JSON.stringify({
       amount: 1.23,
       expenseType: '日常物料',
-      paySource: '员工垫付',
+      paySource: '专属经费',
       braceletCode: braceletId ? testCode : undefined,
       occurredAt: new Date().toISOString().slice(0, 10),
       expenseSummary: 'test_auto_check 自动联调测试',

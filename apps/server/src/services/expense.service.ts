@@ -4,6 +4,7 @@ import {
   defaultExpenseTypeForBusiness,
   buildQianfanOrderUrl,
   isProfitDeductingExpense,
+  DEFAULT_PAY_SOURCE,
   type ExpenseBusinessType,
 } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
@@ -238,6 +239,11 @@ export async function createExpense(
 ) {
   if (!input.amount || input.amount <= 0) throw new Error('金额必须大于 0')
 
+  const paySource = (input.paySource || DEFAULT_PAY_SOURCE).trim()
+  if (paySource === '员工垫付') {
+    throw new Error('请使用专属经费记支出，员工垫付报销流程已下线')
+  }
+
   const businessType = (input.businessType || EXPENSE_BUSINESS_TYPES.normal) as ExpenseBusinessType
   const expenseType = input.expenseType || defaultExpenseTypeForBusiness(businessType)
 
@@ -294,7 +300,7 @@ export async function createExpense(
       saleId: saleBinding.saleId,
       expenseType,
       businessType,
-      paySource: input.paySource,
+      paySource,
       amount: input.amount,
       occurredAt: parseDateInput(input.occurredAt),
       expenseSummary: input.expenseSummary,
@@ -466,6 +472,9 @@ export async function updateExpense(
   delete data.payeeAccount
   if (input.occurredAt) data.occurredAt = parseDateInput(input.occurredAt)
   if (input.amount !== undefined && input.amount <= 0) throw new Error('金额得填一下')
+  if (input.paySource === '员工垫付') {
+    throw new Error('请使用专属经费记支出，员工垫付报销流程已下线')
+  }
   if (input.payeeAccount !== undefined) {
     data.payeeAccountMasked = maskPayeeAccount(input.payeeAccount)
   }
@@ -540,6 +549,7 @@ export async function updateExpense(
 export async function voidExpense(id: number, voidReason: string, operator: AuthRequest['user']) {
   const before = await prisma.expense.findUnique({ where: { id } })
   if (!before) throw new Error('支出不存在')
+  if (before.isVoided) throw new Error('这条支出已经作废过了，不能重复作废')
 
   const expense = await prisma.expense.update({
     where: { id },

@@ -186,7 +186,7 @@ async function main() {
     fail('公司账户直付客户补偿可记账', companyPay.text)
   }
 
-  // 8. 员工垫付客户补偿
+  // 8. 员工垫付已下线，应拒绝
   const staffPay = await api(token, '/api/expenses', {
     method: 'POST',
     body: JSON.stringify({
@@ -198,10 +198,10 @@ async function main() {
       remark: `${TAG}-staff-advance`,
     }),
   })
-  if (staffPay.res.ok) {
-    pass('员工垫付客户补偿可记账')
+  if (!staffPay.res.ok && /专属经费|报销/.test(staffPay.json.message || staffPay.text || '')) {
+    pass('拒绝员工垫付记支出')
   } else {
-    fail('员工垫付客户补偿可记账', staffPay.text)
+    fail('拒绝员工垫付记支出', staffPay.text)
   }
 
   // 9-10. 无镯子编号按订单号 / 找不到订单待关联

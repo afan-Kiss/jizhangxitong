@@ -11,6 +11,15 @@ import {
   voidExpense,
 } from '../services/expense.service'
 
+const REIMBURSEMENT_GONE = {
+  success: false,
+  message: '报销功能已下线，现在统一使用专属经费记支出。',
+}
+
+function reimbursementGone(_req: unknown, res: { status: (n: number) => { json: (b: unknown) => void } }) {
+  res.status(410).json(REIMBURSEMENT_GONE)
+}
+
 export const expenseRouter = Router()
 expenseRouter.use(authMiddleware)
 
@@ -44,6 +53,11 @@ expenseRouter.get('/summary', requirePermission('expense:view'), async (req: Aut
   )
   res.json({ success: true, data })
 })
+
+expenseRouter.get('/reimbursements/summary', reimbursementGone)
+expenseRouter.get('/pending-reimbursements', reimbursementGone)
+expenseRouter.post('/export/reimbursement-excel/preview', reimbursementGone)
+expenseRouter.post('/export/reimbursement-excel', reimbursementGone)
 
 expenseRouter.get('/:id', requirePermission('expense:view'), async (req, res) => {
   const expense = await getExpense(Number(req.params.id))
@@ -85,9 +99,15 @@ expenseRouter.post('/:id/link', requirePermission('expense:update'), async (req:
 })
 
 expenseRouter.post('/:id/void', requirePermission('expense:void'), async (req: AuthRequest, res) => {
-  const expense = await voidExpense(Number(req.params.id), req.body.voidReason || '', req.user!)
-  res.json({ success: true, data: expense })
+  try {
+    const expense = await voidExpense(Number(req.params.id), req.body.voidReason || '', req.user!)
+    res.json({ success: true, data: expense })
+  } catch (err) {
+    res.status(400).json({ success: false, message: (err as Error).message })
+  }
 })
+
+expenseRouter.patch('/:id/reimbursement-status', reimbursementGone)
 
 expenseRouter.post('/:id/attachments', requirePermission('expense:attachment:upload'), async (req: AuthRequest, res) => {
   const expense = await addAttachments(Number(req.params.id), req.body.items || [], req.user)

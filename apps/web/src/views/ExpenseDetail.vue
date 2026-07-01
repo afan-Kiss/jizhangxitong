@@ -258,8 +258,8 @@ function toggleSupplement() {
             <span>{{ expenseTypeLabel }}</span>
           </div>
           <div class="expense-detail__row">
-            <span class="muted">支付方式</span>
-            <span data-testid="expense-pay-source">{{ expense.paySource }}</span>
+            <span class="muted">付款账户</span>
+            <span data-testid="expense-pay-source">{{ expense.paySource || '专属经费' }}</span>
           </div>
           <div class="expense-detail__row">
             <span class="muted">发生日期</span>

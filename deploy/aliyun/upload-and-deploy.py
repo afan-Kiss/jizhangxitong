@@ -229,18 +229,28 @@ def main() -> None:
             build_zip(zip_path)
             env_path.write_text(env_content, encoding="utf-8")
 
-            run(client, f"mkdir -p {DEPLOY_DIR} /www/backup /tmp/jade-upload")
+            up_code = run(client, f"mkdir -p {DEPLOY_DIR} /www/backup /tmp/jade-upload")
+            if up_code != 0:
+                sys.exit(up_code)
             server_had_content = run(
                 client,
                 f"test -d {DEPLOY_DIR} && ls -A {DEPLOY_DIR} 2>/dev/null | head -1",
             ) == 0
+            backup_path = ""
             if server_had_content:
                 ts = __import__("datetime").datetime.now().strftime("%Y%m%d-%H%M%S")
-                run(client, f"cp -a {DEPLOY_DIR} /www/backup/jade-accounting-{ts}")
-                print("[deploy] 服务器已有部署目录，已备份旧版本")
+                backup_path = f"/www/backup/jade-accounting-{ts}"
+                bk_code = run(client, f"cp -a {DEPLOY_DIR} {backup_path}")
+                if bk_code != 0:
+                    print("[deploy][FATAL] 备份旧部署目录失败", file=sys.stderr)
+                    sys.exit(bk_code)
+                print(f"[deploy] 服务器已有部署目录，已备份旧版本 -> {backup_path}")
             else:
                 print("[deploy] 服务器部署目录为空或不存在，将全新部署")
 
+            up_code = run(client, "mkdir -p /tmp/jade-upload")
+            if up_code != 0:
+                sys.exit(up_code)
             sftp_put(client, zip_path, "/tmp/jade-upload/jade-accounting.zip")
             sftp_put(client, env_path, "/tmp/jade-upload/server.env")
             print("[deploy] 生产环境禁止上传/覆盖 accounting.db（数据优先）")
@@ -249,7 +259,7 @@ def main() -> None:
             if pwd_file.exists():
                 sftp_put(client, pwd_file, "/tmp/jade-upload/admin-password.txt")
 
-        run(
+        deploy_shell_code = run(
             client,
             f"""
 set -e
@@ -267,6 +277,9 @@ sed -i 's/\\r$//' {DEPLOY_DIR}/deploy/aliyun/deploy.sh 2>/dev/null || true
 chmod +x {DEPLOY_DIR}/deploy/aliyun/*.sh 2>/dev/null || true
 """,
         )
+        if deploy_shell_code != 0:
+            print("[deploy][FATAL] 解压/数据保全/恢复步骤失败", file=sys.stderr)
+            sys.exit(deploy_shell_code)
 
         skip_seed = "1"
         code = run(client, f"cd {DEPLOY_DIR} && SKIP_SEED={skip_seed} bash deploy/aliyun/deploy.sh", timeout=3600)

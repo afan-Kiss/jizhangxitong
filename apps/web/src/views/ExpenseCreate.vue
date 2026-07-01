@@ -14,7 +14,7 @@ import ActionButton from '../components/ActionButton.vue'
 import XhsOrderPicker from '../components/XhsOrderPicker.vue'
 import type { XhsOrderItem } from '../types/xhs-order'
 import { resolveApiErrorMessage } from '../utils/api-errors'
-import { EXPENSE_BUSINESS_LABELS, type ExpenseBusinessType } from '@jade-account/shared'
+import { EXPENSE_BUSINESS_LABELS, DEFAULT_PAY_SOURCE, type ExpenseBusinessType } from '@jade-account/shared'
 
 const STORAGE_KEY = 'jade-expense-prefs'
 
@@ -76,6 +76,19 @@ const needsOrder = computed(() => ['customer_refund', 'customer_compensation', '
 const needsGoods = computed(() => form.value.businessType === 'item_cost')
 const isCustomerPayment = computed(() => ['customer_refund', 'customer_compensation', 'after_sale_compensation'].includes(form.value.businessType))
 
+const paySourceOptions = computed(() => {
+  const list = settings.value.paySources || []
+  return list.filter((s: { value: string }) => s.value !== '员工垫付')
+})
+
+function resolveDefaultPaySource() {
+  const opts = paySourceOptions.value
+  const preferred = opts.find((s: { value: string }) => s.value === DEFAULT_PAY_SOURCE)
+  if (preferred) return preferred.value
+  if (opts[0]?.value) return opts[0].value
+  return DEFAULT_PAY_SOURCE
+}
+
 const displayAmount = computed(() => {
   const v = form.value.amount
   if (!v) return ''
@@ -124,11 +137,14 @@ onMounted(async () => {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
     if (saved.expenseType) form.value.expenseType = saved.expenseType
     else if (settings.value.expenseTypes?.length) form.value.expenseType = settings.value.expenseTypes[0].value
-    if (saved.paySource) form.value.paySource = saved.paySource
-    else if (settings.value.paySources?.length) form.value.paySource = settings.value.paySources[0].value
+    if (saved.paySource && saved.paySource !== '员工垫付') form.value.paySource = saved.paySource
+    else form.value.paySource = resolveDefaultPaySource()
   } catch {
     if (settings.value.expenseTypes?.length) form.value.expenseType = settings.value.expenseTypes[0].value
-    if (settings.value.paySources?.length) form.value.paySource = settings.value.paySources[0].value
+    form.value.paySource = resolveDefaultPaySource()
+  }
+  if (!form.value.paySource || form.value.paySource === '员工垫付') {
+    form.value.paySource = resolveDefaultPaySource()
   }
 })
 
@@ -372,10 +388,10 @@ async function onSubmit() {
         </LuxuryCard>
 
         <LuxuryCard>
-          <div class="section-title">付款来源</div>
+          <div class="section-title">付款账户</div>
           <div class="pay-grid">
             <button
-              v-for="s in settings.paySources || []"
+              v-for="s in paySourceOptions"
               :key="s.value"
               class="pay-card"
               :class="{ 'pay-card--active': form.paySource === s.value }"

@@ -11,6 +11,16 @@ const router = createRouter({
     { path: '/expense/create', component: () => import('../views/ExpenseCreate.vue') },
     { path: '/expense/:id', component: () => import('../views/ExpenseDetail.vue') },
     { path: '/expense/stats', component: () => import('../views/ExpenseStats.vue') },
+    {
+      path: '/reimbursements',
+      component: () => import('../views/ModuleDisabled.vue'),
+      props: { moduleName: '报销', message: '报销功能已下线，现在统一使用专属经费记支出。' },
+    },
+    {
+      path: '/expense/export',
+      component: () => import('../views/ModuleDisabled.vue'),
+      props: { moduleName: '报销导出', message: '报销功能已下线，现在统一使用专属经费记支出。' },
+    },
     { path: '/sales', component: () => import('../views/ModuleDisabled.vue'), props: { moduleName: '销售' } },
     { path: '/sales/create', component: () => import('../views/ModuleDisabled.vue'), props: { moduleName: '销售' } },
     { path: '/sales/:id', component: () => import('../views/ModuleDisabled.vue'), props: { moduleName: '销售' } },

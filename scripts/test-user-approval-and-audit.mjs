@@ -92,7 +92,7 @@ async function main() {
     body: JSON.stringify({
       amount: 33,
       expenseType: '包装耗材',
-      paySource: '员工垫付',
+      paySource: '专属经费',
       occurredAt: today,
       reimbursementPerson: newUser.displayName,
       remark: 'test-user-approval-audit',
@@ -131,7 +131,7 @@ async function main() {
     fail('操作日志', JSON.stringify(logs.map((l) => l.action)))
   }
 
-  const list = await fetchJson(`${BASE}/api/expenses?paySource=${encodeURIComponent('员工垫付')}`, {
+  const list = await fetchJson(`${BASE}/api/expenses?paySource=${encodeURIComponent('专属经费')}`, {
     headers: authHeaders(adminToken),
   })
   const row = list.json.data?.items?.find((i) => i.id === expenseId)

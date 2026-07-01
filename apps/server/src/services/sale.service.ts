@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma'
 import { generateNo, toNumber } from '../lib/utils'
+import { isConfirmedRefund } from '@jade-account/shared'
 import { AuthRequest } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
 import { getEntityOperationLogs, resolveUserBrief } from './audit.service'
@@ -229,8 +230,21 @@ export async function refundSale(
   input: { refundAmount: number; refundReason?: string; refundedAt?: string },
   operator: AuthRequest['user'],
 ) {
-  const sale = await prisma.sale.findUnique({ where: { id: saleId } })
+  const sale = await prisma.sale.findUnique({
+    where: { id: saleId },
+    include: { refunds: true },
+  })
   if (!sale) throw new Error('销售记录不存在')
+  if (sale.status === 'refunded') {
+    throw new Error('这笔销售已经退款过了，不能重复退款')
+  }
+  if (sale.status !== 'sold') {
+    throw new Error('只有已成交的销售记录才能退款')
+  }
+  const existingConfirmed = (sale.refunds || []).some((r) => isConfirmedRefund(r.status))
+  if (existingConfirmed) {
+    throw new Error('这笔销售已经退款过了，不能重复退款')
+  }
 
   const refund = await prisma.refund.create({
     data: {

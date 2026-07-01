@@ -2,6 +2,9 @@
  * 清除业务/测试流水，保留全部用户与基础配置（Role、Permission、SystemSetting、ConfigOption 等）
  */
 import { prisma } from '../src/lib/prisma'
+import { assertSafeDatabaseUrl } from '../src/lib/prod-db-guard'
+
+assertSafeDatabaseUrl()
 
 async function deleteBusinessData() {
   await prisma.expenseAttachment.deleteMany()

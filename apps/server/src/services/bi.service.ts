@@ -2,6 +2,7 @@ import {
   isProfitDeductingExpense,
   isConfirmedRefund,
   EXPENSE_BUSINESS_LABELS,
+  BI_METRIC_HINTS,
 } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
 import { toNumber } from '../lib/utils'
@@ -98,6 +99,11 @@ export async function getBiSummary(range?: string, startDate?: string, endDate?:
     effectiveSaleAmount: effective.effectiveSaleAmount,
     effectiveOrderCount: effective.effectiveOrderCount,
     ruleHint: EFFECTIVE_SALES_RULE_HINT,
+    metricHints: BI_METRIC_HINTS,
+    /** @deprecated 报销流程已下线，请勿在 UI 使用 */
+    pendingReimbursementAmount: 0,
+    /** @deprecated 报销流程已下线，请勿在 UI 使用 */
+    pendingReimbursementCount: 0,
   }
 }
 

@@ -9,6 +9,8 @@ export const DEFAULT_SETTINGS = {
   qianfan_order_detail_url_template: '',
 } as const
 
+export const DEFAULT_PAY_SOURCE = '专属经费' as const
+
 export const EXPENSE_TYPES = [
   '原料采购',
   '加工费',
@@ -19,7 +21,6 @@ export const EXPENSE_TYPES = [
   '包装耗材',
   '差旅交通',
   '营销推广',
-  '员工垫付',
   '客户返款',
   '客户退差价',
   '客户心理落差补偿',
@@ -39,16 +40,24 @@ export const EXPENSE_TYPES = [
 ] as const
 
 export const PAY_SOURCES = [
+  '专属经费',
   '微信',
   '支付宝',
   '银行卡',
   '现金',
   '老板付款',
-  '员工垫付',
   '娟姐转账',
   '财务转账',
   '其他',
 ] as const
+
+export const BI_METRIC_HINTS = {
+  expenseAmount: '按支出发生日期 occurredAt 统计',
+  saleAmount: '按成交日期 soldAt 统计',
+  refundAmount: '按退款日期 refundedAt 统计',
+  inventoryCost: '当前在库累计',
+  netProfit: '销售额 - 成本 - 已确认退款 - 客户补偿/返款',
+} as const
 
 export const FILE_TYPES = [
   'payment_screenshot',

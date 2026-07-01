@@ -184,15 +184,15 @@ async function testApiFlow(token) {
       businessType: 'customer_compensation',
       expenseType: '客户心理落差补偿',
       amount: 15,
-      paySource: '员工垫付',
+      paySource: '专属经费',
       occurredAt: today,
       externalOrderNo: orderNo,
       saleId,
       remark: `${TAG}-staff`,
     }),
   })
-  if (staffComp.res.ok) pass('M. 员工垫付客户补偿可记账')
-  else fail('M. 员工垫付客户补偿可记账', staffComp.text)
+  if (staffComp.res.ok) pass('M. 专属经费客户补偿可记账')
+  else fail('M. 专属经费客户补偿可记账', staffComp.text)
 
   console.log('\n--- N-O. 千帆 ---')
   if (comp.json.data?.externalOrderNo === orderNo) pass('N. 支出详情含小红书订单号')

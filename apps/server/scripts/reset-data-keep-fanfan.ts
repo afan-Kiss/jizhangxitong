@@ -1,5 +1,8 @@
 import bcrypt from 'bcryptjs'
 import { prisma } from '../src/lib/prisma'
+import { assertSafeDatabaseUrl } from '../src/lib/prod-db-guard'
+
+assertSafeDatabaseUrl()
 
 const FANFAN_USERNAME = 'fanfan'
 /** 仅新建 fanfan 时使用；已存在则绝不改密码 */

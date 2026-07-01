@@ -105,6 +105,7 @@ onMounted(() => {
     <LuxuryCard v-if="monthly" gold>
       <div class="section-title">运营月报</div>
       <p class="muted rule-hint">{{ monthly.ruleHint }}</p>
+      <p class="muted rule-hint">净利润 = 销售额 - 成本 - 已确认退款 - 客户补偿/返款</p>
       <div class="stat-grid">
         <div class="stat-item">
           <div class="stat-label">有效成交金额</div>
@@ -119,7 +120,7 @@ onMounted(() => {
           <div class="stat-value">¥{{ Number(monthly.refundImpact).toFixed(2) }}</div>
         </div>
         <div class="stat-item">
-          <div class="stat-label">毛利</div>
+          <div class="stat-label">净利润</div>
           <div class="stat-value">¥{{ Number(monthly.grossProfit).toFixed(2) }}</div>
         </div>
       </div>
