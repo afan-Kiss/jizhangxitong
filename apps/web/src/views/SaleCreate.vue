@@ -7,6 +7,8 @@ import { useBreakpoint } from '../composables/useBreakpoint'
 import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import ActionButton from '../components/ActionButton.vue'
+import XhsOrderPicker from '../components/XhsOrderPicker.vue'
+import type { XhsOrderItem } from '../types/xhs-order'
 
 const router = useRouter()
 const route = useRoute()
@@ -26,6 +28,7 @@ const form = ref({
 })
 const costPreview = ref<any>(null)
 const loading = ref(false)
+const showXhsPicker = ref(false)
 
 async function loadGoodsFromQuery() {
   const goodsId = route.query.goodsId as string
@@ -93,6 +96,18 @@ async function onSubmit() {
     loading.value = false
   }
 }
+
+function onXhsOrderPicked(order: XhsOrderItem) {
+  form.value.externalOrderNo = order.externalOrderNo
+  if (order.logisticsNo) form.value.logisticsNo = order.logisticsNo
+  if (order.buyerName) form.value.customerName = order.buyerName
+  if (order.amount) {
+    form.value.saleAmount = String(order.amount)
+    if (!form.value.finalPaymentAmount) form.value.finalPaymentAmount = String(order.amount)
+  } else {
+    showToast('这单没读到金额，请手动补一下')
+  }
+}
 </script>
 
 <template>
@@ -114,7 +129,8 @@ async function onSubmit() {
                 </van-radio-group>
               </template>
             </van-field>
-            <van-field v-model="form.externalOrderNo" label="订单号" />
+            <van-field v-model="form.externalOrderNo" label="订单号" data-testid="sale-order-no" />
+            <ActionButton block plain data-testid="sale-xhs-order-btn" @click="showXhsPicker = true">查询订单</ActionButton>
             <van-field v-model="form.logisticsNo" label="物流单号" />
             <van-field v-model="form.customerName" label="客户昵称" />
             <van-field v-model="form.braceletCode" label="镯子编号" placeholder="输入编号后点查询" required>
@@ -148,6 +164,7 @@ async function onSubmit() {
         <ActionButton block size="lg" :loading="loading" @click="onSubmit">保存销售</ActionButton>
       </div>
     </div>
+    <XhsOrderPicker v-model="showXhsPicker" @select="onXhsOrderPicked" />
   </AppShell>
 </template>
 

@@ -2,7 +2,10 @@
 import { onMounted, ref } from 'vue'
 import { showToast } from 'vant'
 import api from '../api'
+import { useAuthStore } from '../stores/auth'
 import { confirmAction } from '../utils/confirm-dialog'
+
+const auth = useAuthStore()
 
 const users = ref<any[]>([])
 const loading = ref(false)
@@ -45,6 +48,10 @@ async function reject(user: any) {
 }
 
 async function toggleDisable(user: any) {
+  if (user.id === auth.user?.id) {
+    showToast('不能禁用自己的账号')
+    return
+  }
   if (user.protected) {
     showToast('fanfan 管理员不能禁用')
     return
@@ -144,10 +151,11 @@ async function saveRole(user: any) {
           </button>
         </div>
         <button type="button" @click="editDisplayName(user)">改显示名</button>
-        <button v-if="!user.protected" type="button" @click="toggleDisable(user)">
+        <button v-if="!user.protected && user.id !== auth.user?.id" type="button" @click="toggleDisable(user)">
           {{ user.status === 'disabled' ? '启用' : '禁用' }}
         </button>
-        <span v-else class="muted">受保护管理员</span>
+        <span v-else-if="user.protected" class="muted">受保护管理员</span>
+        <span v-else-if="user.id === auth.user?.id" class="muted">当前登录账号</span>
       </div>
     </div>
     <p v-if="!users.length && !loading" class="muted">暂无员工账号</p>

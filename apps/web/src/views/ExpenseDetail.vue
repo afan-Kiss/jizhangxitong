@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import api, { fileThumbUrl } from '../api'
+import api, { fileViewUrl } from '../api'
 import { useAuthStore } from '../stores/auth'
 import { loadQianfanConfig } from '../composables/useQianfan'
 import { EXPENSE_BUSINESS_LABELS } from '@jade-account/shared'
@@ -25,7 +25,7 @@ const statusLabels: Record<string, string> = {
   paid: '已打款',
   failed: '打款失败',
 }
-const thumbUrls = ref<Record<number, string>>({})
+const imageUrls = ref<Record<number, string>>({})
 const supplementFiles = ref<Array<{ fileId: number; fileType: string; name: string }>>([])
 const supplementing = ref(false)
 
@@ -44,7 +44,7 @@ onMounted(async () => {
   const res = await api.get(`/expenses/${route.params.id}`)
   expense.value = res.data.data
   for (const att of expense.value.attachments || []) {
-    thumbUrls.value[att.fileId] = await fileThumbUrl(att.fileId)
+    imageUrls.value[att.fileId] = await fileViewUrl(att.fileId)
   }
 })
 
@@ -88,8 +88,8 @@ async function supplementAttachments() {
     const res = await api.get(`/expenses/${route.params.id}`)
     expense.value = res.data.data
     for (const att of expense.value.attachments || []) {
-      if (!thumbUrls.value[att.fileId]) {
-        thumbUrls.value[att.fileId] = await fileThumbUrl(att.fileId)
+      if (!imageUrls.value[att.fileId]) {
+        imageUrls.value[att.fileId] = await fileViewUrl(att.fileId)
       }
     }
   } catch (err: any) {
@@ -195,7 +195,7 @@ async function supplementAttachments() {
         <img
           v-for="att in expense.attachments"
           :key="att.id"
-          :src="thumbUrls[att.fileId]"
+          :src="imageUrls[att.fileId]"
           alt="凭证"
         />
       </div>

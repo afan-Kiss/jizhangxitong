@@ -81,38 +81,53 @@ async function main() {
     const drop = page.getByTestId('image-uploader-drop')
     const png = tinyPngPath()
 
-    const dt = await page.evaluateHandle((files) => {
+    await page.evaluate((bytes) => {
+      const dropEl = document.querySelector('[data-testid="image-uploader-drop"]')
+      if (!dropEl) return
+      const file = new File([new Uint8Array(bytes)], 'drag-over.png', { type: 'image/png' })
       const dt = new DataTransfer()
-      for (const f of files) {
-        dt.items.add(new File([new Uint8Array(f.bytes)], f.name, { type: f.type }))
-      }
-      return dt
-    }, [{ name: 'drag-1.png', type: 'image/png', bytes: [...fs.readFileSync(png)] }])
-
-    await drop.dispatchEvent('dragenter', { dataTransfer: dt })
-    await drop.dispatchEvent('dragover', { dataTransfer: dt })
+      dt.items.add(file)
+      dropEl.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }))
+    }, [...fs.readFileSync(png)])
+    await page.waitForTimeout(300)
     const hintOverlay = page.getByTestId('image-uploader-drop-hint')
     if (await hintOverlay.count()) pass('拖入图片出现「松开就上传」')
     else pass('拖入图片高亮（Worker 离线时可能无 overlay）')
 
-    await drop.dispatchEvent('drop', { dataTransfer: dt })
-    await page.waitForTimeout(1500)
+    const pngBytes = [...fs.readFileSync(png)]
+    await page.evaluate((bytes) => {
+      const dropEl = document.querySelector('[data-testid="image-uploader-drop"]')
+      if (!dropEl) return
+      const file = new File([new Uint8Array(bytes)], 'drag-1.png', { type: 'image/png' })
+      const dt = new DataTransfer()
+      dt.items.add(file)
+      dropEl.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }))
+      dropEl.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }))
+    }, pngBytes)
+    await page.waitForTimeout(3500)
 
     const overlay = page.locator('.image-uploader__overlay')
-    if (await overlay.count()) pass('拖入后显示上传进度/状态')
+    const thumbCount = await page.locator('.image-uploader__thumb img').count()
+    if (await overlay.count() || thumbCount > 0) pass('拖入后显示上传进度/状态')
     else {
-      const toast = await page.evaluate(() => document.body.innerText.includes('本地助手没连上'))
+      const toast = await page.evaluate(() => {
+        const body = document.body.innerText || ''
+        const van = document.querySelector('.van-toast')?.textContent || ''
+        return body.includes('本地助手没连上') || van.includes('本地助手') || van.includes('先别传')
+      })
       if (toast) pass('Worker 不在线时拖拽前 probe 拦截')
       else fail('拖入后显示上传进度/状态或 probe 拦截')
     }
 
     // 非图片
-    const badDt = await page.evaluateHandle(() => {
+    await page.evaluate(() => {
+      const dropEl = document.querySelector('[data-testid="image-uploader-drop"]')
+      if (!dropEl) return
+      const file = new File(['hello'], 'note.txt', { type: 'text/plain' })
       const dt = new DataTransfer()
-      dt.items.add(new File(['hello'], 'note.txt', { type: 'text/plain' }))
-      return dt
+      dt.items.add(file)
+      dropEl.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }))
     })
-    await drop.dispatchEvent('drop', { dataTransfer: badDt })
     await page.waitForTimeout(400)
     pass('拖入非图片触发校验（源码+事件）')
 

@@ -11,6 +11,20 @@ import { fetchWithTimeout } from './lib/script-timeout.mjs'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(__dirname, '..')
 
+export function resolveVerifyBaseUrl() {
+  const explicit = process.env.DEPLOY_VERIFY_URL?.trim()
+  if (explicit) return explicit.replace(/\/$/, '')
+
+  const accept = process.env.ACCEPTANCE_SERVER?.trim()
+  if (accept) {
+    const normalized = accept.replace(/\/$/, '')
+    const isLocal = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(normalized)
+    if (!isLocal || /\/account/i.test(normalized)) return normalized
+  }
+
+  return RECOMMENDED_URL.replace(/\/$/, '')
+}
+
 export function getLocalHead() {
   return execSync('git rev-parse --short HEAD', { cwd: ROOT, encoding: 'utf-8' }).trim()
 }
@@ -61,10 +75,11 @@ export async function verifyDeployVersion(expectedHead, baseUrl = RECOMMENDED_UR
 
 async function main() {
   const expected = process.argv[2]?.trim() || getLocalHead()
-  const base = (process.env.ACCEPTANCE_SERVER || RECOMMENDED_URL).replace(/\/$/, '')
+  const base = resolveVerifyBaseUrl()
   const result = await verifyDeployVersion(expected, base)
 
   console.log('\n=== 部署版本一致性检查 ===\n')
+  console.log('检查地址:', base)
   console.log('本地 HEAD:', result.localHead)
   console.log('远程 APP_VERSION (meta):', result.remote.metaVersion ?? '(missing)')
   console.log('远程 /api/health version:', result.remote.healthVersion ?? '(missing)')

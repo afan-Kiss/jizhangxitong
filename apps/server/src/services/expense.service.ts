@@ -7,7 +7,7 @@ import {
   type ExpenseBusinessType,
 } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
-import { generateNo, toNumber, startOfDay, endOfDay, startOfWeek, startOfMonth } from '../lib/utils'
+import { generateNo, toNumber, startOfDay, endOfDay, startOfWeek, startOfMonth, parseDateInput } from '../lib/utils'
 import { AuthRequest } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
 import { getEntityOperationLogs, resolveUserBrief, resolveUsersBrief } from './audit.service'
@@ -54,8 +54,8 @@ function buildWhere(filter: ExpenseFilter) {
 
   if (filter.startDate || filter.endDate) {
     where.occurredAt = {}
-    if (filter.startDate) (where.occurredAt as Record<string, Date>).gte = startOfDay(new Date(filter.startDate))
-    if (filter.endDate) (where.occurredAt as Record<string, Date>).lte = endOfDay(new Date(filter.endDate))
+    if (filter.startDate) (where.occurredAt as Record<string, Date>).gte = startOfDay(parseDateInput(filter.startDate))
+    if (filter.endDate) (where.occurredAt as Record<string, Date>).lte = endOfDay(parseDateInput(filter.endDate))
   }
   if (filter.expenseType) where.expenseType = filter.expenseType
   if (filter.businessType) where.businessType = filter.businessType
@@ -309,7 +309,7 @@ export async function createExpense(
       businessType,
       paySource: input.paySource,
       amount: input.amount,
-      occurredAt: new Date(input.occurredAt),
+      occurredAt: parseDateInput(input.occurredAt),
       expenseSummary: input.expenseSummary,
       remark: input.remark,
       reimbursementPerson: input.reimbursementPerson,
@@ -480,7 +480,7 @@ export async function updateExpense(
   const oldBraceletId = before.braceletId
   const data: Record<string, unknown> = { ...input }
   delete data.payeeAccount
-  if (input.occurredAt) data.occurredAt = new Date(input.occurredAt)
+  if (input.occurredAt) data.occurredAt = parseDateInput(input.occurredAt)
   if (input.amount !== undefined && input.amount <= 0) throw new Error('金额得填一下')
   if (input.payeeAccount !== undefined) {
     data.payeeAccountMasked = maskPayeeAccount(input.payeeAccount)

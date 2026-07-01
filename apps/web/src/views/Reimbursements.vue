@@ -124,7 +124,7 @@ onMounted(() => {
         <van-field v-model="filter.externalOrderNo" label="小红书订单号" />
         <van-field v-model="filter.braceletCode" label="货品编号" />
         <van-field v-model="filter.reimbursementPerson" label="经手人" />
-        <van-field v-model="filter.reimbursementStatus" label="报销状态" placeholder="pending" />
+        <van-field v-model="filter.reimbursementStatus" label="报销状态" placeholder="未报销/已报销" />
       </div>
     </LuxuryCard>
 

@@ -6,6 +6,7 @@ import { prisma } from './lib/prisma'
 import { workerHub } from './websocket/worker-hub'
 import { ensureDirs } from './services/file.service'
 import { cleanupLegacyTrialData } from './services/trial-legacy-cleanup'
+import { syncEmployeeRolePermissions } from './services/user.service'
 
 process.on('uncaughtException', (err) => {
   console.error('[fatal] uncaughtException:', err)
@@ -45,6 +46,7 @@ async function main() {
   }
 
   await initDatabase()
+  await syncEmployeeRolePermissions()
   await cleanupLegacyTrialData()
   await ensureDirs()
   const app = createApp()

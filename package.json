@@ -45,6 +45,7 @@
     "test:worker-upload-readiness": "node scripts/test-worker-upload-readiness.mjs",
     "test:unlimited-attachments": "node scripts/test-unlimited-attachments.mjs",
     "test:user-approval-and-audit": "node scripts/test-user-approval-and-audit.mjs",
+    "test:admin-disable-safety": "node scripts/test-admin-disable-safety.mjs",
     "test:reset-data-keep-fanfan": "node scripts/test-reset-data-keep-fanfan.mjs",
     "test:assets": "node scripts/check-assets-remote.mjs",
     "cleanup:stuck-tests": "node scripts/cleanup-stuck-tests.mjs",

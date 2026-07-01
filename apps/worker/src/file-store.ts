@@ -1,7 +1,6 @@
 import fs from 'fs/promises'
 import path from 'path'
 import crypto from 'crypto'
-import sharp from 'sharp'
 
 const FILE_BASE = path.resolve(process.env.FILE_BASE_DIR || 'D:/jewelry-account-files')
 
@@ -67,15 +66,8 @@ export async function saveUpload(input: {
 
     const sha256 = crypto.createHash('sha256').update(buffer).digest('hex')
 
-    const thumbDir = path.join(FILE_BASE, 'thumbs', year, month)
-    await fs.mkdir(thumbDir, { recursive: true })
-    const thumbName = `thumb_${fileName.replace(ext, '.jpg')}`
-    const thumbPath = path.join(thumbDir, thumbName)
-
-    await sharp(buffer)
-      .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 80 })
-      .toFile(thumbPath)
+    // 原图字节原样落盘；缩略图路径指向同一文件，不做 resize / 重编码
+    const thumbPath = localPath
 
     return { localPath, thumbPath, fileSize: buffer.length, sha256 }
   } catch (err) {

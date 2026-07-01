@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, nextTick } from 'vue'
+import { onMounted, onUnmounted, ref, nextTick, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import api from '../api'
@@ -10,11 +10,16 @@ import LuxuryCard from '../components/LuxuryCard.vue'
 import ActionButton from '../components/ActionButton.vue'
 import OrderLink from '../components/OrderLink.vue'
 import BraceletCard from '../components/BraceletCard.vue'
+import XhsOrderPicker from '../components/XhsOrderPicker.vue'
+import type { XhsOrderItem } from '../types/xhs-order'
 import { loadQianfanConfig } from '../composables/useQianfan'
+import { useScanOverlay } from '../composables/useScanOverlay'
 
 const router = useRouter()
 const auth = useAuthStore()
-const { isDesktop } = useBreakpoint()
+const { isDesktop, useScannerGun } = useBreakpoint()
+const scanOverlay = useScanOverlay()
+const showMobileCameraBtn = computed(() => !useScannerGun.value)
 
 const enabled = ref(true)
 const scanInput = ref('')
@@ -27,6 +32,7 @@ const scannerOnline = ref(false)
 const bindGoodsCode = ref('')
 const lastPollCode = ref('')
 const inputFocused = ref(false)
+const showXhsPicker = ref(false)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -144,6 +150,11 @@ function goManualOrderExpense() {
   router.push({ path: '/expense/create', query })
 }
 
+function onXhsOrderPicked(order: XhsOrderItem) {
+  scanInput.value = order.externalOrderNo
+  recognize(order.externalOrderNo)
+}
+
 function goOrderProfit() {
   const order = result.value?.order
   if (order?.orderNo) {
@@ -190,7 +201,7 @@ onUnmounted(() => {
             <div class="scan-workbench__scanner-status" data-testid="scan-scanner-status">
               <span :class="scannerOnline ? 'ok' : 'warn'">
                 <span class="scanner-dot" :class="scannerOnline ? 'scanner-dot--online' : 'scanner-dot--offline'" />
-                {{ scannerOnline ? '扫码枪已连接' : '扫码枪没连上，仍可手动输入' }}
+                {{ scannerOnline ? '出入库系统已连接' : '出入库系统未连接，仍可手动输入' }}
               </span>
             </div>
             <div
@@ -210,7 +221,9 @@ onUnmounted(() => {
                   @blur="inputFocused = false"
                 />
                 <ActionButton :loading="recognizing" data-testid="scan-recognize-btn" @click="recognize()">识别</ActionButton>
+                <ActionButton block plain v-if="showMobileCameraBtn" data-testid="scan-open-camera-btn" @click="scanOverlay.openScan()">打开手机摄像头扫码</ActionButton>
               </div>
+              <ActionButton block plain class="scan-workbench__xhs-btn" data-testid="scan-xhs-order-btn" @click="showXhsPicker = true">查询订单</ActionButton>
             </div>
           </LuxuryCard>
 
@@ -294,6 +307,7 @@ onUnmounted(() => {
         </LuxuryCard>
       </div>
     </div>
+    <XhsOrderPicker v-model="showXhsPicker" @select="onXhsOrderPicked" />
   </AppShell>
 </template>
 
@@ -319,6 +333,7 @@ onUnmounted(() => {
 .scan-workbench__scanner-status .ok { color: var(--color-success); }
 .scan-workbench__scanner-status .warn { color: var(--color-warning); }
 .scan-workbench__input-row { display: flex; flex-direction: column; gap: 10px; position: relative; }
+.scan-workbench__xhs-btn { margin-top: 10px; }
 .scan-workbench__input {
   width: 100%;
   font-size: 18px;

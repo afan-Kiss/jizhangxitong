@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { prisma } from '../src/lib/prisma'
-import { DEFAULT_SETTINGS, EXPENSE_TYPES, PAY_SOURCES } from '@jade-account/shared'
+import { DEFAULT_SETTINGS, EXPENSE_TYPES, PAY_SOURCES, PERMISSIONS } from '@jade-account/shared'
 import { seedPermissions } from '../src/routes/settings.routes'
 
 async function seedConfigOptions(category: string, values: readonly string[]) {
@@ -50,6 +50,22 @@ async function main() {
     })
   }
 
+  const employeeRole = await prisma.role.upsert({
+    where: { name: '员工' },
+    create: { name: '员工', description: '普通员工（共享全公司账本）' },
+    update: { description: '普通员工（共享全公司账本）' },
+  })
+  const businessPerms = allPerms.filter((p) =>
+    !['permission:manage', 'setting:update'].includes(p.code),
+  )
+  for (const perm of businessPerms) {
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: employeeRole.id, permissionId: perm.id } },
+      create: { roleId: employeeRole.id, permissionId: perm.id },
+      update: {},
+    })
+  }
+
   const password = await bcrypt.hash('fanfan9724', 10)
   const adminUser = await prisma.user.upsert({
     where: { username: 'fanfan' },
@@ -63,7 +79,7 @@ async function main() {
     update: {},
   })
 
-  console.log('Seed completed. Default login: fanfan / fanfan9724')
+  console.log('Seed completed. Admin user: fanfan')
 }
 
 main()

@@ -122,6 +122,7 @@ async function main() {
   const loginVue = fs.readFileSync(path.join(ROOT, 'apps/web/src/views/Login.vue'), 'utf-8')
   ok('Login.vue 无空 catch', !loginVue.includes('catch { /* */ }'))
   ok('Login.vue 密码默认空', loginVue.includes("ref('')") && !loginVue.includes("ref('admin123')"))
+  ok('Login.vue 用户名默认空', loginVue.includes("const username = ref('')") && !loginVue.includes("ref('fanfan')"))
   ok('Login.vue loading 文案', loginVue.includes('正在进入...'))
   ok('Login.vue Enter 登录', loginVue.includes('@keyup.enter'))
 

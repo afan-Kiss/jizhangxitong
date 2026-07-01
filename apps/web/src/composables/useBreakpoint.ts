@@ -19,19 +19,31 @@ export function useBreakpoint() {
   const isTablet = computed(() => mode.value === 'tablet')
   const isDesktop = computed(() => mode.value === 'desktop')
   const isWide = computed(() => width.value >= DESKTOP_MIN)
+  const useScannerGun = ref(typeof window !== 'undefined'
+    ? window.matchMedia('(min-width: 768px) and (hover: hover)').matches
+    : false)
 
   function update() {
     width.value = window.innerWidth
   }
 
+  function updateScannerGun(e?: MediaQueryList | MediaQueryListEvent) {
+    const mq = e && 'matches' in e ? e : window.matchMedia('(min-width: 768px) and (hover: hover)')
+    useScannerGun.value = mq.matches
+  }
+
   onMounted(() => {
     update()
     window.addEventListener('resize', update, { passive: true })
+    const mq = window.matchMedia('(min-width: 768px) and (hover: hover)')
+    mq.addEventListener('change', updateScannerGun)
+    updateScannerGun(mq)
   })
 
   onUnmounted(() => {
     window.removeEventListener('resize', update)
+    window.matchMedia('(min-width: 768px) and (hover: hover)').removeEventListener('change', updateScannerGun)
   })
 
-  return { width, mode, isMobile, isTablet, isDesktop, isWide }
+  return { width, mode, isMobile, isTablet, isDesktop, isWide, useScannerGun }
 }

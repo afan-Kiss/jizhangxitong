@@ -87,6 +87,13 @@ export const PERMISSIONS = [
   'permission:manage',
 ] as const
 
+/** 仅系统管理员保留；其余权限为全公司共享账本能力 */
+export const ADMIN_ONLY_PERMISSIONS = ['permission:manage', 'setting:update'] as const
+
+export const SHARED_BUSINESS_PERMISSIONS = PERMISSIONS.filter(
+  (code) => !(ADMIN_ONLY_PERMISSIONS as readonly string[]).includes(code),
+)
+
 export const PERMISSION_LABELS: Record<string, string> = {
   'bracelet:view': '查看镯子列表与详情',
   'bracelet:cost:view': '查看镯子真实成本',

@@ -3,14 +3,21 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBreakpoint } from '../composables/useBreakpoint'
 import { useAuthStore } from '../stores/auth'
+import { useScanOverlay } from '../composables/useScanOverlay'
 import DesktopSidebar from './DesktopSidebar.vue'
 import DesktopHeader from './DesktopHeader.vue'
 import TabBar from './TabBar.vue'
+import ScanCameraOverlay from './ScanCameraOverlay.vue'
+import ScanResultSheet from './ScanResultSheet.vue'
 import { shouldHideMobileTab } from '../utils/mobile-tab-routes'
 
 const route = useRoute()
 const auth = useAuthStore()
-const { isDesktop, isWide } = useBreakpoint()
+const { isDesktop, isWide, useScannerGun } = useBreakpoint()
+const scan = useScanOverlay()
+const cameraOpen = computed(() => scan.cameraVisible.value)
+const resultOpen = computed(() => scan.resultVisible.value)
+const useCameraForScan = computed(() => !useScannerGun.value)
 
 const isLogin = computed(() => route.path === '/login')
 const showChrome = computed(() => !isLogin.value && Boolean(auth.token))
@@ -34,6 +41,17 @@ const hideMobileTab = computed(() => shouldHideMobileTab(route.path, isWide.valu
       </main>
     </div>
     <TabBar v-if="showChrome && !hideMobileTab" />
+    <ScanCameraOverlay
+      :visible="cameraOpen"
+      :use-camera="useCameraForScan"
+      @close="scan.closeCamera()"
+      @detected="scan.onCodeDetected"
+    />
+    <ScanResultSheet
+      :visible="resultOpen"
+      :scan="scan"
+      @close="scan.closeResult()"
+    />
   </div>
 </template>
 

@@ -1,12 +1,36 @@
 import bcrypt from 'bcryptjs'
+import { PERMISSIONS } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
-import { AuthRequest } from '../middleware/auth'
+import { AuthRequest, getUserPermissions } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
 
 const FANFAN_USERNAME = 'fanfan'
 
+const ADMIN_ONLY_PERMISSIONS = ['permission:manage', 'setting:update'] as const
+
+function sharedBusinessPermissionCodes() {
+  return PERMISSIONS.filter(
+    (code) => !(ADMIN_ONLY_PERMISSIONS as readonly string[]).includes(code),
+  )
+}
+
+export function normalizeUsernameInput(username: string | undefined | null): string {
+  return String(username ?? '').trim()
+}
+
+/** SQLite 无 Prisma insensitive 模式，用 lower() 做账号名不区分大小写匹配 */
+export async function findUserByUsername(username: string) {
+  const trimmed = normalizeUsernameInput(username)
+  if (!trimmed) return null
+  const rows = await prisma.$queryRaw<Array<{ id: number }>>`
+    SELECT id FROM User WHERE lower(username) = lower(${trimmed}) LIMIT 1
+  `
+  if (!rows.length) return null
+  return prisma.user.findUnique({ where: { id: rows[0].id } })
+}
+
 export function isProtectedAdmin(username: string) {
-  return username === FANFAN_USERNAME
+  return normalizeUsernameInput(username).toLowerCase() === FANFAN_USERNAME
 }
 
 export async function registerUser(input: {
@@ -22,7 +46,7 @@ export async function registerUser(input: {
   if (!displayName) throw new Error('请填写显示名（员工姓名）')
   if (!password || password.length < 6) throw new Error('密码至少 6 位')
 
-  const exists = await prisma.user.findUnique({ where: { username } })
+  const exists = await findUserByUsername(username)
   if (exists) throw new Error('这个登录账号已经有人用了')
 
   const hashed = await bcrypt.hash(password, 10)
@@ -80,19 +104,11 @@ export async function listManagedUsers() {
 async function ensureEmployeeRole() {
   let role = await prisma.role.findUnique({ where: { name: '员工' } })
   if (!role) {
-    role = await prisma.role.create({ data: { name: '员工', description: '普通员工' } })
+    role = await prisma.role.create({ data: { name: '员工', description: '普通员工（共享全公司账本）' } })
   }
-  const employeePermCodes = [
-    'bracelet:view',
-    'expense:view',
-    'expense:create',
-    'expense:update',
-    'expense:attachment:view',
-    'expense:attachment:upload',
-    'reimbursement:view',
-    'sale:view',
-  ]
-  const perms = await prisma.permission.findMany({ where: { code: { in: employeePermCodes } } })
+  const perms = await prisma.permission.findMany({
+    where: { code: { in: [...sharedBusinessPermissionCodes()] } },
+  })
   for (const perm of perms) {
     await prisma.rolePermission.upsert({
       where: { roleId_permissionId: { roleId: role.id, permissionId: perm.id } },
@@ -103,8 +119,35 @@ async function ensureEmployeeRole() {
   return role
 }
 
+/** 启动时同步员工角色权限，确保各账号看到同一份业务数据（不按人隔离） */
+export async function syncEmployeeRolePermissions() {
+  await ensureEmployeeRole()
+}
+
 async function ensureAdminRole() {
   return prisma.role.findUniqueOrThrow({ where: { name: '管理员' } })
+}
+
+async function userHasPermission(userId: number, code: string): Promise<boolean> {
+  const perms = await getUserPermissions(userId)
+  return perms.includes(code)
+}
+
+/** 仍具备 permission:manage 且可登录的管理员数量（可排除即将被禁用的用户） */
+async function countActivePermissionManagers(excludeUserId?: number): Promise<number> {
+  const users = await prisma.user.findMany({
+    where: {
+      status: 'active',
+      isActive: true,
+      ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+    },
+    select: { id: true },
+  })
+  let count = 0
+  for (const u of users) {
+    if (await userHasPermission(u.id, 'permission:manage')) count++
+  }
+  return count
 }
 
 export async function approveUser(userId: number, operator: AuthRequest['user'], roleName: '管理员' | '员工' = '员工') {
@@ -165,7 +208,16 @@ export async function rejectUser(userId: number, operator: AuthRequest['user']) 
 export async function disableUser(userId: number, operator: AuthRequest['user']) {
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) throw new Error('用户不存在')
+  if (operator?.userId === userId) throw new Error('不能禁用自己的账号')
   if (isProtectedAdmin(user.username)) throw new Error('fanfan 管理员不能禁用')
+
+  const targetCanManage = await userHasPermission(userId, 'permission:manage')
+  if (targetCanManage) {
+    const remaining = await countActivePermissionManagers(userId)
+    if (remaining < 1) {
+      throw new Error('至少保留一名可管理账号的管理员，不能继续禁用')
+    }
+  }
 
   await prisma.user.update({
     where: { id: userId },

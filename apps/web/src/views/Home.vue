@@ -15,10 +15,12 @@ import {
   toRangeQuery,
   type DateRangeState,
 } from '../utils/date-range'
+import { useScanOverlay } from '../composables/useScanOverlay'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const scan = useScanOverlay()
 
 const dateRange = ref<DateRangeState>(parseRouteRange(route.query as Record<string, string>))
 const summary = ref<any>(null)
@@ -215,7 +217,7 @@ const heroSubtitle = () => {
           <van-icon name="balance-pay" size="22" />
           <span>记一笔</span>
         </button>
-        <button class="home-page__action" data-testid="home-scan-btn" @click="router.push('/scan')">
+        <button class="home-page__action" data-testid="home-scan-btn" @click="scan.openScan()">
           <van-icon name="scan" size="22" />
           <span>扫码工作台</span>
         </button>

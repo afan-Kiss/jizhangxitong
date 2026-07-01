@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma'
 import { signToken } from '../lib/jwt'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { sanitizeUser } from '../lib/serialize'
-import { registerUser } from '../services/user.service'
+import { registerUser, findUserByUsername } from '../services/user.service'
 import { writeOperationLog } from '../services/operation-log.service'
 
 export const authRouter = Router()
@@ -37,7 +37,7 @@ authRouter.post('/register', async (req, res) => {
 
 authRouter.post('/login', async (req, res) => {
   const { username, password } = req.body
-  const user = await prisma.user.findUnique({ where: { username } })
+  const user = await findUserByUsername(username)
   if (!user) {
     res.status(401).json({ success: false, message: '用户名或密码错误' })
     return

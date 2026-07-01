@@ -24,6 +24,7 @@ type LocalItem = {
 }
 
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'])
+const FILE_ACCEPT = 'image/png,image/jpeg,image/jpg,image/webp,image/gif'
 
 const props = defineProps<{
   modelValue: UploadedItem[]
@@ -52,6 +53,8 @@ const queueRunning = ref(false)
 const failedCount = ref(0)
 const dragOver = ref(false)
 const isDesktop = ref(false)
+const probePassed = ref(false)
+const addInputId = `image-uploader-input-${Math.random().toString(36).slice(2, 9)}`
 
 const displayItems = computed(() => {
   const saved = props.modelValue.map((m, idx) => ({
@@ -71,9 +74,14 @@ function tagLabel(type: string) {
   return quickTags.find((t) => t.type === type)?.label || type
 }
 
+function revokePreview(url?: string) {
+  if (url?.startsWith('blob:')) URL.revokeObjectURL(url)
+}
+
 function syncModelValue() {
   const successLocals = localItems.value.filter((i) => i.status === 'success' && i.fileId)
   const merged = [...props.modelValue]
+  const promotedKeys: string[] = []
   for (const i of successLocals) {
     if (!merged.some((m) => m.fileId === i.fileId)) {
       merged.push({
@@ -83,7 +91,15 @@ function syncModelValue() {
         preview: i.preview,
         label: i.label,
       })
+      promotedKeys.push(i.key)
     }
+  }
+  if (promotedKeys.length) {
+    for (const key of promotedKeys) {
+      const item = localItems.value.find((i) => i.key === key)
+      revokePreview(item?.preview)
+    }
+    localItems.value = localItems.value.filter((i) => !promotedKeys.includes(i.key))
   }
   emit('update:modelValue', merged)
   emit('upload-failures', failedCount.value)
@@ -111,7 +127,8 @@ function isImageFile(file: File) {
   return /\.(png|jpe?g|webp|gif)$/i.test(file.name)
 }
 
-function enqueueFiles(files: File[]) {
+/** 点击上传与拖拽上传共用 */
+function addFiles(files: File[]) {
   if (!files.length) return
   const label = customLabel.value.trim() || tagLabel(selectedTag.value)
   for (const file of files) {
@@ -134,18 +151,32 @@ function enqueueFiles(files: File[]) {
   runUploadQueue()
 }
 
-async function onAddClick() {
+async function onAddAreaClick(e: MouseEvent) {
+  if (!isDesktop.value) return
+  e.preventDefault()
+  if (probing.value) return
   const ok = await probeUploadChannel()
   if (!ok) return
+  probePassed.value = true
   fileInput.value?.click()
 }
 
-function onFileChange(e: Event) {
+async function onFileChange(e: Event) {
   const input = e.target as HTMLInputElement
   const files = input.files
   if (!files?.length) return
+  const picked = Array.from(files)
   input.value = ''
-  enqueueFiles(Array.from(files))
+
+  if (isDesktop.value && probePassed.value) {
+    probePassed.value = false
+    addFiles(picked)
+    return
+  }
+
+  const ok = await probeUploadChannel()
+  if (!ok) return
+  addFiles(picked)
 }
 
 async function handleDrop(e: DragEvent) {
@@ -176,7 +207,7 @@ async function handleDrop(e: DragEvent) {
     showToast('这张微信图片没拖出来，请先保存到电脑再上传。')
     return
   }
-  enqueueFiles(files)
+  addFiles(files)
 }
 
 function onDragOver(e: DragEvent) {
@@ -224,7 +255,7 @@ async function retryItem(item: LocalItem) {
   if (!ok) return
   const input = document.createElement('input')
   input.type = 'file'
-  input.accept = 'image/png,image/jpeg,image/jpg,image/webp,image/gif'
+  input.accept = FILE_ACCEPT
   input.onchange = (e) => {
     const file = (e.target as HTMLInputElement).files?.[0]
     if (!file) return
@@ -236,11 +267,14 @@ async function retryItem(item: LocalItem) {
   input.click()
 }
 
-function removeItem(item: { key: string; fileId?: number }) {
+function removeItem(item: { key: string; fileId?: number; preview?: string }) {
   if (item.key.startsWith('saved-') && item.fileId) {
+    revokePreview(item.preview)
     emit('update:modelValue', props.modelValue.filter((m) => m.fileId !== item.fileId))
     return
   }
+  const local = localItems.value.find((i) => i.key === item.key)
+  revokePreview(local?.preview)
   localItems.value = localItems.value.filter((i) => i.key !== item.key)
 }
 
@@ -315,34 +349,63 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <button
-          type="button"
-          class="image-uploader__add"
-          :disabled="probing"
+        <div
+          class="image-uploader__add-wrap"
           data-testid="image-uploader-add"
-          @click="onAddClick"
         >
-          <span v-if="probing" class="image-uploader__ring" />
-          <template v-else>
-            <span class="image-uploader__plus">+</span>
-            <span class="show-desktop-only" data-testid="image-uploader-hint-desktop">点击或把微信图片拖到这里</span>
-            <span class="show-mobile-only">添加图片</span>
-          </template>
-        </button>
+          <input
+            v-if="!isDesktop"
+            :id="addInputId"
+            ref="fileInput"
+            type="file"
+            :accept="FILE_ACCEPT"
+            multiple
+            class="image-uploader__file-input"
+            data-testid="image-uploader-file-input"
+            @change="onFileChange"
+          />
+          <input
+            v-else
+            ref="fileInput"
+            type="file"
+            :accept="FILE_ACCEPT"
+            multiple
+            class="image-uploader__file-input image-uploader__file-input--hidden"
+            data-testid="image-uploader-file-input"
+            tabindex="-1"
+            @change="onFileChange"
+          />
+          <div
+            v-if="isDesktop"
+            class="image-uploader__add"
+            :class="{ 'image-uploader__add--busy': probing }"
+            role="button"
+            tabindex="0"
+            @click="onAddAreaClick"
+          >
+            <span v-if="probing" class="image-uploader__ring" />
+            <template v-else>
+              <span class="image-uploader__plus">+</span>
+              <span data-testid="image-uploader-hint-desktop">点击或把微信图片拖到这里</span>
+            </template>
+          </div>
+          <label
+            v-else
+            :for="addInputId"
+            class="image-uploader__add"
+            :class="{ 'image-uploader__add--busy': probing }"
+          >
+            <span v-if="probing" class="image-uploader__ring" />
+            <template v-else>
+              <span class="image-uploader__plus">+</span>
+              <span data-testid="image-uploader-hint-mobile">点这里添加图片</span>
+            </template>
+          </label>
+        </div>
       </div>
 
       <p v-if="dragOver" class="image-uploader__drop-hint" data-testid="image-uploader-drop-hint">松开就上传</p>
     </div>
-
-    <input
-      ref="fileInput"
-      type="file"
-      accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
-      capture="environment"
-      multiple
-      hidden
-      @change="onFileChange"
-    />
 
     <p v-if="failedCount > 0" class="image-uploader__warn">
       有 {{ failedCount }} 张图没传上，可稍后补传。
@@ -405,6 +468,28 @@ onUnmounted(() => {
 @media (min-width: 1200px) {
   .image-uploader__grid { grid-template-columns: repeat(4, 1fr); }
 }
+.image-uploader__add-wrap {
+  position: relative;
+  aspect-ratio: 1;
+}
+.image-uploader__file-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 3;
+  font-size: 16px;
+}
+.image-uploader__file-input--hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  inset: auto;
+}
 .image-uploader__add,
 .image-uploader__thumb {
   aspect-ratio: 1;
@@ -418,6 +503,8 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 4px;
+  width: 100%;
+  height: 100%;
   background: rgba(255, 255, 255, 0.5);
   border: 1px dashed rgba(198, 161, 91, 0.35);
   cursor: pointer;
@@ -426,7 +513,7 @@ onUnmounted(() => {
   padding: 8px;
   text-align: center;
 }
-.image-uploader__add:disabled { opacity: 0.6; cursor: wait; }
+.image-uploader__add--busy { opacity: 0.6; }
 .image-uploader__plus { font-size: 22px; color: var(--color-gold); line-height: 1; }
 .image-uploader__thumb img { width: 100%; height: 100%; object-fit: cover; }
 .image-uploader__thumb--failed { border: 1px solid rgba(220, 80, 80, 0.5); }
@@ -442,6 +529,7 @@ onUnmounted(() => {
   font-weight: 600;
   text-align: center;
   padding: 8px;
+  z-index: 1;
 }
 .image-uploader__overlay--error { background: rgba(120, 30, 30, 0.65); }
 .image-uploader__label {
@@ -457,6 +545,7 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  z-index: 1;
 }
 .image-uploader__remove {
   position: absolute;
@@ -470,6 +559,7 @@ onUnmounted(() => {
   color: #fff;
   font-size: 14px;
   line-height: 1;
+  z-index: 2;
 }
 .image-uploader__retry {
   position: absolute;
@@ -482,6 +572,7 @@ onUnmounted(() => {
   font-size: 11px;
   background: rgba(255, 255, 255, 0.9);
   color: var(--color-jade-deep);
+  z-index: 2;
 }
 .image-uploader__ring {
   width: 28px;

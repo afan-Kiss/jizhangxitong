@@ -11,6 +11,8 @@ import LuxuryCard from '../components/LuxuryCard.vue'
 import WorkerStatus from '../components/WorkerStatus.vue'
 import ImageUploader from '../components/ImageUploader.vue'
 import ActionButton from '../components/ActionButton.vue'
+import XhsOrderPicker from '../components/XhsOrderPicker.vue'
+import type { XhsOrderItem } from '../types/xhs-order'
 import { resolveApiErrorMessage } from '../utils/api-errors'
 
 const STORAGE_KEY = 'jade-expense-prefs'
@@ -65,6 +67,7 @@ const uploadedFiles = ref<Array<{ fileId: number; fileType: string; name: string
 const uploadFailCount = ref(0)
 const loading = ref(false)
 const amountFocused = ref(false)
+const showXhsPicker = ref(false)
 
 const needsOrder = computed(() => ['customer_refund', 'customer_compensation', 'after_sale_compensation', 'platform_fee'].includes(form.value.businessType))
 const needsGoods = computed(() => form.value.businessType === 'item_cost')
@@ -162,6 +165,17 @@ async function lookupOrder() {
   } finally {
     lookupLoading.value = false
   }
+}
+
+function onXhsOrderPicked(order: XhsOrderItem) {
+  form.value.externalOrderNo = order.externalOrderNo
+  if (order.logisticsNo) form.value.logisticsNo = order.logisticsNo
+  if (order.amount) {
+    if (!form.value.amount) form.value.amount = String(order.amount)
+  } else {
+    showToast('这单没读到金额，请手动补一下')
+  }
+  lookupOrder()
 }
 
 async function onSubmit() {
@@ -291,11 +305,14 @@ async function onSubmit() {
           </div>
         </LuxuryCard>
 
-        <LuxuryCard v-if="needsOrder || form.businessType === 'manual_pending'" data-testid="expense-order-section">
+        <LuxuryCard data-testid="expense-order-section">
           <div class="section-title">小红书订单号</div>
           <van-field v-model="form.externalOrderNo" label="订单号" placeholder="可先填订单号，找不到也能先记账" class="field-custom" data-testid="expense-order-no" />
           <van-field v-model="form.logisticsNo" label="物流单号" placeholder="可选" class="field-custom" />
-          <ActionButton block plain :loading="lookupLoading" data-testid="expense-lookup-order" @click="lookupOrder">查订单</ActionButton>
+          <div class="expense-order-actions">
+            <ActionButton block plain data-testid="expense-xhs-order-btn" @click="showXhsPicker = true">查询订单</ActionButton>
+            <ActionButton block plain :loading="lookupLoading" data-testid="expense-lookup-order" @click="lookupOrder">查本地订单</ActionButton>
+          </div>
           <div v-if="matchedSale" class="order-card" data-testid="expense-matched-sale">
             <div>已找到订单：{{ matchedSale.externalOrderNo }}</div>
             <div class="muted">货品 {{ matchedSale.braceletCode || '暂无编号' }} · 销售 ¥{{ Number(matchedSale.saleAmount).toFixed(2) }}</div>
@@ -378,7 +395,7 @@ async function onSubmit() {
               @click="form.reimbursementStatus = opt.v"
             >{{ opt.l }}</button>
           </div>
-          <van-field v-model="form.reimbursementPerson" label="报销人" placeholder="如：范帅" class="field-custom" />
+          <van-field v-model="form.reimbursementPerson" label="报销人" placeholder="填谁垫付的" class="field-custom" />
         </LuxuryCard>
 
         <LuxuryCard>
@@ -407,6 +424,8 @@ async function onSubmit() {
     <template v-if="!isDesktop" #footer>
       <ActionButton block size="lg" :loading="loading" data-testid="expense-save-btn" @click="onSubmit">保存支出</ActionButton>
     </template>
+
+    <XhsOrderPicker v-model="showXhsPicker" @select="onXhsOrderPicked" />
   </AppShell>
 </template>
 
@@ -415,6 +434,12 @@ async function onSubmit() {
 .expense-create__save-desktop { padding-top: 4px; }
 .aside-tip { margin: 8px 0 0; font-size: 12px; line-height: 1.45; }
 .lookup-hint { margin: 8px 0 0; font-size: 13px; }
+.expense-order-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
 .order-card {
   margin-top: 12px;
   padding: 14px;

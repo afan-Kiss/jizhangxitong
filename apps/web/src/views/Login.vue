@@ -12,7 +12,7 @@ import { resolveApiErrorMessage } from '../utils/api-errors'
 const router = useRouter()
 const auth = useAuthStore()
 const mode = ref<'login' | 'register'>('login')
-const username = ref('fanfan')
+const username = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const displayName = ref('')

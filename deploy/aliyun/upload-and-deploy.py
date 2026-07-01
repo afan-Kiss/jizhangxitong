@@ -84,9 +84,40 @@ def should_skip(rel: str) -> bool:
             return True
     if rel_norm.endswith(".db-journal") or rel_norm.endswith(".log"):
         return True
+    if rel_norm.endswith("accounting.db"):
+        return True
     if "/.env" in rel_norm and not rel_norm.endswith(".env.example"):
         return True
     return False
+
+
+def build_production_web(app_version: str) -> None:
+    """生产子路径 /account/ 必须用 VITE_APP_BASE，否则 index.html 引用 /assets/ 导致白屏。"""
+    import subprocess
+
+    if os.environ.get("DEPLOY_SKIP_BUILD") == "1":
+        print("[deploy] DEPLOY_SKIP_BUILD=1，跳过本地构建")
+        return
+
+    env = {**os.environ, "VITE_APP_BASE": "/account/"}
+    if app_version:
+        env["APP_VERSION"] = app_version
+    print("[deploy] 构建前端 VITE_APP_BASE=/account/")
+    workspaces = (
+        "@jade-account/shared",
+        "@jade-account/server",
+        "@jade-account/web",
+        "@jade-account/worker",
+    )
+    for ws in workspaces:
+        cmd = f"npm run build -w {ws}"
+        r = subprocess.run(cmd, cwd=str(ROOT), env=env, shell=True)
+        if r.returncode != 0:
+            sys.exit(r.returncode)
+    index = ROOT / "apps/web/dist/index.html"
+    if not index.is_file() or 'src="/account/assets/' not in index.read_text(encoding="utf-8"):
+        print("[deploy][FAIL] 前端 dist 未包含 /account/assets/ 路径", file=sys.stderr)
+        sys.exit(1)
 
 
 def build_zip(zip_path: Path) -> int:
@@ -176,6 +207,7 @@ def main() -> None:
                 app_version = ""
         if app_version:
             print(f"[deploy] APP_VERSION={app_version}")
+        build_production_web(app_version)
         env_content, _, worker_token = build_server_env(
             existing,
             host=HOST,
@@ -211,12 +243,15 @@ def main() -> None:
             sftp_put(client, env_path, "/tmp/jade-upload/server.env")
 
             db = ROOT / "apps/server/prisma/data/accounting.db"
-            skip_seed = "1" if db.exists() else "0"
-            if db.exists():
+            upload_local_db = os.environ.get("DEPLOY_UPLOAD_LOCAL_DB", "").strip() in ("1", "true", "yes")
+            skip_seed = "1"
+            if upload_local_db and db.exists():
                 sftp_put(client, db, "/tmp/jade-upload/accounting.db")
-                print(f"[deploy] 上传本地数据库 ({db.stat().st_size} bytes)")
+                print(f"[deploy] 上传本地数据库覆盖线上 ({db.stat().st_size} bytes)")
+                print("[deploy][WARN] DEPLOY_UPLOAD_LOCAL_DB=1：线上用户/业务数据会被本地库替换")
             else:
-                print("[deploy] 本地无 accounting.db，服务器将按 schema 初始化新库")
+                print("[deploy] 保留线上 accounting.db（不用本地库覆盖）")
+                skip_seed = "1"
 
             pwd_file = ROOT / "secrets/initial-admin-password.txt"
             if pwd_file.exists():
@@ -226,12 +261,22 @@ def main() -> None:
             client,
             f"""
 set -e
+SSL_BACKUP=/tmp/jade-ssl-backup-$$
+DB_BACKUP=/tmp/jade-db-backup-$$
+if [ -d {DEPLOY_DIR}/ssl ]; then cp -a {DEPLOY_DIR}/ssl "$SSL_BACKUP"; fi
+if [ -f {DEPLOY_DIR}/apps/server/prisma/data/accounting.db ]; then cp -a {DEPLOY_DIR}/apps/server/prisma/data/accounting.db "$DB_BACKUP"; fi
 rm -rf {DEPLOY_DIR}
 mkdir -p {DEPLOY_DIR}
 unzip -q /tmp/jade-upload/jade-accounting.zip -d {DEPLOY_DIR}
+if [ -d "$SSL_BACKUP" ]; then mkdir -p {DEPLOY_DIR}/ssl && cp -a "$SSL_BACKUP/." {DEPLOY_DIR}/ssl/; rm -rf "$SSL_BACKUP"; fi
 mkdir -p {DEPLOY_DIR}/apps/server/prisma/data {DEPLOY_DIR}/logs {DEPLOY_DIR}/exports {DEPLOY_DIR}/web
+if [ -f /tmp/jade-upload/accounting.db ]; then
+  cp /tmp/jade-upload/accounting.db {DEPLOY_DIR}/apps/server/prisma/data/accounting.db
+elif [ -f "$DB_BACKUP" ]; then
+  cp -a "$DB_BACKUP" {DEPLOY_DIR}/apps/server/prisma/data/accounting.db
+  rm -f "$DB_BACKUP"
+fi
 cp /tmp/jade-upload/server.env {DEPLOY_DIR}/apps/server/.env
-if [ -f /tmp/jade-upload/accounting.db ]; then cp /tmp/jade-upload/accounting.db {DEPLOY_DIR}/apps/server/prisma/data/accounting.db; fi
 sed -i 's/\\r$//' {DEPLOY_DIR}/deploy/aliyun/deploy.sh 2>/dev/null || true
 chmod +x {DEPLOY_DIR}/deploy/aliyun/*.sh 2>/dev/null || true
 """,
@@ -258,6 +303,13 @@ chmod +x {DEPLOY_DIR}/deploy/aliyun/*.sh 2>/dev/null || true
             import subprocess
             subprocess.run([sys.executable, str(apply_py)], check=False, env={**os.environ, **{"SSH_PASS": load_ssh_pass()}})
 
+        ssl_py = ROOT / "deploy/aliyun/enable-https-selfsigned.py"
+        if ssl_py.exists():
+            import subprocess
+            r = subprocess.run([sys.executable, str(ssl_py)], env={**os.environ, **{"SSH_PASS": load_ssh_pass()}})
+            if r.returncode != 0:
+                print("[deploy][WARN] 自签名 HTTPS 恢复失败，HTTP 仍可用", file=sys.stderr)
+
         run(client, f"curl -fsS -o /dev/null -w '%{{http_code}}' http://127.0.0.1{PUBLIC_PATH}")
 
         sync_local_token_from_remote(client)
@@ -272,8 +324,9 @@ chmod +x {DEPLOY_DIR}/deploy/aliyun/*.sh 2>/dev/null || true
     )
     print(f"\n=== 部署完成 ===")
     print(f"推荐手机访问: http://{HOST}/account/")
+    print(f"HTTPS（自签名）: https://{HOST}/account/  （浏览器需点一次继续访问）")
     print(f"Worker WS: {WS_URL}")
-    print(f"域名 HTTPS: 待备案/正式证书完成后启用（当前不推荐自签名入口）\n")
+    print(f"域名 HTTPS: 需先 ICP 备案，再用阿里云免费 DV 证书\n")
 
 
 if __name__ == "__main__":

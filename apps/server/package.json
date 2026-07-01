@@ -21,7 +21,8 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
     "uuid": "^11.0.5",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "xhshow-js": "^1.0.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

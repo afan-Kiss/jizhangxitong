@@ -1,9 +1,24 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import { desktopNav, isNavActive } from '../config/nav'
+import { useScanOverlay } from '../composables/useScanOverlay'
 import BraceletIcon from './BraceletIcon.vue'
 
 const route = useRoute()
+const scan = useScanOverlay()
+
+function onNavClick(item: { path: string }, e: MouseEvent) {
+  if (item.path !== '/scan') return
+  e.preventDefault()
+  scan.openScan()
+}
+
+function isActive(path: string) {
+  if (path === '/scan') {
+    return scan.cameraVisible.value || scan.resultVisible.value || isNavActive(path, route.path)
+  }
+  return isNavActive(path, route.path)
+}
 </script>
 
 <template>
@@ -19,11 +34,12 @@ const route = useRoute()
       <router-link
         v-for="item in desktopNav"
         :key="item.path"
-        :to="item.path"
+        :to="item.path === '/scan' ? route.path : item.path"
         class="desktop-sidebar__link"
-        :class="{ 'desktop-sidebar__link--active': isNavActive(item.path, route.path) }"
+        :class="{ 'desktop-sidebar__link--active': isActive(item.path) }"
+        @click="onNavClick(item, $event)"
       >
-        <BraceletIcon v-if="item.custom" :size="18" :active="isNavActive(item.path, route.path)" />
+        <BraceletIcon v-if="item.custom" :size="18" :active="isActive(item.path)" />
         <van-icon v-else :name="item.icon" size="18" />
         <span>{{ item.label }}</span>
       </router-link>

@@ -19,6 +19,14 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
   }
   try {
     const payload = verifyToken(header.slice(7))
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { status: true, isActive: true },
+    })
+    if (!user || user.status !== 'active' || !user.isActive) {
+      res.status(403).json({ success: false, message: '账号不可用，请联系管理员。' })
+      return
+    }
     const permissions = await getUserPermissions(payload.userId)
     req.user = { ...payload, permissions }
     next()
