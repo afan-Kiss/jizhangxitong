@@ -26,7 +26,7 @@ const SECTION_TIER = {
   braceletSync: ACCEPTANCE_TIER.EXTERNAL,
   expense: ACCEPTANCE_TIER.CORE,
   image: ACCEPTANCE_TIER.EXTERNAL,
-  sale: ACCEPTANCE_TIER.CORE,
+  sale: ACCEPTANCE_TIER.EXTERNAL,
   full: ACCEPTANCE_TIER.CORE,
   remaining: ACCEPTANCE_TIER.CORE,
 }
@@ -40,7 +40,7 @@ const report = {
     ['镯子同步（外部依赖）', 'braceletSync'],
     ['支出', 'expense'],
     ['图片（外部依赖）', 'image'],
-    ['销售', 'sale'],
+    ['销售（已下线）', 'sale'],
     ['Full 模式扩展', 'full'],
     ['待处理', 'remaining'],
   ],
@@ -178,17 +178,19 @@ async function main() {
     headers: authHeaders(token),
     body: JSON.stringify({
       amount: 1.23,
-      expenseType: '日常物料',
-      paySource: '专属经费',
-      braceletCode: braceletId ? testCode : undefined,
+      expenseType: '办公杂费',
+      businessType: 'normal',
+      paySource: '项目专用资金',
       occurredAt: new Date().toISOString().slice(0, 10),
-      expenseSummary: 'test_auto_check 自动联调测试',
       remark: 'test_auto_check 自动联调测试，可删除',
       needsAttachment: true,
     }),
   })
   const expenseId = expCreate.res.ok ? expCreate.json.data?.id : null
-  log('expense', `创建 id=${expenseId}`, !!expenseId)
+  log('expense', `创建 id=${expenseId}`, !!expenseId, ACCEPTANCE_TIER.CORE)
+  if (!expenseId) {
+    log('expense', `创建失败: ${expCreate.text?.slice(0, 120) || expCreate.res.status}`, false, ACCEPTANCE_TIER.CORE)
+  }
 
   let fileId = null
   if (workerOnline && expenseId) {
@@ -212,26 +214,26 @@ async function main() {
   }
 
   let saleId = null
-  if (braceletId && workerOnline) {
-    const saleCreate = await fetchJson(`${SERVER}/api/sales`, {
-      method: 'POST',
-      headers: authHeaders(token),
-      body: JSON.stringify({
-        platform: '其他',
-        customerName: '自动验收',
-        braceletCode: testCode,
-        braceletId,
-        saleAmount: 9999,
-        soldAt: new Date().toISOString().slice(0, 10),
-        customerRemark: 'test_auto_check',
-      }),
-    })
-    saleId = saleCreate.res.ok ? saleCreate.json.data?.id : null
-    if (!saleId && saleCreate.res.status === 409) {
-      log('sale', '重复登记已拦截（409）', true)
-    } else {
-      log('sale', `销售 id=${saleId}`, !!saleId)
-    }
+  const saleCreate = await fetchJson(`${SERVER}/api/sales`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      platform: '其他',
+      customerName: '自动验收',
+      braceletCode: testCode,
+      braceletId,
+      saleAmount: 9999,
+      soldAt: new Date().toISOString().slice(0, 10),
+      customerRemark: 'test_auto_check',
+    }),
+  })
+  if (saleCreate.res.status === 410) {
+    log('sale', '销售模块已下线（410）', true, ACCEPTANCE_TIER.EXTERNAL)
+  } else if (saleCreate.res.ok) {
+    saleId = saleCreate.json.data?.id
+    log('sale', `销售 id=${saleId}`, !!saleId, ACCEPTANCE_TIER.EXTERNAL)
+  } else {
+    log('sale', `销售接口 ${saleCreate.res.status}`, false, ACCEPTANCE_TIER.EXTERNAL)
   }
 
   if (MODE === 'full') {
