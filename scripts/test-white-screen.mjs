@@ -23,11 +23,17 @@ const ROOT = path.join(__dirname, '..')
 const BASE = (process.env.ACCEPTANCE_SERVER || RECOMMENDED_URL).replace(/\/$/, '')
 const reportsDir = path.join(ROOT, 'reports')
 
-function readAdminPassword() {
+function readAdminCredentials() {
   const file = path.join(ROOT, 'secrets/initial-admin-password.txt')
-  if (!fs.existsSync(file)) return ''
-  return fs.readFileSync(file, 'utf-8').match(/密码:\s*(.+)/)?.[1]?.trim() || ''
+  if (!fs.existsSync(file)) return { username: 'fanfan', password: '' }
+  const text = fs.readFileSync(file, 'utf-8')
+  return {
+    username: text.match(/用户名:\s*(.+)/)?.[1]?.trim() || 'fanfan',
+    password: text.match(/密码:\s*(.+)/)?.[1]?.trim() || '',
+  }
 }
+
+const HOME_MARKERS = ['店里经营情况', '今日支出', '快捷操作', '本期经费支出']
 
 async function checkPage(page, label, url, checks = {}) {
   const bucket = { consoleErrors: [], pageErrors: [], failedRequests: [] }
@@ -79,7 +85,7 @@ async function main() {
     const page = await context.newPage()
 
     const home = await checkPage(page, 'home', `${BASE}/`, {
-      expectText: ['和田玉', '今天店里情况', '经营总览', '今日简况', '登录', '进入系统'],
+      expectText: ['和田玉', '登录', '进入系统', ...HOME_MARKERS.slice(0, 1)],
     })
     console.log('[home]', home.issues.length ? 'FAIL' : 'OK', home.bodyText.slice(0, 80))
     if (home.issues.length) {
@@ -119,6 +125,7 @@ async function main() {
       console.log('OK 空密码提示正确')
     }
 
+    await page.fill('input:not([type="password"])', 'fanfan')
     await page.fill('input[type="password"]', 'wrong-password')
     await page.getByRole('button', { name: /进入系统/ }).click()
     await page.waitForTimeout(1200)
@@ -132,14 +139,15 @@ async function main() {
       console.log('OK 错误密码提示正确')
     }
 
-    const adminPwd = readAdminPassword()
+    const { username, password: adminPwd } = readAdminCredentials()
     if (adminPwd) {
+      await page.fill('input:not([type="password"])', username)
       await page.fill('input[type="password"]', adminPwd)
       await page.getByRole('button', { name: /进入系统/ }).click()
       await page.waitForURL(/\/account\/?$/, { timeout: PAGE_TIMEOUT_MS }).catch(() => null)
       await page.waitForTimeout(1000)
       const afterLogin = await page.evaluate(() => document.body.innerText)
-      if (!afterLogin.includes('今天店里情况') && !afterLogin.includes('经营总览') && !afterLogin.includes('今日简况')) {
+      if (!HOME_MARKERS.some((t) => afterLogin.includes(t))) {
         failed++
         console.log('FAIL 登录后未见首页')
       } else {
@@ -152,7 +160,7 @@ async function main() {
       await page.reload({ waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT_MS })
       await page.waitForTimeout(800)
       const reloadText = await page.evaluate(() => document.body.innerText)
-      if (!reloadText.includes('今天店里情况') && !reloadText.includes('经营总览') && !reloadText.includes('今日简况')) {
+      if (!HOME_MARKERS.some((t) => reloadText.includes(t))) {
         failed++
         console.log('FAIL 刷新首页白屏')
       } else {

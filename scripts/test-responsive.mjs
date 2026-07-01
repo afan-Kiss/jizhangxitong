@@ -35,6 +35,7 @@ function accountWebBase(webBase) {
   return webBase.includes('/account') ? webBase : `${webBase}/account`
 }
 const reportsDir = path.join(ROOT, 'reports')
+const HOME_MARKERS = ['店里经营情况', '今日支出', '快捷操作', '本期经费支出']
 
 const VIEWPORTS = [
   { name: 'mobile', width: 390, height: 844, desktop: false },
@@ -110,7 +111,7 @@ async function runViewportInner(browser, vp, creds) {
   await check('首页不是白屏', async () => {
     await gotoStable(page, `${WEB_BASE}/`)
     const text = await page.evaluate(() => document.body?.innerText?.trim() || '')
-    if (!text.includes('今天店里情况') && !text.includes('经营总览') && !text.includes('今日简况')) {
+    if (!HOME_MARKERS.some((t) => text.includes(t))) {
       throw new Error('首页内容异常')
     }
     await assertNoOverflow(page)

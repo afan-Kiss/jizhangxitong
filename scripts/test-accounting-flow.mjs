@@ -122,13 +122,15 @@ async function testHomeNoWhiteScreen(webBase) {
       return
     }
     const password = await getAdminPassword()
+    await page.locator('input:not([type="password"])').first().fill('fanfan')
     await pwdInput.fill(password)
     await page.getByRole('button', { name: /进入系统/ }).click()
     await page.waitForTimeout(1500)
     await gotoStable(page, `${web}/`, { timeout: 30000 })
     const el = await page.locator('[data-testid="home-page"]').count()
     const text = await page.evaluate(() => document.body.innerText || '')
-    if (el > 0 || text.includes('今天店里情况') || text.includes('经营总览') || text.includes('今日简况')) pass('首页渲染正常')
+    const homeMarkers = ['店里经营情况', '今日支出', '快捷操作', '本期经费支出']
+    if (el > 0 || homeMarkers.some((t) => text.includes(t))) pass('首页渲染正常')
     else fail('首页渲染正常', '缺少 home-page')
     const scanBtn = await page.locator('text=扫码绑定').count()
     const scanWorkbench = await page.locator('text=扫码工作台').count()
