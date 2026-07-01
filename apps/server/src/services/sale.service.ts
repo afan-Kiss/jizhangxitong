@@ -230,10 +230,7 @@ export async function refundSale(
   input: { refundAmount: number; refundReason?: string; refundedAt?: string },
   operator: AuthRequest['user'],
 ) {
-  const sale = await prisma.sale.findUnique({
-    where: { id: saleId },
-    include: { refunds: true },
-  })
+  const sale = await prisma.sale.findUnique({ where: { id: saleId } })
   if (!sale) throw new Error('销售记录不存在')
   if (sale.status === 'refunded') {
     throw new Error('这笔销售已经退款过了，不能重复退款')
@@ -241,31 +238,50 @@ export async function refundSale(
   if (sale.status !== 'sold') {
     throw new Error('只有已成交的销售记录才能退款')
   }
-  const existingConfirmed = (sale.refunds || []).some((r) => isConfirmedRefund(r.status))
-  if (existingConfirmed) {
-    throw new Error('这笔销售已经退款过了，不能重复退款')
+
+  const existingRefunds = await prisma.refund.findMany({ where: { saleId } })
+  if (existingRefunds.some((r) => isConfirmedRefund(r.status))) {
+    throw new Error('这笔销售已有退款记录，不能重复扣减利润')
   }
 
-  const refund = await prisma.refund.create({
-    data: {
-      saleId,
-      braceletId: sale.braceletId,
-      braceletCode: sale.braceletCode,
-      refundAmount: input.refundAmount,
-      refundReason: input.refundReason,
-      refundedAt: input.refundedAt ? new Date(input.refundedAt) : new Date(),
-      createdBy: operator!.userId,
-    },
-  })
+  const refund = await prisma.$transaction(async (tx) => {
+    const currentSale = await tx.sale.findUnique({ where: { id: saleId } })
+    if (!currentSale) throw new Error('销售记录不存在')
+    if (currentSale.status === 'refunded') {
+      throw new Error('这笔销售已经退款过了，不能重复退款')
+    }
+    if (currentSale.status !== 'sold') {
+      throw new Error('只有已成交的销售记录才能退款')
+    }
 
-  await prisma.sale.update({
-    where: { id: saleId },
-    data: { status: 'refunded' },
-  })
+    const refundsInTx = await tx.refund.findMany({ where: { saleId } })
+    if (refundsInTx.some((r) => isConfirmedRefund(r.status))) {
+      throw new Error('这笔销售已有退款记录，不能重复扣减利润')
+    }
 
-  await prisma.bracelet.update({
-    where: { id: sale.braceletId },
-    data: { scannerStatus: 'returned_available' },
+    const created = await tx.refund.create({
+      data: {
+        saleId,
+        braceletId: currentSale.braceletId,
+        braceletCode: currentSale.braceletCode,
+        refundAmount: input.refundAmount,
+        refundReason: input.refundReason,
+        refundedAt: input.refundedAt ? new Date(input.refundedAt) : new Date(),
+        createdBy: operator!.userId,
+      },
+    })
+
+    await tx.sale.update({
+      where: { id: saleId },
+      data: { status: 'refunded' },
+    })
+
+    await tx.bracelet.update({
+      where: { id: currentSale.braceletId },
+      data: { scannerStatus: 'returned_available' },
+    })
+
+    return created
   })
 
   await writeOperationLog({

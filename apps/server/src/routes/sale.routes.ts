@@ -60,6 +60,10 @@ saleRouter.post('/', requirePermission('sale:create'), async (req: AuthRequest, 
 })
 
 saleRouter.post('/:id/refund', requirePermission('sale:refund'), async (req: AuthRequest, res) => {
-  const result = await refundSale(Number(req.params.id), req.body, req.user!)
-  res.json({ success: true, data: result })
+  try {
+    const result = await refundSale(Number(req.params.id), req.body, req.user!)
+    res.json({ success: true, data: result })
+  } catch (err) {
+    res.status(400).json({ success: false, message: (err as Error).message })
+  }
 })

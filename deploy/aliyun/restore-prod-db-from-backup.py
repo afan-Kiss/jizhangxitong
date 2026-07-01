@@ -43,6 +43,13 @@ def run(c: paramiko.SSHClient, cmd: str, timeout: int = 180) -> tuple[int, str]:
     return code, out
 
 
+def run_must(c: paramiko.SSHClient, cmd: str, label: str, timeout: int = 180) -> str:
+    code, out = run(c, cmd, timeout=timeout)
+    if code != 0:
+        sys.exit(f"{label} failed (exit {code})")
+    return out
+
+
 def stat_db(c: paramiko.SSHClient, path: str) -> tuple[int, str]:
     code, out = run(c, f'stat -c "%s %y" "{path}" 2>/dev/null || echo "MISSING"')
     if code != 0 or out.endswith("MISSING"):
@@ -62,7 +69,7 @@ def main() -> None:
         usage()
 
     assert_restore_backup_allowed(backup)
-    require_destructive_confirmation(f"从备份恢复生产库: {backup}")
+    require_destructive_confirmation("restore production accounting.db from backup")
 
     pwd = load_password()
     if not pwd:
@@ -72,11 +79,11 @@ def main() -> None:
     c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     c.connect(HOST, username="root", password=pwd, timeout=60)
 
-    code, _ = run(c, f'test -f "{backup}"')
-    if code != 0:
-        sys.exit(f"backup missing: {backup}")
+    run_must(c, f'test -f "{backup}"', f"backup missing: {backup}")
 
     backup_size, backup_mtime = stat_db(c, backup)
+    if backup_size <= 0:
+        sys.exit(f"backup invalid: {backup}")
     current_size, current_mtime = stat_db(c, CURRENT)
     print(f"\n=== 备份库: {backup_size} bytes, mtime={backup_mtime} ===")
     print(f"=== 当前库: {current_size} bytes, mtime={current_mtime} ===")
@@ -85,11 +92,13 @@ def main() -> None:
     pre_restore = f"/www/backup/jade-accounting-pre-restore-{ts}"
     pre_db = f"{pre_restore}/apps/server/prisma/data/accounting.db"
 
-    run(c, f'mkdir -p "{pre_restore}/apps/server/prisma/data"')
+    run_must(
+        c,
+        f'mkdir -p "{pre_restore}/apps/server/prisma/data"',
+        "创建 pre-restore 目录",
+    )
     if current_size > 0:
-        code, _ = run(c, f'cp -a "{CURRENT}" "{pre_db}"')
-        if code != 0:
-            sys.exit("创建 pre-restore 快照失败")
+        run_must(c, f'cp -a "{CURRENT}" "{pre_db}"', "创建 pre-restore 快照")
         snap_size, snap_mtime = stat_db(c, pre_db)
         if snap_size <= 0:
             sys.exit("pre-restore 快照 accounting.db 无效")
@@ -97,10 +106,13 @@ def main() -> None:
     else:
         print("[restore] 当前库不存在，跳过 pre-restore 快照")
 
-    run(c, "export NVM_DIR=/root/.nvm && . /root/.nvm/nvm.sh 2>/dev/null; pm2 stop jade-accounting-server")
-    code, _ = run(c, f'cp -a "{backup}" "{CURRENT}"')
-    if code != 0:
-        sys.exit("覆盖生产库失败")
+    run_must(
+        c,
+        "export NVM_DIR=/root/.nvm && . /root/.nvm/nvm.sh 2>/dev/null; pm2 stop jade-accounting-server",
+        "停止 jade-accounting-server",
+    )
+    run_must(c, f'mkdir -p "{DEPLOY_DIR}/apps/server/prisma/data"', "创建生产 data 目录")
+    run_must(c, f'cp -a "{backup}" "{CURRENT}"', "覆盖生产库")
     run(c, f'rm -f "{CURRENT}-wal" "{CURRENT}-shm"')
     run(c, f'sqlite3 "{CURRENT}" "PRAGMA wal_checkpoint(FULL);"')
 
@@ -109,8 +121,14 @@ def main() -> None:
         sys.exit("恢复后 accounting.db 无效")
     print(f"[restore] 已恢复: {CURRENT} ({restored_size} bytes, {restored_mtime})")
 
-    run(c, "export NVM_DIR=/root/.nvm && . /root/.nvm/nvm.sh 2>/dev/null; pm2 restart jade-accounting-server")
-    run(c, "sleep 2 && curl -fsS http://127.0.0.1:4731/api/health")
+    run_must(
+        c,
+        "export NVM_DIR=/root/.nvm && . /root/.nvm/nvm.sh 2>/dev/null; pm2 restart jade-accounting-server",
+        "重启 jade-accounting-server",
+    )
+    code, _ = run(c, "sleep 2 && curl -fsS http://127.0.0.1:4731/api/health")
+    if code != 0:
+        sys.exit("恢复后 health 检查失败")
 
     c.close()
     print(f"\nrestore OK from {backup}")

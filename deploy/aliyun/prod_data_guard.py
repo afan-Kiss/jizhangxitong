@@ -65,7 +65,10 @@ DATA_PRESERVE=/tmp/jade-data-preserve-$$
 if [ -f {data_dir}/accounting.db ]; then
   OLD_SIZE=$(stat -c%s "{data_dir}/accounting.db" 2>/dev/null || echo 0)
   echo "[deploy][DATA] 发现旧 accounting.db (${{OLD_SIZE}} bytes)"
-  mkdir -p "$DATA_PRESERVE"
+  if ! mkdir -p "$DATA_PRESERVE"; then
+    echo "[deploy][FATAL] 创建保全目录失败" >&2
+    exit 1
+  fi
   if ! cp -a {data_dir}/. "$DATA_PRESERVE/"; then
     echo "[deploy][FATAL] 保全线上 data 目录失败" >&2
     exit 1
@@ -92,7 +95,10 @@ def shell_restore_preserved_data(deploy_dir: str) -> str:
     data_dir = f"{deploy_dir}/{PRODUCTION_DATA_REL}"
     return f"""
 rm -f /tmp/jade-upload/accounting.db
-mkdir -p {data_dir}
+if ! mkdir -p {data_dir}; then
+  echo "[deploy][FATAL] 创建 data 目录失败" >&2
+  exit 1
+fi
 if [ -f /tmp/jade-upload/accounting.db ]; then
   echo "[deploy][FATAL] 检测到上传 accounting.db，生产环境禁止覆盖线上数据库" >&2
   exit 1
