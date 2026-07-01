@@ -283,7 +283,7 @@ if [ -f "$PROD_DB" ]; then
   echo "[deploy][DATA] 当前 accounting.db 大小: $(stat -c%s "$PROD_DB" 2>/dev/null || echo ?) bytes"
 fi
 cp /tmp/jade-upload/server.env {DEPLOY_DIR}/apps/server/.env
-sed -i 's/\\r$$//' {DEPLOY_DIR}/deploy/aliyun/deploy.sh 2>/dev/null || true
+sed -i 's/\\r$$//' {DEPLOY_DIR}/deploy/aliyun/*.sh 2>/dev/null || true
 chmod +x {DEPLOY_DIR}/deploy/aliyun/*.sh 2>/dev/null || true
 """,
         )
@@ -292,7 +292,12 @@ chmod +x {DEPLOY_DIR}/deploy/aliyun/*.sh 2>/dev/null || true
             sys.exit(deploy_shell_code)
 
         skip_seed = "1"
-        code = run(client, f"cd {DEPLOY_DIR} && SKIP_SEED={skip_seed} bash deploy/aliyun/deploy.sh", timeout=3600)
+        code = run(
+            client,
+            f"sed -i 's/\\r$$//' {DEPLOY_DIR}/deploy/aliyun/*.sh 2>/dev/null; "
+            f"cd {DEPLOY_DIR} && SKIP_SEED={skip_seed} bash deploy/aliyun/deploy.sh",
+            timeout=3600,
+        )
         if code != 0:
             sys.exit(code)
 
