@@ -77,7 +77,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <AppShell title="支出统计" :show-back="!isDesktop" @back="router.back()">
+  <AppShell title="支出统计">
     <div data-testid="expense-stats-date-range">
       <DateRangePicker v-model="dateRange" @change="onRangeChange" />
     </div>

@@ -268,7 +268,7 @@ async function onSubmit() {
 </script>
 
 <template>
-  <AppShell title="记支出" show-back no-tab-pad :fixed-bottom="!isDesktop" @back="router.back()">
+  <AppShell title="记支出" no-tab-pad :fixed-bottom="!isDesktop">
     <LuxuryCard v-if="linkedGoods" gold data-testid="expense-linked-goods">
       <div class="section-title">已带入货品</div>
       <div>{{ linkedGoods.name || linkedGoods.code }}（{{ linkedGoods.code }}）</div>

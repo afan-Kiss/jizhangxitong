@@ -80,9 +80,7 @@ function onImageError() {
   <AppShell
     v-if="detail"
     :title="detail.bracelet.braceletCode"
-    :show-back="!isDesktop"
     no-tab-pad
-    @back="router.back()"
   >
     <div class="desktop-two-column">
       <div class="desktop-two-column__main">

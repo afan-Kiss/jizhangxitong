@@ -50,7 +50,7 @@ async function onRefund() {
 </script>
 
 <template>
-  <AppShell v-if="sale" title="销售详情" show-back data-testid="sale-detail-page">
+  <AppShell v-if="sale" title="销售详情" data-testid="sale-detail-page">
     <LuxuryCard dark gold :stagger="0" padding="20px 18px">
       <div class="sale-detail__amount money">¥{{ Number(sale.saleAmount).toFixed(2) }}</div>
       <div class="sale-detail__meta">

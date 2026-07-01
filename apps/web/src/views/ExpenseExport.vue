@@ -53,7 +53,7 @@ function download() {
 </script>
 
 <template>
-  <AppShell title="报销导出" show-back no-tab-pad :fixed-bottom="!isDesktop" @back="router.back()">
+  <AppShell title="报销导出" no-tab-pad :fixed-bottom="!isDesktop">
     <LuxuryCard gold>
       <div class="section-title">筛选条件</div>
       <p class="export-hint muted">按条件导出 Excel（含付款截图）。需公司电脑 Worker 在线。</p>

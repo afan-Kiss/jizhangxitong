@@ -187,7 +187,7 @@ function toggleSupplement() {
 </script>
 
 <template>
-  <AppShell title="支出详情" show-back data-testid="expense-detail-page">
+  <AppShell title="支出详情" data-testid="expense-detail-page">
     <div v-if="loading" class="expense-detail__state muted" data-testid="expense-detail-loading">
       正在加载支出详情...
     </div>

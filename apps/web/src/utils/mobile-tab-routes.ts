@@ -5,6 +5,9 @@ export function shouldHideMobileTab(path: string, isWide: boolean): boolean {
   if (path === '/scan') return true
   if (path === '/expense/create') return true
   if (path === '/expense/export') return true
+  if (path === '/reimbursements') return true
+  if (path === '/logs') return true
+  if (path === '/bi/drilldown') return true
   if (path === '/sales/create') return true
   if (/^\/expense\/\d+/.test(path)) return true
   if (/^\/sales\/\d+/.test(path)) return true

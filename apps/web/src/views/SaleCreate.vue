@@ -111,7 +111,7 @@ function onXhsOrderPicked(order: XhsOrderItem) {
 </script>
 
 <template>
-  <AppShell title="销售登记" :show-back="!isDesktop" no-tab-pad @back="router.back()">
+  <AppShell title="销售登记" no-tab-pad>
     <LuxuryCard v-if="linkedGoods" gold data-testid="sale-linked-goods">
       <div class="section-title">已带入货品</div>
       <div>{{ linkedGoods.name || linkedGoods.code }}（{{ linkedGoods.code }}）</div>

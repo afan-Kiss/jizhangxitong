@@ -184,7 +184,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <AppShell title="扫码工作台" :show-back="!isDesktop" no-tab-pad data-testid="scan-workbench-page">
+  <AppShell title="扫码工作台" no-tab-pad data-testid="scan-workbench-page">
     <div class="scan-workbench" :class="{ 'scan-workbench--desktop': isDesktop }">
       <div class="scan-workbench__main">
         <LuxuryCard v-if="!enabled" gold data-testid="scan-workbench-disabled">

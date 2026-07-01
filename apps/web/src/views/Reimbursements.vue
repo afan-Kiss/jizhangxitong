@@ -141,7 +141,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <AppShell title="报销列表" :show-back="!isDesktop" data-testid="reimbursements-page" @back="router.back()">
+  <AppShell title="报销列表" data-testid="reimbursements-page">
     <PageHero
       title="员工垫付报销"
       subtitle="这段时间员工垫付了多少，一眼看清。"

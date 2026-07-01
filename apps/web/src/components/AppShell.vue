@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, useAttrs } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useBreakpoint } from '../composables/useBreakpoint'
+import { shouldShowPageBack } from '../utils/page-back'
 
 const props = defineProps<{
   title?: string
@@ -10,10 +12,30 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ back: [] }>()
+const attrs = useAttrs()
+const route = useRoute()
+const router = useRouter()
 const { isDesktop } = useBreakpoint()
 
 const useFixedFooter = computed(() => Boolean(props.fixedBottom) && !isDesktop.value)
-const showNavBar = computed(() => Boolean(props.title) && !isDesktop.value)
+const showBackButton = computed(() => {
+  if (props.showBack !== undefined) return props.showBack
+  return shouldShowPageBack(route.path)
+})
+const showMobileNavBar = computed(() => Boolean(props.title) && !isDesktop.value)
+const showDesktopHead = computed(() => Boolean(props.title) && isDesktop.value)
+
+function goBack() {
+  if (typeof attrs.onBack === 'function') {
+    emit('back')
+    return
+  }
+  if (window.history.length > 1) {
+    router.back()
+  } else {
+    router.push('/')
+  }
+}
 </script>
 
 <template>
@@ -25,12 +47,23 @@ const showNavBar = computed(() => Boolean(props.title) && !isDesktop.value)
       'app-shell--desktop': isDesktop,
     }"
   >
-    <div v-if="isDesktop && title" class="app-shell__page-title">{{ title }}</div>
+    <div v-if="showDesktopHead" class="app-shell__page-head">
+      <button
+        v-if="showBackButton"
+        type="button"
+        class="app-shell__back"
+        data-testid="page-back-btn"
+        @click="goBack"
+      >
+        ← 返回
+      </button>
+      <h1 class="app-shell__page-title">{{ title }}</h1>
+    </div>
     <van-nav-bar
-      v-if="showNavBar"
+      v-if="showMobileNavBar"
       :title="title"
-      :left-arrow="showBack"
-      @click-left="emit('back')"
+      :left-arrow="showBackButton"
+      @click-left="goBack"
     />
     <div class="app-shell__body page-enter">
       <slot />
@@ -57,8 +90,28 @@ const showNavBar = computed(() => Boolean(props.title) && !isDesktop.value)
   min-height: auto;
   padding-bottom: 0;
 }
-.app-shell__page-title {
+.app-shell__page-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin: 0 0 16px;
+  flex-wrap: wrap;
+}
+.app-shell__back {
+  border: 1px solid rgba(198, 161, 91, 0.28);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-gold-light);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color var(--duration-fast), transform var(--duration-fast);
+}
+.app-shell__back:active {
+  transform: scale(0.97);
+}
+.app-shell__page-title {
+  margin: 0;
   font-size: 22px;
   font-weight: 600;
   color: var(--color-text-main);
