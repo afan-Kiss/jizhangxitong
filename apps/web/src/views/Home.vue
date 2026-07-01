@@ -67,10 +67,10 @@ function onRangeChange() {
   loadDashboard()
 }
 
-function drill(type: string) {
+function goReimbursements() {
   router.push({
-    path: '/bi/drilldown',
-    query: { type, ...toRangeQuery(dateRange.value) },
+    path: '/reimbursements',
+    query: toRangeQuery(dateRange.value),
   })
 }
 
@@ -101,7 +101,7 @@ onMounted(async () => {
 
 const heroSubtitle = () => {
   const label = rangeLabel(dateRange.value)
-  return `经营总览 · ${label} · 点卡片看明细`
+  return `报销总览 · ${label} · 点卡片管理待报销`
 }
 </script>
 
@@ -121,91 +121,18 @@ const heroSubtitle = () => {
       <div class="home-page__kpi-grid">
         <button
           type="button"
-          class="home-page__kpi"
-          data-testid="kpi-sales"
-          @click="drill('sales')"
-        >
-          <MoneyCard label="卖了多少钱" :value="summary?.saleAmount ?? 0" :stagger="1" />
-          <span class="home-page__kpi-hint">查看明细</span>
-        </button>
-        <button
-          type="button"
-          class="home-page__kpi"
-          data-testid="kpi-expenses"
-          @click="drill('expenses')"
-        >
-          <MoneyCard label="花了多少钱" :value="summary?.expenseAmount ?? 0" :stagger="2" />
-          <span class="home-page__kpi-hint">查看明细</span>
-        </button>
-        <button
-          type="button"
-          class="home-page__kpi"
-          data-testid="kpi-profit"
-          @click="drill('profit')"
-        >
-          <MoneyCard label="大概赚了多少" :value="summary?.netProfit ?? 0" :stagger="3" />
-          <span class="home-page__kpi-hint">查看明细</span>
-        </button>
-        <button
-          type="button"
-          class="home-page__kpi"
-          data-testid="kpi-customer-payments"
-          @click="drill('customer-payments')"
-        >
-          <MoneyCard label="客户返款/补偿" :value="summary?.customerPaymentAmount ?? 0" :stagger="4" />
-          <span class="home-page__kpi-hint">查看明细</span>
-        </button>
-        <button
-          type="button"
-          class="home-page__kpi"
-          data-testid="kpi-refunds"
-          @click="drill('refunds')"
-        >
-          <MoneyCard label="退款金额" :value="summary?.refundAmount ?? 0" :stagger="5" />
-          <span class="home-page__kpi-hint">查看明细</span>
-        </button>
-        <button
-          type="button"
-          class="home-page__kpi"
+          class="home-page__kpi home-page__kpi--solo"
           data-testid="kpi-reimbursements"
-          @click="drill('reimbursements')"
+          @click="goReimbursements"
         >
           <MoneyCard
             label="还有多少没报销"
             :value="summary?.pendingReimbursementAmount ?? 0"
             :sub="`${summary?.pendingReimbursementCount ?? 0} 笔待处理`"
             highlight
-            :stagger="6"
+            :stagger="1"
           />
-          <span class="home-page__kpi-hint">查看明细</span>
-        </button>
-        <button
-          type="button"
-          class="home-page__kpi"
-          data-testid="kpi-inventory"
-          @click="drill('inventory')"
-        >
-          <MoneyCard
-            label="在库货品"
-            :value="summary?.inventoryCost ?? 0"
-            :sub="`${summary?.inventoryCount ?? 0} 件在库`"
-            :stagger="7"
-          />
-          <span class="home-page__kpi-hint">查看明细</span>
-        </button>
-        <button
-          type="button"
-          class="home-page__kpi"
-          data-testid="kpi-effective-sales"
-          @click="drill('effective-sales')"
-        >
-          <MoneyCard
-            label="有效成交金额"
-            :value="summary?.effectiveSaleAmount ?? 0"
-            :sub="`${summary?.effectiveOrderCount ?? 0} 单有效`"
-            :stagger="8"
-          />
-          <span class="home-page__kpi-hint">查看明细</span>
+          <span class="home-page__kpi-hint">批量处理</span>
         </button>
       </div>
     </LuxuryCard>
@@ -220,10 +147,6 @@ const heroSubtitle = () => {
         <button class="home-page__action" data-testid="home-scan-btn" @click="scan.openScan()">
           <van-icon name="scan" size="22" />
           <span>扫码工作台</span>
-        </button>
-        <button class="home-page__action" @click="router.push('/reimbursements')">
-          <van-icon name="bill-o" size="22" />
-          <span>报销列表</span>
         </button>
         <button class="home-page__action" @click="exportThisMonth">
           <van-icon name="down" size="22" />
@@ -279,14 +202,12 @@ const heroSubtitle = () => {
 }
 .home-page__kpi-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 10px;
+  max-width: 420px;
 }
-@media (min-width: 768px) {
-  .home-page__kpi-grid { grid-template-columns: repeat(3, 1fr); }
-}
-@media (min-width: 1200px) {
-  .home-page__kpi-grid { grid-template-columns: repeat(4, 1fr); }
+.home-page__kpi--solo {
+  max-width: 100%;
 }
 .home-page__kpi {
   position: relative;
