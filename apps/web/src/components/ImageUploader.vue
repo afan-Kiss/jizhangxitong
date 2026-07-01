@@ -53,6 +53,7 @@ const queueRunning = ref(false)
 const failedCount = ref(0)
 const dragOver = ref(false)
 const isDesktop = ref(false)
+const pasteScopeActive = ref(false)
 const probePassed = ref(false)
 const addInputId = `image-uploader-input-${Math.random().toString(36).slice(2, 9)}`
 
@@ -151,14 +152,73 @@ function addFiles(files: File[]) {
   runUploadQueue()
 }
 
-async function onAddAreaClick(e: MouseEvent) {
-  if (!isDesktop.value) return
-  e.preventDefault()
-  if (probing.value) return
+async function triggerFilePick() {
+  if (!isDesktop.value || probing.value) return
   const ok = await probeUploadChannel()
   if (!ok) return
   probePassed.value = true
   fileInput.value?.click()
+}
+
+function filesFromClipboard(data: DataTransfer | null) {
+  if (!data) return [] as File[]
+  const files: File[] = []
+  if (data.files?.length) {
+    for (const file of Array.from(data.files)) {
+      if (isImageFile(file)) files.push(file)
+    }
+  }
+  if (!files.length && data.items?.length) {
+    for (const item of Array.from(data.items)) {
+      if (item.kind !== 'file') continue
+      const file = item.getAsFile()
+      if (file && isImageFile(file)) files.push(file)
+    }
+  }
+  return files
+}
+
+async function ingestDesktopFiles(files: File[]) {
+  if (!files.length) return false
+  const ok = await probeUploadChannel()
+  if (!ok) return false
+  addFiles(files)
+  return true
+}
+
+async function onDocumentPaste(e: ClipboardEvent) {
+  if (!isDesktop.value || !pasteScopeActive.value) return
+  const files = filesFromClipboard(e.clipboardData)
+  if (!files.length) return
+  e.preventDefault()
+  await ingestDesktopFiles(files)
+}
+
+async function onAddAreaClick(e: MouseEvent) {
+  if (!isDesktop.value) return
+  e.preventDefault()
+  if (e.ctrlKey) return
+  await triggerFilePick()
+}
+
+async function onDropZoneClick(e: MouseEvent) {
+  if (!isDesktop.value || !e.ctrlKey || e.button !== 0) return
+  const target = e.target as HTMLElement
+  if (target.closest('.image-uploader__remove, .image-uploader__retry, .image-uploader__tag-btn')) return
+  e.preventDefault()
+  e.stopPropagation()
+  await triggerFilePick()
+}
+
+function onDropZoneMouseEnter() {
+  if (isDesktop.value) pasteScopeActive.value = true
+}
+
+function onDropZoneMouseLeave(e: MouseEvent) {
+  if (!dropZone.value) return
+  const related = e.relatedTarget as Node | null
+  if (related && dropZone.value.contains(related)) return
+  pasteScopeActive.value = false
 }
 
 async function onFileChange(e: Event) {
@@ -287,9 +347,11 @@ onMounted(() => {
   updateDesktopFlag()
   mq = window.matchMedia('(min-width: 768px) and (hover: hover)')
   mq.addEventListener('change', updateDesktopFlag)
+  document.addEventListener('paste', onDocumentPaste)
 })
 onUnmounted(() => {
   mq?.removeEventListener('change', updateDesktopFlag)
+  document.removeEventListener('paste', onDocumentPaste)
 })
 </script>
 
@@ -317,11 +379,15 @@ onUnmounted(() => {
     <div
       ref="dropZone"
       class="image-uploader__drop"
-      :class="{ 'image-uploader__drop--active': dragOver }"
+      :class="{ 'image-uploader__drop--active': dragOver, 'image-uploader__drop--desktop': isDesktop }"
       data-testid="image-uploader-drop"
+      tabindex="0"
       @dragover="onDragOver"
       @dragleave="onDragLeave"
       @drop="handleDrop"
+      @mouseenter="onDropZoneMouseEnter"
+      @mouseleave="onDropZoneMouseLeave"
+      @click="onDropZoneClick"
     >
       <div class="image-uploader__grid">
         <div
@@ -386,7 +452,7 @@ onUnmounted(() => {
             <span v-if="probing" class="image-uploader__ring" />
             <template v-else>
               <span class="image-uploader__plus">+</span>
-              <span data-testid="image-uploader-hint-desktop">点击或把微信图片拖到这里</span>
+              <span data-testid="image-uploader-hint-desktop">点击添加 · Ctrl+点击 · Ctrl+V 粘贴 · 可拖拽</span>
             </template>
           </div>
           <label
@@ -438,6 +504,12 @@ onUnmounted(() => {
   margin-top: 12px;
   border-radius: 16px;
   transition: box-shadow var(--duration-fast), border-color var(--duration-fast);
+}
+.image-uploader__drop--desktop:focus {
+  outline: none;
+}
+.image-uploader__drop--desktop:focus-visible {
+  box-shadow: 0 0 0 2px rgba(198, 161, 91, 0.35);
 }
 .image-uploader__drop--active {
   box-shadow: 0 0 0 2px rgba(198, 161, 91, 0.45), var(--shadow-glow);

@@ -11,7 +11,7 @@ defineProps<{
 
 <template>
   <div
-    class="luxury-card glass-surface luxury-shimmer"
+    class="luxury-card glass-surface"
     :class="{
       'luxury-card--dark': dark,
       'luxury-card--gold': gold,
