@@ -131,18 +131,27 @@ async function onRegister() {
 <style scoped>
 .login__hero {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 36px;
+  position: relative;
+  z-index: 1;
 }
 .login__brand {
-  font-size: 28px;
+  font-size: clamp(26px, 6vw, 32px);
   font-weight: 600;
   color: var(--color-gold-light);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 32px rgba(215, 181, 109, 0.15);
 }
 .login__tagline {
-  margin-top: 10px;
+  margin-top: 12px;
   font-size: 14px;
   color: var(--color-text-sub);
+  letter-spacing: 0.08em;
+}
+.login-page__inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
 }
 .login__switch {
   margin-top: 16px;
@@ -153,5 +162,12 @@ async function onRegister() {
   background: none;
   color: var(--color-gold);
   font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  transition: background var(--duration-fast), box-shadow var(--duration-fast);
+}
+.login__switch button:hover {
+  background: rgba(215, 181, 109, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(215, 181, 109, 0.2);
 }
 </style>

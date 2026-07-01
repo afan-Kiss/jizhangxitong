@@ -31,8 +31,8 @@ body {
   margin: 0 0 12px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-text-main);
-  letter-spacing: 0.02em;
+  color: var(--color-text-champagne);
+  letter-spacing: 0.04em;
 }
 
 .section-title--sub {
@@ -77,8 +77,32 @@ body {
 .van-cell__title {
   color: var(--color-text-sub);
 }
+.van-cell::after {
+  border-color: rgba(215, 181, 109, 0.08) !important;
+}
 .van-toast {
   background: var(--color-card-dark) !important;
   color: var(--color-text-light) !important;
   border: var(--border-gold);
+  box-shadow: var(--shadow-card), var(--shadow-glow);
+}
+.van-popup {
+  background: var(--color-card-dark) !important;
+  border: var(--border-gold);
+}
+.van-dialog {
+  background: var(--color-card-dark) !important;
+  border: var(--border-gold);
+}
+.van-dialog__header {
+  color: var(--color-text-light) !important;
+}
+.van-dialog__message {
+  color: var(--color-text-sub) !important;
+}
+
+/* 表单 focus 金边 */
+.van-field:focus-within {
+  box-shadow: inset 0 0 0 1px rgba(215, 181, 109, 0.22);
+  border-radius: 8px;
 }

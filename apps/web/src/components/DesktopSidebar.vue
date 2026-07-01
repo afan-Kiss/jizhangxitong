@@ -24,7 +24,9 @@ function isActive(path: string) {
 <template>
   <aside class="desktop-sidebar glass-surface" data-testid="desktop-sidebar">
     <div class="desktop-sidebar__brand">
-      <div class="desktop-sidebar__mark">◆</div>
+      <div class="desktop-sidebar__mark" aria-hidden="true">
+        <span class="desktop-sidebar__diamond">◆</span>
+      </div>
       <div>
         <div class="desktop-sidebar__title">和田玉记账</div>
         <div class="desktop-sidebar__sub">高端珠宝经营工作台</div>
@@ -35,7 +37,7 @@ function isActive(path: string) {
         v-for="item in desktopNav"
         :key="item.path"
         :to="item.path === '/scan' ? route.path : item.path"
-        class="desktop-sidebar__link"
+        class="desktop-sidebar__link luxury-hover"
         :class="{ 'desktop-sidebar__link--active': isActive(item.path) }"
         @click="onNavClick(item, $event)"
       >
@@ -44,7 +46,7 @@ function isActive(path: string) {
         <span>{{ item.label }}</span>
       </router-link>
     </nav>
-    <div class="desktop-sidebar__footer muted">墨玉绿 · 暖金点缀</div>
+    <div class="desktop-sidebar__footer muted">墨玉绿 · 香槟金</div>
   </aside>
 </template>
 
@@ -53,47 +55,61 @@ function isActive(path: string) {
   width: var(--sidebar-width);
   flex-shrink: 0;
   min-height: 100vh;
-  padding: 18px 10px;
-  background: rgba(12, 16, 14, 0.55);
-  border-right: var(--border-glass);
+  padding: 20px 12px;
+  background:
+    linear-gradient(180deg, rgba(18, 28, 24, 0.88) 0%, rgba(14, 20, 18, 0.92) 100%);
+  border-right: 1px solid rgba(215, 181, 109, 0.1);
   color: var(--color-text-light);
   display: flex;
   flex-direction: column;
+  box-shadow: 4px 0 24px rgba(8, 12, 10, 0.25);
 }
 
 .desktop-sidebar__brand {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 6px 10px 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  margin-bottom: 14px;
+  gap: 12px;
+  padding: 8px 10px 20px;
+  border-bottom: 1px solid rgba(215, 181, 109, 0.1);
+  margin-bottom: 16px;
 }
 
 .desktop-sidebar__mark {
-  color: var(--color-gold);
-  font-size: 14px;
-  line-height: 1.4;
-  opacity: 0.9;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 30% 30%, rgba(215, 181, 109, 0.25), rgba(31, 77, 58, 0.35));
+  border: 1px solid rgba(215, 181, 109, 0.22);
+  box-shadow: 0 0 16px rgba(215, 181, 109, 0.12);
+}
+
+.desktop-sidebar__diamond {
+  color: var(--color-gold-light);
+  font-size: 13px;
+  line-height: 1;
 }
 
 .desktop-sidebar__title {
   font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--color-gold-light);
 }
 
 .desktop-sidebar__sub {
-  margin-top: 3px;
+  margin-top: 4px;
   font-size: 11px;
-  color: rgba(248, 243, 232, 0.5);
+  color: rgba(248, 244, 234, 0.48);
+  letter-spacing: 0.06em;
 }
 
 .desktop-sidebar__nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   flex: 1;
 }
 
@@ -101,25 +117,26 @@ function isActive(path: string) {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 11px 12px;
-  border-radius: 10px;
+  padding: 12px 12px;
+  border-radius: 12px;
   text-decoration: none;
-  color: rgba(248, 243, 232, 0.72);
+  color: rgba(248, 244, 234, 0.68);
   font-size: 14px;
-  transition: background var(--duration-fast), color var(--duration-fast), transform var(--duration-fast);
+  border: 1px solid transparent;
 }
 
 .desktop-sidebar__link:hover {
-  background: rgba(255, 255, 255, 0.05);
   color: var(--color-text-light);
+  background: rgba(255, 255, 255, 0.04);
   transform: translateX(2px);
 }
 
 .desktop-sidebar__link--active {
-  background: rgba(78, 125, 105, 0.22);
+  background: linear-gradient(135deg, rgba(90, 143, 120, 0.22) 0%, rgba(215, 181, 109, 0.08) 100%);
   color: var(--color-gold-light);
   font-weight: 500;
-  box-shadow: inset 0 0 0 1px rgba(198, 161, 91, 0.12);
+  border-color: rgba(215, 181, 109, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(215, 181, 109, 0.1), 0 0 20px rgba(215, 181, 109, 0.08);
 }
 
 .desktop-sidebar__link--active :deep(.van-icon) {
@@ -127,9 +144,10 @@ function isActive(path: string) {
 }
 
 .desktop-sidebar__footer {
-  padding: 12px 10px 4px;
+  padding: 14px 10px 6px;
   font-size: 10px;
   text-align: center;
-  opacity: 0.65;
+  opacity: 0.55;
+  letter-spacing: 0.12em;
 }
 </style>

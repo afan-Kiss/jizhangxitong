@@ -59,9 +59,10 @@ const hideMobileTab = computed(() => shouldHideMobileTab(route.path, isWide.valu
 .responsive-layout {
   min-height: 100vh;
   background:
-    radial-gradient(ellipse 90% 50% at 10% -5%, var(--color-bg-mesh-1) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 40% at 95% 100%, var(--color-bg-mesh-2) 0%, transparent 50%),
-    var(--color-bg);
+    radial-gradient(ellipse 85% 55% at 8% -8%, var(--color-bg-mesh-1) 0%, transparent 58%),
+    radial-gradient(ellipse 55% 42% at 98% 92%, var(--color-bg-mesh-2) 0%, transparent 52%),
+    radial-gradient(ellipse 40% 35% at 50% 50%, var(--color-bg-mesh-3) 0%, transparent 65%),
+    linear-gradient(180deg, #141f1a 0%, var(--color-bg) 40%, var(--color-bg-deep) 100%);
 }
 
 .responsive-layout--desktop {

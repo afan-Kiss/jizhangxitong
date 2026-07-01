@@ -1,47 +1,60 @@
 :root {
-  /* 墨玉绿 + 暖金 — 高端珠宝工作台 */
-  --color-bg: #0c100e;
-  --color-bg-deep: #060908;
-  --color-bg-mesh-1: rgba(31, 77, 58, 0.22);
-  --color-bg-mesh-2: rgba(198, 161, 91, 0.08);
+  /* 深墨绿 / 深岩灰 — 高端珠宝经营台（非纯黑） */
+  --color-bg: #101814;
+  --color-bg-deep: #121c18;
+  --color-bg-elevated: #17241e;
+  --color-bg-panel: #202721;
+  --color-bg-mesh-1: rgba(46, 92, 72, 0.18);
+  --color-bg-mesh-2: rgba(215, 181, 109, 0.07);
+  --color-bg-mesh-3: rgba(78, 125, 105, 0.12);
 
-  --color-surface: rgba(18, 26, 23, 0.55);
-  --color-card: rgba(22, 30, 27, 0.78);
-  --color-card-dark: rgba(12, 16, 14, 0.92);
-  --color-card-light: rgba(255, 255, 255, 0.06);
+  --color-surface: rgba(22, 32, 28, 0.62);
+  --color-card: rgba(26, 36, 32, 0.78);
+  --color-card-dark: rgba(16, 24, 20, 0.92);
+  --color-card-light: rgba(255, 255, 255, 0.05);
 
-  --color-gold: #C6A15B;
-  --color-gold-light: #E6D3A3;
-  --color-jade: #4E7D69;
-  --color-jade-deep: #1F4D3A;
-  --color-jade-glow: rgba(74, 222, 128, 0.12);
+  /* 香槟金点缀 */
+  --color-gold: #d7b56d;
+  --color-gold-light: #e8d4a2;
+  --color-gold-deep: #b88a3d;
+  --color-gold-border: rgba(215, 181, 109, 0.35);
+  --color-gold-border-hover: rgba(215, 181, 109, 0.55);
+  --color-gold-glow: rgba(215, 181, 109, 0.22);
 
-  --color-text-main: #E8EDE9;
-  --color-text-sub: rgba(232, 237, 233, 0.62);
-  --color-text-light: #F8F3E8;
+  --color-jade: #5a8f78;
+  --color-jade-deep: #1f4d3a;
+  --color-jade-soft: #3d6b58;
+  --color-jade-glow: rgba(90, 143, 120, 0.18);
 
-  --color-success: #4ade80;
-  --color-warning: #fbbf24;
-  --color-danger: #f87171;
-  --color-info: #7dd3fc;
+  --color-text-main: #ebe8e0;
+  --color-text-sub: rgba(235, 232, 224, 0.58);
+  --color-text-light: #f8f4ea;
+  --color-text-champagne: #e8d4a2;
 
-  --radius-card: 16px;
+  --color-success: #6ecf9a;
+  --color-warning: #e8c468;
+  --color-danger: #e88a84;
+  --color-info: #8ecfe8;
+
+  --radius-card: 18px;
   --radius-btn: 14px;
   --radius-pill: 999px;
-  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35);
-  --shadow-glow: 0 0 24px rgba(198, 161, 91, 0.12);
-  --shadow-glow-jade: 0 0 24px rgba(74, 222, 128, 0.1);
-  --border-gold: 1px solid rgba(198, 161, 91, 0.14);
-  --border-glass: 1px solid rgba(255, 255, 255, 0.06);
-  --blur-glass: blur(12px);
+  --shadow-card: 0 4px 28px rgba(8, 14, 11, 0.42);
+  --shadow-card-hover: 0 12px 36px rgba(8, 14, 11, 0.5);
+  --shadow-glow: 0 0 28px rgba(215, 181, 109, 0.14);
+  --shadow-glow-jade: 0 0 24px rgba(90, 143, 120, 0.12);
+  --shadow-inset-gold: inset 0 0 0 1px rgba(215, 181, 109, 0.12);
+  --border-gold: 1px solid rgba(215, 181, 109, 0.16);
+  --border-glass: 1px solid rgba(255, 255, 255, 0.07);
+  --blur-glass: blur(14px);
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --duration-fast: 120ms;
-  --duration-normal: 220ms;
-  --duration-slow: 480ms;
+  --duration-fast: 140ms;
+  --duration-normal: 240ms;
+  --duration-slow: 520ms;
 
   /* Vant 深色主题 */
-  --van-primary-color: var(--color-jade);
+  --van-primary-color: var(--color-jade-soft);
   --van-success-color: var(--color-success);
   --van-warning-color: var(--color-warning);
   --van-danger-color: var(--color-danger);
@@ -50,52 +63,186 @@
   --van-background: var(--color-bg);
   --van-background-2: var(--color-card);
   --van-border-color: rgba(255, 255, 255, 0.08);
-  --van-active-color: rgba(78, 125, 105, 0.15);
+  --van-active-color: rgba(90, 143, 120, 0.14);
   --van-cell-background: transparent;
   --van-field-label-color: var(--color-text-sub);
   --van-field-input-text-color: var(--color-text-main);
   --van-radius-lg: var(--radius-card);
-  --van-button-primary-background: linear-gradient(135deg, var(--color-jade-deep) 0%, #2A5A45 50%, rgba(198, 161, 91, 0.9) 130%);
+  --van-button-primary-background: linear-gradient(135deg, var(--color-jade-deep) 0%, #2a5a45 55%, rgba(215, 181, 109, 0.75) 130%);
   --van-button-primary-border-color: transparent;
   --van-nav-bar-background: transparent;
   --van-nav-bar-title-text-color: var(--color-text-main);
   --van-nav-bar-icon-color: var(--color-text-main);
-  --van-tabbar-background: rgba(12, 16, 14, 0.88);
+  --van-tabbar-background: rgba(16, 24, 20, 0.9);
   --van-tabbar-item-active-color: var(--color-gold);
   --van-tabbar-item-text-color: var(--color-text-sub);
 }
 
-/* 玻璃面板 — 对齐总控台 .glass */
+/* ---------- 玻璃面板 ---------- */
 .glass-surface {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.015) 100%);
   backdrop-filter: var(--blur-glass);
   -webkit-backdrop-filter: var(--blur-glass);
   border: var(--border-glass);
 }
 
+/* ---------- 可复用奢华交互 ---------- */
+.luxury-hover {
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast),
+    box-shadow var(--duration-normal);
+}
+@media (hover: hover) {
+  .luxury-hover:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-gold-border-hover) !important;
+    box-shadow: var(--shadow-card), var(--shadow-glow);
+  }
+}
+.luxury-hover:active {
+  transform: scale(0.98);
+}
+
+.luxury-gold-border {
+  border: 1px solid var(--color-gold-border);
+}
+
+.luxury-button {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-btn);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-light);
+  cursor: pointer;
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast),
+    box-shadow var(--duration-normal);
+}
+@media (hover: hover) {
+  .luxury-button:hover {
+    border-color: var(--color-gold-border-hover);
+    box-shadow: 0 0 20px var(--color-gold-glow);
+    transform: translateY(-1px);
+  }
+}
+.luxury-button:active {
+  transform: scale(0.97);
+}
+
+.luxury-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.luxury-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    rgba(215, 181, 109, 0.08) 48%,
+    rgba(232, 212, 162, 0.14) 50%,
+    rgba(215, 181, 109, 0.08) 52%,
+    transparent 62%
+  );
+  transform: translateX(-120%);
+  pointer-events: none;
+  z-index: 0;
+}
+@media (hover: hover) {
+  .luxury-shimmer:hover::after {
+    animation: luxury-shimmer-sweep 0.85s var(--ease-out);
+  }
+}
+
+.luxury-soft-glow {
+  box-shadow: var(--shadow-card), var(--shadow-glow-jade);
+}
+
+.luxury-pulse {
+  animation: luxury-pulse-bar 2.8s ease-in-out infinite;
+}
+
+.luxury-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(215, 181, 109, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: luxury-skeleton 1.4s ease-in-out infinite;
+  border-radius: var(--radius-card);
+}
+
+.luxury-loading-ring {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(215, 181, 109, 0.15);
+  border-top-color: var(--color-gold);
+  border-right-color: var(--color-gold-light);
+  animation: spin-soft 0.75s linear infinite;
+}
+
+.luxury-capsule {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--color-gold-light);
+  background: rgba(215, 181, 109, 0.1);
+  border: 1px solid rgba(215, 181, 109, 0.28);
+}
+
+.luxury-empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--color-text-sub);
+  font-size: 13px;
+  border-radius: var(--radius-card);
+  border: 1px dashed rgba(215, 181, 109, 0.18);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* ---------- 动效 ---------- */
 @keyframes page-enter {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes card-stagger {
-  from { opacity: 0; transform: translateY(14px); }
+  from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes card-float {
-  from { transform: translateY(0); }
-  to { transform: translateY(-2px); }
+@keyframes luxury-pulse-bar {
+  0%, 100% { opacity: 0.65; box-shadow: 0 0 8px rgba(215, 181, 109, 0.2); }
+  50% { opacity: 1; box-shadow: 0 0 16px rgba(215, 181, 109, 0.38); }
+}
+
+@keyframes luxury-shimmer-sweep {
+  to { transform: translateX(120%); }
+}
+
+@keyframes luxury-skeleton {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 @keyframes pulse-soft {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  50% { opacity: 0.55; }
 }
 
 @keyframes highlight-flash {
-  0% { box-shadow: 0 0 0 0 rgba(198, 161, 91, 0.45); }
-  70% { box-shadow: 0 0 0 8px rgba(198, 161, 91, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(215, 181, 109, 0.45); }
+  70% { box-shadow: 0 0 0 10px rgba(215, 181, 109, 0); }
   100% { box-shadow: var(--shadow-card); }
 }
 
@@ -117,13 +264,32 @@
 }
 
 @keyframes breathe-dot {
-  0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 6px rgba(74, 222, 128, 0.4); }
-  50% { transform: scale(1.2); opacity: 0.75; box-shadow: 0 0 12px rgba(74, 222, 128, 0.65); }
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 6px rgba(110, 207, 154, 0.35);
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.8;
+    box-shadow: 0 0 14px rgba(215, 181, 109, 0.45);
+  }
+}
+
+@keyframes tab-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(215, 181, 109, 0.25); }
+  50% { box-shadow: 0 0 0 6px rgba(215, 181, 109, 0); }
 }
 
 @keyframes input-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(198, 161, 91, 0); }
-  50% { box-shadow: 0 0 0 3px rgba(198, 161, 91, 0.22); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(215, 181, 109, 0); }
+  50% { box-shadow: 0 0 0 3px rgba(215, 181, 109, 0.2); }
+}
+
+@keyframes scan-line {
+  0% { top: 0; opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { top: calc(100% - 2px); opacity: 0.5; }
 }
 
 .page-enter {
@@ -147,7 +313,7 @@
 }
 .scan-input-wrap--focused .scan-workbench__input {
   border-color: var(--color-gold);
-  animation: input-glow 2s var(--ease-out) infinite;
+  animation: input-glow 2.2s var(--ease-out) infinite;
 }
 .scan-input-wrap--scanning::after {
   content: '';
@@ -160,12 +326,6 @@
   pointer-events: none;
 }
 
-@keyframes scan-line {
-  0% { top: 0; opacity: 0.6; }
-  50% { opacity: 1; }
-  100% { top: calc(100% - 2px); opacity: 0.6; }
-}
-
 .scanner-dot {
   display: inline-block;
   width: 8px;
@@ -176,17 +336,23 @@
 }
 .scanner-dot--online {
   background: var(--color-success);
-  animation: breathe-dot 2.4s ease-in-out infinite;
+  animation: breathe-dot 2.6s ease-in-out infinite;
 }
 .scanner-dot--offline {
   background: var(--color-warning);
+  opacity: 0.85;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .page-enter,
   .card-stagger,
-  .fade-in { animation: none !important; }
+  .fade-in,
+  .luxury-pulse,
+  .luxury-skeleton { animation: none !important; }
+  .luxury-shimmer::after { display: none; }
+  .luxury-loading-ring { animation: none; opacity: 0.7; }
   .scan-input-wrap--focused .scan-workbench__input { animation: none; }
   .scan-input-wrap--scanning::after { animation: none; display: none; }
   .scanner-dot--online { animation: none; }
+  .luxury-hover:hover { transform: none; }
 }

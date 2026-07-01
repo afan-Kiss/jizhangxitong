@@ -221,7 +221,7 @@ watch(showPicker, (open) => {
   gap: 8px;
 }
 .date-range-picker__preset {
-  border: 1px solid rgba(198, 161, 91, 0.28);
+  border: 1px solid rgba(215, 181, 109, 0.28);
   background: rgba(255, 255, 255, 0.04);
   color: var(--color-text-light);
   border-radius: 999px;

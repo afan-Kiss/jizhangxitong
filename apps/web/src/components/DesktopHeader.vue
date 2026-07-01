@@ -87,11 +87,22 @@ function logout() {
   gap: 16px;
   min-height: var(--header-height);
   padding: 10px 24px;
-  background: rgba(12, 16, 14, 0.72);
-  border-bottom: var(--border-glass);
+  background: rgba(16, 24, 20, 0.78);
+  border-bottom: 1px solid rgba(215, 181, 109, 0.12);
+  box-shadow: 0 4px 24px rgba(8, 12, 10, 0.2);
   position: sticky;
   top: 0;
   z-index: 50;
+}
+.desktop-header::after {
+  content: '';
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(215, 181, 109, 0.35), transparent);
+  pointer-events: none;
 }
 
 .desktop-header__title {
@@ -130,23 +141,27 @@ function logout() {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 7px 14px;
   border-radius: var(--radius-pill);
-  background: rgba(78, 125, 105, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(90, 143, 120, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--color-text-light);
   font-size: 13px;
   white-space: nowrap;
   cursor: pointer;
   transition:
     background var(--duration-fast),
-    border-color var(--duration-fast);
+    border-color var(--duration-fast),
+    box-shadow var(--duration-fast),
+    transform var(--duration-fast);
 }
 
 .desktop-header__user:hover,
 .desktop-header__user--open {
-  background: rgba(78, 125, 105, 0.24);
-  border-color: rgba(198, 161, 91, 0.28);
+  background: rgba(90, 143, 120, 0.2);
+  border-color: var(--color-gold-border-hover);
+  box-shadow: 0 0 18px var(--color-gold-glow);
+  transform: translateY(-1px);
 }
 
 .desktop-header__caret {
@@ -162,13 +177,14 @@ function logout() {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  min-width: 148px;
+  min-width: 156px;
   padding: 6px;
-  border-radius: 12px;
-  border: var(--border-glass);
-  background: rgba(18, 24, 21, 0.96);
-  box-shadow: var(--shadow-card), 0 12px 32px rgba(0, 0, 0, 0.28);
+  border-radius: 14px;
+  border: 1px solid rgba(215, 181, 109, 0.18);
+  background: rgba(20, 30, 26, 0.96);
+  box-shadow: var(--shadow-card), 0 16px 40px rgba(8, 12, 10, 0.35);
   z-index: 60;
+  backdrop-filter: blur(16px);
 }
 
 .desktop-header__dropdown-item {
@@ -187,7 +203,8 @@ function logout() {
 }
 
 .desktop-header__dropdown-item:hover {
-  background: rgba(78, 125, 105, 0.18);
+  background: rgba(90, 143, 120, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(215, 181, 109, 0.15);
 }
 
 .desktop-header__dropdown-item--danger {

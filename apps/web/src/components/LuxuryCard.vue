@@ -11,7 +11,7 @@ defineProps<{
 
 <template>
   <div
-    class="luxury-card glass-surface"
+    class="luxury-card glass-surface luxury-shimmer"
     :class="{
       'luxury-card--dark': dark,
       'luxury-card--gold': gold,
@@ -24,7 +24,9 @@ defineProps<{
       animationDelay: stagger !== undefined ? `${stagger * 45}ms` : undefined,
     }"
   >
-    <slot />
+    <div class="luxury-card__content">
+      <slot />
+    </div>
   </div>
 </template>
 
@@ -41,16 +43,22 @@ defineProps<{
     box-shadow var(--duration-normal) var(--ease-out),
     border-color var(--duration-fast);
 }
+.luxury-card__content {
+  position: relative;
+  z-index: 1;
+}
 @media (hover: hover) {
   .luxury-card--hoverable:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-card), var(--shadow-glow);
-    border-color: rgba(198, 161, 91, 0.2);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-card-hover), var(--shadow-glow);
+    border-color: var(--color-gold-border-hover);
   }
 }
 .luxury-card--dark {
-  background: linear-gradient(145deg, #141C19 0%, #1A2822 45%, #0F1614 100%);
-  border-color: rgba(198, 161, 91, 0.22);
+  background:
+    radial-gradient(ellipse 80% 60% at 100% 0%, rgba(90, 143, 120, 0.14) 0%, transparent 55%),
+    linear-gradient(155deg, #1a2621 0%, #1f2e28 42%, #141c19 100%);
+  border-color: rgba(215, 181, 109, 0.2);
   color: var(--color-text-light);
   overflow: hidden;
 }
@@ -61,8 +69,9 @@ defineProps<{
   right: -20%;
   width: 60%;
   height: 80%;
-  background: radial-gradient(circle, rgba(78, 125, 105, 0.25) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(90, 143, 120, 0.2) 0%, transparent 70%);
   pointer-events: none;
+  z-index: 0;
 }
 .luxury-card--dark::after {
   content: '';
@@ -71,12 +80,15 @@ defineProps<{
   left: -10%;
   width: 50%;
   height: 60%;
-  background: radial-gradient(circle, rgba(198, 161, 91, 0.12) 0%, transparent 65%);
+  background: radial-gradient(circle, rgba(215, 181, 109, 0.1) 0%, transparent 65%);
   pointer-events: none;
+  z-index: 0;
 }
 .luxury-card--gold {
-  border-color: rgba(198, 161, 91, 0.28);
+  border-color: rgba(215, 181, 109, 0.28);
   box-shadow: var(--shadow-card), var(--shadow-glow);
+  background:
+    linear-gradient(145deg, rgba(215, 181, 109, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
 }
 .luxury-card--clickable {
   cursor: pointer;

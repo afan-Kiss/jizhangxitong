@@ -132,7 +132,7 @@ const heroSubtitle = () => {
             highlight
             :stagger="1"
           />
-          <span class="home-page__kpi-hint">批量处理</span>
+          <span class="home-page__kpi-hint luxury-capsule">批量处理</span>
         </button>
       </div>
     </LuxuryCard>
@@ -162,7 +162,7 @@ const heroSubtitle = () => {
     <div class="desktop-grid-2">
       <LuxuryCard :stagger="6">
         <div class="section-title">最近支出</div>
-        <div v-if="!recentExpenses.length" class="muted">暂无记录</div>
+        <div v-if="!recentExpenses.length" class="luxury-empty">暂无记录</div>
         <div
           v-for="item in recentExpenses"
           :key="item.id"
@@ -217,31 +217,42 @@ const heroSubtitle = () => {
   text-align: left;
   cursor: pointer;
   min-height: 88px;
-  transition: transform var(--duration-fast) var(--ease-out);
+  border-radius: var(--radius-card);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast);
 }
 @media (hover: hover) {
-  .home-page__kpi:hover { transform: translateY(-3px); }
+  .home-page__kpi:hover {
+    transform: translateY(-3px);
+  }
+  .home-page__kpi:hover :deep(.money-card) {
+    border-color: var(--color-gold-border-hover);
+    box-shadow: var(--shadow-card), var(--shadow-glow);
+  }
 }
 .home-page__kpi :deep(.money-card) {
   width: 100%;
   height: 100%;
+  transition:
+    border-color var(--duration-fast),
+    box-shadow var(--duration-normal);
 }
 .home-page__kpi-hint {
   position: absolute;
-  top: 8px;
+  top: 10px;
   right: 10px;
-  font-size: 10px;
-  color: var(--color-gold);
-  opacity: 0.85;
   pointer-events: none;
 }
 .home-page__actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 }
-@media (min-width: 1200px) {
-  .home-page__actions { grid-template-columns: repeat(4, 1fr); }
+@media (min-width: 480px) {
+  .home-page__actions {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 .home-page__action {
   display: flex;
@@ -249,31 +260,56 @@ const heroSubtitle = () => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 72px;
-  padding: 14px 8px;
-  border: var(--border-glass);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
+  min-height: 76px;
+  padding: 14px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(90, 143, 120, 0.12) 0%, transparent 70%),
+    rgba(255, 255, 255, 0.03);
   color: var(--color-text-light);
   font-size: 12px;
   cursor: pointer;
-  transition: transform var(--duration-fast) var(--ease-out), border-color var(--duration-fast), box-shadow var(--duration-fast);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast),
+    box-shadow var(--duration-normal);
 }
 @media (hover: hover) {
   .home-page__action:hover {
     transform: translateY(-2px);
-    border-color: rgba(198, 161, 91, 0.25);
+    border-color: var(--color-gold-border-hover);
     box-shadow: var(--shadow-glow);
   }
 }
 .home-page__action:active { transform: scale(0.96); }
-.home-page__action :deep(.van-icon) { color: var(--color-gold); }
+.home-page__action :deep(.van-icon) {
+  color: var(--color-gold);
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(215, 181, 109, 0.08);
+  box-shadow: 0 0 12px rgba(90, 143, 120, 0.12);
+}
 .home-page__log {
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(198, 161, 91, 0.08);
+  padding: 12px 4px;
+  border-bottom: 1px solid rgba(215, 181, 109, 0.08);
   font-size: 13px;
   line-height: 1.5;
+  border-radius: 8px;
+  transition: background var(--duration-fast), box-shadow var(--duration-fast);
+}
+.home-page__log:hover {
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(215, 181, 109, 0.12);
 }
 .home-page__log:last-child { border-bottom: none; }
-.home-page__expense-row { cursor: pointer; }
+.home-page__expense-row {
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background var(--duration-fast), box-shadow var(--duration-fast);
+}
+.home-page__expense-row:hover {
+  background: rgba(90, 143, 120, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(215, 181, 109, 0.14);
+}
 </style>

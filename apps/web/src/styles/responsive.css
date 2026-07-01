@@ -142,18 +142,23 @@
 
 .data-table th {
   font-weight: 600;
-  color: var(--color-text-sub);
+  color: var(--color-text-champagne);
   font-size: 12px;
+  letter-spacing: 0.03em;
   background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(8px);
 }
 
 .data-table tbody tr {
   cursor: pointer;
-  transition: background var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    box-shadow var(--duration-fast);
 }
 
 .data-table tbody tr:hover {
-  background: rgba(78, 125, 105, 0.06);
+  background: rgba(90, 143, 120, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(215, 181, 109, 0.18);
 }
 
 .list-card {
@@ -170,16 +175,25 @@
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
-  border-bottom: 1px solid rgba(198, 161, 91, 0.08);
+  border-bottom: 1px solid rgba(215, 181, 109, 0.08);
   cursor: pointer;
+  transition:
+    background var(--duration-fast),
+    box-shadow var(--duration-fast);
 }
 
 .list-card__item:last-child {
   border-bottom: none;
 }
 
+.list-card__item:hover {
+  background: rgba(90, 143, 120, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(215, 181, 109, 0.15);
+}
+
 .list-card__item:active {
-  background: rgba(78, 125, 105, 0.05);
+  background: rgba(90, 143, 120, 0.1);
+  transform: scale(0.995);
 }
 
 /* ---------- 登录页 — 深色玻璃 ---------- */
@@ -187,9 +201,26 @@
   min-height: 100vh;
   padding: 80px 20px 40px;
   background:
-    radial-gradient(ellipse 100% 70% at 50% -5%, var(--color-bg-mesh-1) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 40% at 95% 95%, var(--color-bg-mesh-2) 0%, transparent 50%),
-    linear-gradient(180deg, #0f1512 0%, var(--color-bg) 45%);
+    radial-gradient(ellipse 90% 55% at 50% -8%, var(--color-bg-mesh-1) 0%, transparent 58%),
+    radial-gradient(ellipse 45% 38% at 92% 92%, var(--color-bg-mesh-2) 0%, transparent 52%),
+    radial-gradient(ellipse 35% 30% at 8% 75%, var(--color-bg-mesh-3) 0%, transparent 50%),
+    linear-gradient(180deg, #141f1a 0%, var(--color-bg) 48%, var(--color-bg-deep) 100%);
+  position: relative;
+}
+.login-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(
+      125deg,
+      transparent,
+      transparent 48px,
+      rgba(215, 181, 109, 0.015) 48px,
+      rgba(215, 181, 109, 0.015) 49px
+    );
+  pointer-events: none;
+  opacity: 0.6;
 }
 
 @media (min-width: 768px) {
@@ -200,8 +231,9 @@
     justify-content: center;
     padding: 40px 24px;
     background:
-      radial-gradient(ellipse 80% 60% at 50% 0%, var(--color-bg-mesh-1) 0%, transparent 60%),
-      var(--color-bg);
+      radial-gradient(ellipse 75% 55% at 50% 0%, var(--color-bg-mesh-1) 0%, transparent 62%),
+      radial-gradient(ellipse 40% 35% at 100% 100%, var(--color-bg-mesh-2) 0%, transparent 55%),
+      linear-gradient(180deg, #141f1a 0%, var(--color-bg) 100%);
   }
 
   .login-page__inner {
