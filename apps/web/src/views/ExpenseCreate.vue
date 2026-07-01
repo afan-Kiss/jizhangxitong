@@ -14,19 +14,25 @@ import ActionButton from '../components/ActionButton.vue'
 import XhsOrderPicker from '../components/XhsOrderPicker.vue'
 import type { XhsOrderItem } from '../types/xhs-order'
 import { resolveApiErrorMessage } from '../utils/api-errors'
+import { EXPENSE_BUSINESS_LABELS, type ExpenseBusinessType } from '@jade-account/shared'
 
 const STORAGE_KEY = 'jade-expense-prefs'
 
-const BUSINESS_OPTIONS = [
-  { v: 'normal', l: '普通支出' },
-  { v: 'item_cost', l: '货品成本' },
-  { v: 'customer_refund', l: '客户返款/退差价' },
-  { v: 'customer_compensation', l: '客户补偿/安抚打款' },
-  { v: 'after_sale_compensation', l: '售后补偿' },
-  { v: 'platform_fee', l: '平台扣款' },
-  { v: 'staff_reimbursement', l: '员工垫付' },
-  { v: 'manual_pending', l: '先记账后补关联' },
+const BUSINESS_TYPE_ORDER: ExpenseBusinessType[] = [
+  'normal',
+  'item_cost',
+  'customer_refund',
+  'customer_compensation',
+  'after_sale_compensation',
+  'platform_fee',
+  'staff_reimbursement',
+  'manual_pending',
 ]
+
+const BUSINESS_OPTIONS = BUSINESS_TYPE_ORDER.map((v) => ({
+  v,
+  l: EXPENSE_BUSINESS_LABELS[v],
+}))
 
 const PAYMENT_STATUS_OPTIONS = [
   { v: 'unpaid', l: '未打款' },

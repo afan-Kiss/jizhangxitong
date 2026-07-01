@@ -55,7 +55,7 @@ function businessLabel(businessType?: unknown, expenseType?: unknown): string {
   }
   const t = String(expenseType || '').trim()
   if (t) return t
-  return '普通支出'
+  return '好评返现'
 }
 
 function actorName(operatorName?: string | null): string | null {

@@ -49,8 +49,8 @@ async function main() {
     }),
   })
   const normalId = normal.json.data?.id
-  if (!normalId) fail('创建普通支出', normal.text)
-  else pass('创建普通支出')
+  if (!normalId) fail('创建好评返现', normal.text)
+  else pass('创建好评返现')
 
   const comp = await fetchJson(`${SERVER.replace(/\/$/, '')}/api/expenses`, {
     method: 'POST',
@@ -88,8 +88,8 @@ async function main() {
   const logs = detail.json.data?.operationLogs || []
   const texts = logs.map((l) => l.formattedMessage || l.summary || '').join('\n')
 
-  if (texts.includes('添加了一笔') && texts.includes('88')) pass('普通支出日志含金额')
-  else fail('普通支出日志', texts.slice(0, 200))
+  if (texts.includes('添加了一笔') && texts.includes('88')) pass('好评返现日志含金额')
+  else fail('好评返现日志', texts.slice(0, 200))
 
   const compDetail = await fetchJson(`${SERVER.replace(/\/$/, '')}/api/expenses/${compId}`, {
     headers: authHeaders(token),

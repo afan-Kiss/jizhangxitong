@@ -107,8 +107,8 @@ async function main() {
   }
 
   const normalImpact = calculateExpenseImpact({ expenseType: '加工费', businessType: 'normal', amount: 50 })
-  if (!normalImpact.affectsProfit && normalImpact.affectsCost) pass('普通支出不扣单品利润、计入成本')
-  else fail('普通支出口径', JSON.stringify(normalImpact))
+  if (!normalImpact.affectsProfit && normalImpact.affectsCost) pass('好评返现不扣单品利润、计入成本')
+  else fail('好评返现口径', JSON.stringify(normalImpact))
 
   const customerPayImpact = calculateExpenseImpact({
     expenseType: '客户返款',

@@ -15,6 +15,7 @@ import {
   toRangeQuery,
   type DateRangeState,
 } from '../utils/date-range'
+import { EXPENSE_BUSINESS_LABELS } from '@jade-account/shared'
 
 const router = useRouter()
 const route = useRoute()
@@ -38,16 +39,7 @@ const filter = ref({
   pageSize: 30,
 })
 
-const businessLabels: Record<string, string> = {
-  normal: '普通支出',
-  item_cost: '货品成本',
-  customer_refund: '客户返款',
-  customer_compensation: '客户补偿',
-  after_sale_compensation: '售后补偿',
-  platform_fee: '平台扣款',
-  staff_reimbursement: '员工垫付',
-  manual_pending: '待补关联',
-}
+const businessLabels = EXPENSE_BUSINESS_LABELS as Record<string, string>
 
 const statusLabels: Record<string, string> = {
   pending: '未报销',
