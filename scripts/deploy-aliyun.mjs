@@ -180,12 +180,21 @@ async function main() {
   const workerReport = await verifyWorkerRemote(remoteUrl)
   await check7789()
 
+  const testEnv = { ...process.env, ACCEPTANCE_SERVER: remoteUrl }
+
   runTiered('remote-acceptance（含 Excel/Worker 上传）', `node scripts/remote-acceptance.mjs`, 'external', {
     env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl, ACCEPTANCE_MODE: 'full' },
     timeout: TIMEOUTS.remoteAcceptance + 30000,
   })
 
-  const testEnv = { ...process.env, ACCEPTANCE_SERVER: remoteUrl }
+  try {
+    run('node scripts/acceptance-cleanup.mjs', { env: testEnv, timeout: TIMEOUTS.acceptanceCleanup + 60000 })
+    deployReport.core.push({ name: 'acceptance:cleanup', ok: true })
+  } catch (e) {
+    deployReport.core.push({ name: 'acceptance:cleanup', ok: false })
+    console.warn('\nWARN — acceptance:cleanup 未通过，请手动检查测试数据')
+  }
+
   const coreTests = [
     ['test:white-screen', `node scripts/test-white-screen.mjs`, TIMEOUTS.whiteScreen + 180000],
     ['test:responsive', `node scripts/test-responsive.mjs`, TIMEOUTS.responsive + 180000],

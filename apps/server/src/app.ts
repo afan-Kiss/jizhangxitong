@@ -41,7 +41,7 @@ export function createApp() {
     const version = process.env.APP_VERSION?.trim()
     res.json({
       success: true,
-      message: '和田玉镯子记账系统运行中',
+      message: '项目资金支出记录系统运行中',
       scanWorkbenchEnabled: config.scanWorkbenchEnabled,
       qianfanOrderLinkEnabled: await isQianfanOrderLinkEnabled(),
       ...(version ? { version } : {}),

@@ -28,8 +28,8 @@ function isActive(path: string) {
         <span class="desktop-sidebar__diamond">◆</span>
       </div>
       <div>
-        <div class="desktop-sidebar__title">和田玉记账</div>
-        <div class="desktop-sidebar__sub">高端珠宝经营工作台</div>
+        <div class="desktop-sidebar__title">项目资金支出记录</div>
+        <div class="desktop-sidebar__sub">记录 · 统计 · 关联订单</div>
       </div>
     </div>
     <nav class="desktop-sidebar__nav">

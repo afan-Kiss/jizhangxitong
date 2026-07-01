@@ -81,8 +81,8 @@ async function onRegister() {
   <div class="login-page page-enter" data-testid="login-page">
     <div class="login-page__inner">
       <div class="login__hero">
-        <div class="login__brand">和田玉镯子记账</div>
-        <div class="login__tagline">老板随身财务工作台</div>
+        <div class="login__brand">项目资金支出记录</div>
+        <div class="login__tagline">记录每一笔项目资金去向，可关联千帆订单</div>
       </div>
       <LuxuryCard gold padding="24px 20px">
         <template v-if="mode === 'login'">

@@ -33,7 +33,7 @@ function readAdminCredentials() {
   }
 }
 
-const HOME_MARKERS = ['项目资金支出', '今日支出', '本期支出', '本月支出', '待补凭证', '最近支出']
+const HOME_MARKERS = ['项目资金支出记录', '今日支出', '本期支出', '本月支出', '待补凭证', '最近支出']
 
 async function checkPage(page, label, url, checks = {}) {
   const bucket = { consoleErrors: [], pageErrors: [], failedRequests: [] }

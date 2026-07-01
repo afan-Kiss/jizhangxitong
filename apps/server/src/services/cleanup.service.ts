@@ -5,11 +5,30 @@ import { workerHub } from '../websocket/worker-hub'
 import { AuthRequest } from '../middleware/auth'
 import { toNumber } from '../lib/utils'
 
-const TEST_MARKERS = ['test_auto_check', 'test_auto_check_multi_images']
+const TEST_TEXT_MARKERS = [
+  'test_auto_check',
+  'test_auto_check_multi_images',
+  'test-accounting-flow',
+  'test-project-expense-only',
+  '自动联调测试',
+]
 
 function isTestText(text?: string | null) {
   if (!text) return false
-  return TEST_MARKERS.some((m) => text.includes(m))
+  return TEST_TEXT_MARKERS.some((m) => text.includes(m))
+}
+
+/** 仅匹配自动化测试产生的支出，不误伤用户真实记录 */
+export function isAcceptanceTestExpense(expense: {
+  remark?: string | null
+  expenseSummary?: string | null
+  externalOrderNo?: string | null
+}) {
+  if (isTestText(expense.remark) || isTestText(expense.expenseSummary)) return true
+  const remark = String(expense.remark || '')
+  if (/^FUND-\d+(-default-pay|-reject-staff)?$/i.test(remark.trim())) return true
+  if (/^TEST-\d+/.test(String(expense.externalOrderNo || ''))) return true
+  return false
 }
 
 export interface CleanupResult {
@@ -35,19 +54,12 @@ export async function cleanupAcceptanceTestData(operator: AuthRequest['user']): 
     localFilesFailed: [],
   }
 
-  const testExpenses = await prisma.expense.findMany({
-    where: {
-      OR: [
-        { remark: { contains: 'test_auto_check' } },
-        { expenseSummary: { contains: 'test_auto_check' } },
-      ],
-    },
+  const allExpenses = await prisma.expense.findMany({
     include: { attachments: { include: { file: true } } },
   })
 
-  for (const expense of testExpenses) {
-    if (!isTestText(expense.remark) && !isTestText(expense.expenseSummary)) {
-      result.expensesSkipped.push({ id: expense.id, reason: '不含测试标记，跳过' })
+  for (const expense of allExpenses) {
+    if (!isAcceptanceTestExpense(expense)) {
       continue
     }
     if (expense.isVoided) {

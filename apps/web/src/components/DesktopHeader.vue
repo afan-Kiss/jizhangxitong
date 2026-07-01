@@ -45,7 +45,7 @@ function logout() {
 
 <template>
   <header class="desktop-header glass-surface" data-testid="desktop-header">
-    <div class="desktop-header__title">和田玉镯子记账系统</div>
+    <div class="desktop-header__title">项目资金支出记录</div>
     <div class="desktop-header__right">
       <WorkerStatus :status="auth.workerStatus" compact />
       <div v-if="auth.user" ref="menuRoot" class="desktop-header__menu">

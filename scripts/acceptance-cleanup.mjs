@@ -70,7 +70,14 @@ async function main() {
     { headers: authHeaders(token) },
   )
   const hasTest = testExpenses.json.data?.items?.some(
-    (e) => !e.isVoided && (e.remark?.includes('test_auto_check') || e.expenseSummary?.includes('test_auto_check')),
+    (e: { isVoided?: boolean; remark?: string; expenseSummary?: string; externalOrderNo?: string }) =>
+      !e.isVoided && (
+        (e.remark?.includes('test_auto_check') || e.expenseSummary?.includes('test_auto_check'))
+        || e.remark?.includes('test-accounting-flow')
+        || e.remark?.includes('test-project-expense-only')
+        || /^FUND-\d+/.test(String(e.remark || ''))
+        || /^TEST-\d+/.test(String(e.externalOrderNo || ''))
+      ),
   )
   log('verify', `活跃支出中无 test_auto_check: ${!hasTest}`, !hasTest)
 

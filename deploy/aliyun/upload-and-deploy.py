@@ -192,11 +192,27 @@ def sftp_put(client: paramiko.SSHClient, local: Path, remote: str) -> None:
         sftp.close()
 
 
+def read_latest_backup_env(client: paramiko.SSHClient) -> dict[str, str]:
+    _, stdout, _ = client.exec_command(
+        "ls -dt /www/backup/jade-accounting-* 2>/dev/null | head -1",
+        timeout=30,
+    )
+    latest = stdout.read().decode("utf-8", errors="replace").strip()
+    if not latest:
+        return {}
+    _, stdout2, _ = client.exec_command(f"cat {latest}/apps/server/.env 2>/dev/null || true", timeout=30)
+    env = parse_env_text(stdout2.read().decode("utf-8", errors="replace"))
+    if env:
+        print(f"[deploy] 从备份读取 .env: {latest}")
+    return env
+
+
 def main() -> None:
     forbid_local_db_overwrite()
     client = connect()
     try:
         existing = read_remote_env(client)
+        latest_backup_env = read_latest_backup_env(client)
         app_version = os.environ.get("DEPLOY_APP_VERSION", "").strip()
         if not app_version:
             try:
@@ -210,6 +226,7 @@ def main() -> None:
         if app_version:
             print(f"[deploy] APP_VERSION={app_version}")
         build_production_web(app_version)
+
         env_content, _, worker_token = build_server_env(
             existing,
             host=HOST,
@@ -217,7 +234,14 @@ def main() -> None:
             app_version=app_version,
             force_rotate_worker=False,
             force_rotate_jwt=False,
+            backup_env=latest_backup_env if latest_backup_env else None,
         )
+        env_parsed = parse_env_text(env_content)
+        preserved = [k for k in ("CONTROL_SERVICE_TOKEN", "QIANFAN_ORDER_DETAIL_URL_TEMPLATE") if env_parsed.get(k)]
+        if preserved:
+            print(f"[deploy] 保留环境变量: {', '.join(preserved)}")
+        elif existing.get("CONTROL_SERVICE_TOKEN") or latest_backup_env.get("CONTROL_SERVICE_TOKEN"):
+            print("[deploy][WARN] CONTROL_SERVICE_TOKEN 未能写入 server.env，千帆 Cookie 可能不可用", file=sys.stderr)
         if existing.get("WORKER_WS_TOKEN") and existing["WORKER_WS_TOKEN"] == worker_token:
             print("[deploy] 保留现有 WORKER_WS_TOKEN（未轮换）")
         else:

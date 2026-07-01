@@ -35,7 +35,7 @@ function accountWebBase(webBase) {
   return webBase.includes('/account') ? webBase : `${webBase}/account`
 }
 const reportsDir = path.join(ROOT, 'reports')
-const HOME_MARKERS = ['项目资金支出', '今日支出', '本期支出', '本月支出', '待补凭证']
+const HOME_MARKERS = ['项目资金支出记录', '今日支出', '本期支出', '本月支出', '待补凭证']
 
 const VIEWPORTS = [
   { name: 'mobile', width: 390, height: 844, desktop: false },

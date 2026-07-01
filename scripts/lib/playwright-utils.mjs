@@ -62,7 +62,7 @@ export async function waitForLoginPage(page, timeoutMs = PAGE_TIMEOUT_MS) {
       const submit = document.querySelector('[data-testid="login-submit"]')
         || Array.from(document.querySelectorAll('button')).find((b) => /进入系统|登录/.test(b.textContent || ''))
       const text = (root || document.body)?.textContent?.trim() || ''
-      const hasBrand = /和田玉|用户名|密码|进入系统|老板随身/.test(text)
+      const hasBrand = /和田玉|用户名|密码|进入系统|项目资金支出记录/.test(text)
       const vis = (el) => {
         if (!el) return false
         const r = el.getBoundingClientRect()

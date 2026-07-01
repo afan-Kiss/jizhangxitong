@@ -9,7 +9,7 @@ import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
 
 const BASE = (process.env.ACCEPTANCE_SERVER || SERVER).replace(/\/$/, '')
 const FORBIDDEN = ['销售', '毛利', '利润', '有效成交', '库存', '报销', '员工垫付', '扫码工作台']
-const REQUIRED_HOME = ['项目资金支出', '今日支出', '本期支出', '本月支出', '待补凭证', '最近支出']
+const REQUIRED_HOME = ['项目资金支出记录', '今日支出', '本期支出', '本月支出', '待补凭证', '最近支出']
 
 let failed = 0
 function pass(n) { console.log(`✓ ${n}`) }
