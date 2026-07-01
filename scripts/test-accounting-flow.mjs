@@ -41,7 +41,7 @@ async function api(token, url, opts = {}) {
 async function testHomeDashboard(token) {
   console.log('\n--- 首页数据 ---')
   const res = await api(token, '/api/stats/home')
-  if (res.res.ok && res.json.data?.labels?.expense === '今天花了多少钱') {
+  if (res.res.ok && res.json.data?.labels?.expense === '今日经费支出') {
     pass('首页今日简况 API')
   } else {
     fail('首页今日简况 API', res.text)
