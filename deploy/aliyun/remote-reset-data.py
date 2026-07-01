@@ -9,6 +9,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DEPLOY = ROOT / "deploy" / "aliyun" / "upload-and-deploy.py"
 
+sys.path.insert(0, str(ROOT / "deploy" / "aliyun"))
+from prod_data_guard import require_destructive_confirmation
+
 spec = importlib.util.spec_from_file_location("upload_and_deploy", DEPLOY)
 mod = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
@@ -18,6 +21,7 @@ DEPLOY_DIR = mod.DEPLOY_DIR
 
 
 def main() -> int:
+    require_destructive_confirmation("remote-reset-data（清空生产业务数据，仅保留 fanfan）")
     client = mod.connect()
     try:
         code = mod.run(

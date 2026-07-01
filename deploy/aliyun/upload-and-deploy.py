@@ -13,6 +13,7 @@ import paramiko
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from env_utils import build_server_env, parse_env_text
+from prod_data_guard import forbid_local_db_overwrite, shell_preserve_production_data, shell_restore_preserved_data
 
 ROOT = Path(__file__).resolve().parents[2]
 HOST = os.environ.get("DEPLOY_HOST", "8.137.126.18")
@@ -192,6 +193,7 @@ def sftp_put(client: paramiko.SSHClient, local: Path, remote: str) -> None:
 
 
 def main() -> None:
+    forbid_local_db_overwrite()
     client = connect()
     try:
         existing = read_remote_env(client)
@@ -241,17 +243,7 @@ def main() -> None:
 
             sftp_put(client, zip_path, "/tmp/jade-upload/jade-accounting.zip")
             sftp_put(client, env_path, "/tmp/jade-upload/server.env")
-
-            db = ROOT / "apps/server/prisma/data/accounting.db"
-            upload_local_db = os.environ.get("DEPLOY_UPLOAD_LOCAL_DB", "").strip() in ("1", "true", "yes")
-            skip_seed = "1"
-            if upload_local_db and db.exists():
-                sftp_put(client, db, "/tmp/jade-upload/accounting.db")
-                print(f"[deploy] 上传本地数据库覆盖线上 ({db.stat().st_size} bytes)")
-                print("[deploy][WARN] DEPLOY_UPLOAD_LOCAL_DB=1：线上用户/业务数据会被本地库替换")
-            else:
-                print("[deploy] 保留线上 accounting.db（不用本地库覆盖）")
-                skip_seed = "1"
+            print("[deploy] 生产环境禁止上传/覆盖 accounting.db（数据优先）")
 
             pwd_file = ROOT / "secrets/initial-admin-password.txt"
             if pwd_file.exists():
@@ -262,26 +254,21 @@ def main() -> None:
             f"""
 set -e
 SSL_BACKUP=/tmp/jade-ssl-backup-$$
-DB_BACKUP=/tmp/jade-db-backup-$$
+{shell_preserve_production_data(DEPLOY_DIR)}
 if [ -d {DEPLOY_DIR}/ssl ]; then cp -a {DEPLOY_DIR}/ssl "$SSL_BACKUP"; fi
-if [ -f {DEPLOY_DIR}/apps/server/prisma/data/accounting.db ]; then cp -a {DEPLOY_DIR}/apps/server/prisma/data/accounting.db "$DB_BACKUP"; fi
 rm -rf {DEPLOY_DIR}
 mkdir -p {DEPLOY_DIR}
 unzip -q /tmp/jade-upload/jade-accounting.zip -d {DEPLOY_DIR}
 if [ -d "$SSL_BACKUP" ]; then mkdir -p {DEPLOY_DIR}/ssl && cp -a "$SSL_BACKUP/." {DEPLOY_DIR}/ssl/; rm -rf "$SSL_BACKUP"; fi
-mkdir -p {DEPLOY_DIR}/apps/server/prisma/data {DEPLOY_DIR}/logs {DEPLOY_DIR}/exports {DEPLOY_DIR}/web
-if [ -f /tmp/jade-upload/accounting.db ]; then
-  cp /tmp/jade-upload/accounting.db {DEPLOY_DIR}/apps/server/prisma/data/accounting.db
-elif [ -f "$DB_BACKUP" ]; then
-  cp -a "$DB_BACKUP" {DEPLOY_DIR}/apps/server/prisma/data/accounting.db
-  rm -f "$DB_BACKUP"
-fi
+mkdir -p {DEPLOY_DIR}/logs {DEPLOY_DIR}/exports {DEPLOY_DIR}/web
+{shell_restore_preserved_data(DEPLOY_DIR)}
 cp /tmp/jade-upload/server.env {DEPLOY_DIR}/apps/server/.env
 sed -i 's/\\r$//' {DEPLOY_DIR}/deploy/aliyun/deploy.sh 2>/dev/null || true
 chmod +x {DEPLOY_DIR}/deploy/aliyun/*.sh 2>/dev/null || true
 """,
         )
 
+        skip_seed = "1"
         code = run(client, f"cd {DEPLOY_DIR} && SKIP_SEED={skip_seed} bash deploy/aliyun/deploy.sh", timeout=3600)
         if code != 0:
             sys.exit(code)

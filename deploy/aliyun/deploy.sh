@@ -60,13 +60,25 @@ install_build() {
   npm ci
   log "prisma generate"
   npm run db:generate -w @jade-account/server
-  log "db push"
-  npm run db:push -w @jade-account/server
-  if [[ "${SKIP_SEED:-0}" != "1" ]]; then
-    log "db seed"
-    npm run db:seed -w @jade-account/server || true
+  local db_file="$DEPLOY_DIR/apps/server/prisma/data/accounting.db"
+  if [[ -f "$db_file" ]]; then
+    log "生产 accounting.db 已存在 — 禁止 db:seed；默认跳过 db:push（数据优先）"
+    export SKIP_SEED=1
+    if [[ "${DEPLOY_ALLOW_SCHEMA_PUSH:-0}" == "1" ]]; then
+      log "DEPLOY_ALLOW_SCHEMA_PUSH=1 — 执行 db push（仅 schema，不覆盖业务数据）"
+      npm run db:push -w @jade-account/server
+    else
+      log "skip db:push（保留现有库；schema 变更需显式 DEPLOY_ALLOW_SCHEMA_PUSH=1）"
+    fi
   else
-    log "skip seed (existing database)"
+    log "无 accounting.db — 首次初始化（db push + seed）"
+    npm run db:push -w @jade-account/server
+    if [[ "${SKIP_SEED:-0}" != "1" ]]; then
+      log "db seed"
+      npm run db:seed -w @jade-account/server || true
+    else
+      log "skip seed"
+    fi
   fi
   if [[ -f apps/web/dist/index.html && -f apps/server/dist/index.js ]]; then
     log "use prebuilt dist from upload bundle"
