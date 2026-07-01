@@ -25,7 +25,6 @@ const BUSINESS_TYPE_ORDER: ExpenseBusinessType[] = [
   'customer_compensation',
   'after_sale_compensation',
   'platform_fee',
-  'staff_reimbursement',
   'manual_pending',
 ]
 
@@ -55,8 +54,6 @@ const form = ref({
   amount: '',
   expenseType: '',
   paySource: '',
-  reimbursementPerson: '',
-  reimbursementStatus: 'pending',
   braceletCode: '',
   externalOrderNo: '',
   logisticsNo: '',
@@ -88,7 +85,6 @@ const displayAmount = computed(() => {
 })
 
 watch(() => form.value.businessType, (bt) => {
-  if (bt === 'staff_reimbursement' && !form.value.paySource) form.value.paySource = '员工垫付'
   if (bt === 'customer_refund' && !form.value.expenseType) form.value.expenseType = '客户返款'
   if (bt === 'customer_compensation' && !form.value.expenseType) form.value.expenseType = '客户心理落差补偿'
   if (bt === 'after_sale_compensation' && !form.value.expenseType) form.value.expenseType = '售后补偿'
@@ -238,8 +234,6 @@ async function onSubmit() {
       linkNote: form.value.linkNote || undefined,
       attachments: uploadedFiles.value.map((f) => ({ fileId: f.fileId, fileType: f.fileType })),
       needsAttachment,
-      reimbursementStatus: form.value.paySource === '员工垫付' ? form.value.reimbursementStatus : 'not_required',
-      reimbursementPerson: form.value.reimbursementPerson || undefined,
     }
     if (form.value.businessType === 'after_sale_compensation' && form.value.includeFreightRefund) {
       payload.remark = [payload.remark, '含退货运费补偿'].filter(Boolean).join('；')
@@ -336,7 +330,7 @@ async function onSubmit() {
           <van-field v-model="form.braceletCode" placeholder="可不填；货品成本建议填写" class="field-custom" data-testid="expense-bracelet-code" />
         </LuxuryCard>
 
-        <LuxuryCard v-if="form.businessType === 'normal' || form.businessType === 'item_cost' || form.businessType === 'staff_reimbursement'">
+        <LuxuryCard v-if="form.businessType === 'normal' || form.businessType === 'item_cost'">
           <div class="section-title">支出分类</div>
           <div class="pill-row">
             <button
@@ -388,20 +382,6 @@ async function onSubmit() {
               @click="form.paySource = s.value"
             >{{ s.label }}</button>
           </div>
-        </LuxuryCard>
-
-        <LuxuryCard v-if="form.paySource === '员工垫付'">
-          <div class="section-title">报销状态</div>
-          <div class="segment">
-            <button
-              v-for="opt in [{ v: 'pending', l: '未报销' }, { v: 'reimbursed', l: '已报销' }, { v: 'not_required', l: '不需要' }]"
-              :key="opt.v"
-              class="segment__item"
-              :class="{ 'segment__item--active': form.reimbursementStatus === opt.v }"
-              @click="form.reimbursementStatus = opt.v"
-            >{{ opt.l }}</button>
-          </div>
-          <van-field v-model="form.reimbursementPerson" label="报销人" placeholder="填谁垫付的" class="field-custom" />
         </LuxuryCard>
 
         <LuxuryCard>

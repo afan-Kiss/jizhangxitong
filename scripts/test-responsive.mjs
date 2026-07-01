@@ -161,12 +161,10 @@ async function runViewportInner(browser, vp, creds) {
       if (layout.flexDirection !== 'row') throw new Error(`flexDirection=${layout.flexDirection}`)
     })
 
-    await check('导出页按钮可见', async () => {
-      await gotoStable(page, `${WEB_BASE}/expense/export`)
-      const btn = page.locator('[data-testid="export-btn"]')
-      await btn.waitFor({ state: 'visible', timeout: 10000 })
-      const box = await btn.boundingBox()
-      if (!box || box.y + box.height > vp.height) throw new Error('导出按钮不在可视区域')
+    await check('支出统计页按钮可见', async () => {
+      await gotoStable(page, `${WEB_BASE}/expense/stats`)
+      const card = page.locator('[data-testid="expense-stats-summary"]')
+      await card.waitFor({ state: 'visible', timeout: 10000 })
     })
   }
 

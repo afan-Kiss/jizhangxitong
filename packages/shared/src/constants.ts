@@ -60,8 +60,6 @@ export const FILE_TYPES = [
 
 export const PLATFORMS = ['小红书', '微信私域', '其他'] as const
 
-export const REIMBURSEMENT_STATUSES = ['pending', 'reimbursed', 'not_required'] as const
-
 export const SALE_STATUSES = ['sold', 'refunded', 'returned_available'] as const
 
 export const PERMISSIONS = [
@@ -74,15 +72,12 @@ export const PERMISSIONS = [
   'expense:void',
   'expense:attachment:view',
   'expense:attachment:upload',
-  'expense:export',
   'sale:view',
   'sale:create',
   'sale:update',
   'sale:refund',
   'cost:adjust',
   'setting:update',
-  'reimbursement:view',
-  'reimbursement:update',
   'log:view',
   'permission:manage',
 ] as const
@@ -104,15 +99,12 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'expense:void': '作废支出',
   'expense:attachment:view': '查看付款/聊天截图',
   'expense:attachment:upload': '上传支出凭证',
-  'expense:export': '导出报销 Excel',
   'sale:view': '查看销售记录',
   'sale:create': '新建销售',
   'sale:update': '修改销售',
   'sale:refund': '销售退款/退货',
   'cost:adjust': '调整镯子成本',
   'setting:update': '修改系统设置',
-  'reimbursement:view': '查看未报销列表',
-  'reimbursement:update': '更新报销状态',
   'log:view': '查看操作日志',
   'permission:manage': '管理角色与权限',
 }

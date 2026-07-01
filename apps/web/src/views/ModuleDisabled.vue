@@ -17,7 +17,7 @@ const { isDesktop } = useBreakpoint()
   <AppShell :title="moduleName ? `${moduleName}已停用` : '功能已停用'" data-testid="module-disabled-page" @back="router.push('/')">
     <LuxuryCard padding="18px 16px">
       <p class="module-disabled__text">
-        {{ moduleName || '这个模块' }}已经停用，请回到首页继续使用记支出、报销、扫码工作台等功能。
+        {{ moduleName || '这个模块' }}已经停用，请回到首页继续使用记支出、扫码工作台等功能。
       </p>
       <ActionButton block data-testid="module-disabled-home" @click="router.push('/')">返回首页</ActionButton>
     </LuxuryCard>

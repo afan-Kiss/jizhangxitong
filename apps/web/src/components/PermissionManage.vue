@@ -10,7 +10,6 @@ const GROUP_LABELS: Record<string, string> = {
   expense: '支出',
   sale: '销售',
   cost: '成本',
-  reimbursement: '报销',
   setting: '系统设置',
   log: '日志',
   permission: '权限管理',

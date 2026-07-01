@@ -8,7 +8,6 @@ import { braceletRouter, workerRouter } from './routes/bracelet.routes'
 import { expenseRouter } from './routes/expense.routes'
 import { saleRouter } from './routes/sale.routes'
 import { fileRouter } from './routes/file.routes'
-import { exportRouter } from './routes/export.routes'
 import {
   logRouter,
   permissionRouter,
@@ -62,7 +61,6 @@ export function createApp() {
   app.use('/api/expenses', expenseRouter)
   app.use('/api/sales', saleRouter)
   app.use('/api/files', fileRouter)
-  app.use('/api/exports', exportRouter)
   app.use('/api/settings', settingsRouter)
   app.use('/api/operation-logs', logRouter)
   app.use('/api/permissions', permissionRouter)

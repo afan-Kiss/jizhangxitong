@@ -25,8 +25,6 @@ export interface ExpenseFilter {
   expenseType?: string
   businessType?: string
   paySource?: string
-  reimbursementStatus?: string
-  reimbursementPerson?: string
   braceletCode?: string
   externalOrderNo?: string
   customerPaymentStatus?: string
@@ -61,12 +59,6 @@ function buildWhere(filter: ExpenseFilter) {
   if (filter.expenseType) where.expenseType = filter.expenseType
   if (filter.businessType) where.businessType = filter.businessType
   if (filter.paySource) where.paySource = filter.paySource
-  if (filter.reimbursementStatus && filter.reimbursementStatus !== 'all') {
-    where.reimbursementStatus = filter.reimbursementStatus
-  }
-  if (filter.reimbursementPerson) {
-    where.reimbursementPerson = { contains: filter.reimbursementPerson }
-  }
   if (filter.braceletCode) where.braceletCode = { contains: filter.braceletCode }
   if (filter.externalOrderNo) where.externalOrderNo = { contains: filter.externalOrderNo }
   if (filter.customerPaymentStatus) where.customerPaymentStatus = filter.customerPaymentStatus
@@ -150,11 +142,6 @@ function resolvePendingLinkStatus(input: {
   return PENDING_LINK_STATUSES.linked
 }
 
-function resolveReimbursementStatus(paySource: string, inputStatus?: string): string {
-  if (paySource === '员工垫付') return inputStatus || 'pending'
-  return inputStatus || 'not_required'
-}
-
 function requiresBraceletBinding(businessType?: string | null): boolean {
   return businessType === EXPENSE_BUSINESS_TYPES.item_cost
 }
@@ -187,24 +174,6 @@ export async function listExpenses(filter: ExpenseFilter) {
     submitterName: userMap.get(e.createdBy)?.displayName || null,
   }))
   return { items: withCreator, total, page, pageSize }
-}
-
-export async function getReimbursementSummary(filter: ExpenseFilter) {
-  const where = buildWhere(filter)
-  const pendingWhere = { ...where, reimbursementStatus: 'pending' }
-  const [total, pendingAgg] = await Promise.all([
-    prisma.expense.count({ where }),
-    prisma.expense.aggregate({
-      where: pendingWhere,
-      _count: true,
-      _sum: { amount: true },
-    }),
-  ])
-  return {
-    total,
-    pendingCount: pendingAgg._count,
-    pendingAmount: toNumber(pendingAgg._sum.amount),
-  }
 }
 
 export async function getExpense(id: number) {
@@ -255,8 +224,6 @@ export async function createExpense(
     logisticsNo?: string
     expenseSummary?: string
     remark?: string
-    reimbursementPerson?: string
-    reimbursementStatus?: string
     customerPaymentStatus?: string
     paidAt?: string
     payeeName?: string
@@ -332,8 +299,7 @@ export async function createExpense(
       occurredAt: parseDateInput(input.occurredAt),
       expenseSummary: input.expenseSummary,
       remark: input.remark,
-      reimbursementPerson: input.reimbursementPerson,
-      reimbursementStatus: resolveReimbursementStatus(input.paySource, input.reimbursementStatus),
+      reimbursementStatus: 'not_required',
       needsAttachment: input.needsAttachment || false,
       isTrialRun: false,
       createdBy: operator!.userId,
@@ -482,8 +448,6 @@ export async function updateExpense(
     logisticsNo: string
     expenseSummary: string
     remark: string
-    reimbursementPerson: string
-    reimbursementStatus: string
     customerPaymentStatus: string
     paidAt: string
     payeeName: string
@@ -509,10 +473,6 @@ export async function updateExpense(
     data.paidAt = new Date()
   }
   if (input.paidAt) data.paidAt = new Date(input.paidAt)
-
-  if (input.paySource) {
-    data.reimbursementStatus = resolveReimbursementStatus(input.paySource, input.reimbursementStatus)
-  }
 
   if (input.externalOrderNo !== undefined || input.saleId !== undefined || input.logisticsNo !== undefined) {
     const saleBinding = await resolveSaleBinding({
@@ -615,37 +575,6 @@ export async function voidExpense(id: number, voidReason: string, operator: Auth
   return expense
 }
 
-export async function updateReimbursementStatus(
-  id: number,
-  status: string,
-  remark?: string,
-  operator?: AuthRequest['user'],
-) {
-  const before = await prisma.expense.findUnique({ where: { id } })
-  if (!before) throw new Error('支出不存在')
-
-  const expense = await prisma.expense.update({
-    where: { id },
-    data: {
-      reimbursementStatus: status,
-      remark: remark || before.remark,
-    },
-  })
-
-  await writeOperationLog({
-    module: 'reimbursement',
-    action: 'update_reimbursement_status',
-    targetType: 'expense',
-    targetId: id,
-    targetCode: before.expenseNo,
-    beforeJson: { status: before.reimbursementStatus },
-    afterJson: { status },
-    operator,
-  })
-
-  return expense
-}
-
 export async function addAttachments(
   expenseId: number,
   items: Array<{ fileId: number; fileType: string }>,
@@ -728,26 +657,15 @@ export async function getExpenseSummary(
 
   const byType: Record<string, number> = {}
   const byPaySource: Record<string, number> = {}
-  const byPerson: Record<string, number> = {}
-  const byReimbursement: Record<string, number> = {}
 
   for (const e of expenses) {
     byType[e.expenseType] = (byType[e.expenseType] || 0) + toNumber(e.amount)
     byPaySource[e.paySource] = (byPaySource[e.paySource] || 0) + toNumber(e.amount)
-    const person = e.reimbursementPerson || '未填写'
-    byPerson[person] = (byPerson[person] || 0) + toNumber(e.amount)
-    byReimbursement[e.reimbursementStatus] = (byReimbursement[e.reimbursementStatus] || 0) + toNumber(e.amount)
   }
 
   const compensationAmount = expenses
     .filter((e) => isProfitDeductingExpense(e))
     .reduce((s, e) => s + toNumber(e.amount), 0)
-
-  const pendingExpenses = await prisma.expense.findMany({
-    where: { isVoided: false, isTrialRun: false, reimbursementStatus: 'pending', paySource: '员工垫付' },
-  })
-  const pendingAmount = pendingExpenses.reduce((s, e) => s + toNumber(e.amount), 0)
-  const pendingCount = pendingExpenses.length
 
   const needsAttachment = await prisma.expense.count({
     where: { isVoided: false, isTrialRun: false, needsAttachment: true },
@@ -763,26 +681,9 @@ export async function getExpenseSummary(
     myCount,
     byType,
     byPaySource,
-    byPerson,
-    byReimbursement,
     compensationAmount,
-    pendingAmount,
-    pendingCount,
     needsAttachmentCount: needsAttachment,
   }
-}
-
-export async function listPendingReimbursements() {
-  return prisma.expense.findMany({
-    where: {
-      isVoided: false,
-      isTrialRun: false,
-      paySource: '员工垫付',
-      reimbursementStatus: 'pending',
-    },
-    include: { attachments: { include: { file: true } } },
-    orderBy: { occurredAt: 'desc' },
-  })
 }
 
 export { buildWhere }

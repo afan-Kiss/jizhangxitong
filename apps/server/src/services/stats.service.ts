@@ -50,13 +50,10 @@ export async function getHomeDashboard() {
     todayExpenseAmount: expenseToday.totalAmount,
     todaySaleAmount,
     todayProfit,
-    pendingReimbursementAmount: expenseToday.pendingAmount,
-    pendingReimbursementCount: expenseToday.pendingCount,
     labels: {
       expense: '今天花了多少钱',
       sale: '今天卖了多少钱',
       profit: '今天大概赚了多少',
-      pending: '还有多少没报销',
     },
   }
 }
@@ -134,7 +131,6 @@ export async function getMonthlyReport(year: number, month: number) {
     year,
     month,
     expenseTotal: expenseSummary.totalAmount,
-    pendingReimbursement: expenseSummary.pendingAmount,
     saleAmount: salesSummary.totalSaleAmount,
     grossProfit: salesSummary.totalProfit,
     refundImpact: salesSummary.totalRefund,

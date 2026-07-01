@@ -23,9 +23,6 @@ const expense = ref<any>(null)
 const loading = ref(true)
 const loadError = ref('')
 const statusLabels: Record<string, string> = {
-  pending: '待报销',
-  reimbursed: '已报销',
-  not_required: '不需要报销',
   unpaid: '未打款',
   paid: '已打款',
   failed: '打款失败',
@@ -57,21 +54,8 @@ const expenseTypeLabel = computed(() => {
 const profitImpactText = computed(() => {
   if (!expense.value) return ''
   if (expense.value.affectsProfit) return '会扣这单利润'
-  if (expense.value.paySource === '员工垫付') return '员工垫付，走报销'
   return '不影响订单利润'
 })
-
-const showReimbursementFields = computed(() => {
-  if (!expense.value) return false
-  return expense.value.paySource === '员工垫付' || expense.value.reimbursementStatus !== 'not_required'
-})
-
-const canMarkReimbursed = computed(() =>
-  auth.hasPermission('reimbursement:update')
-  && expense.value?.paySource === '员工垫付'
-  && expense.value?.reimbursementStatus === 'pending'
-  && !expense.value?.isVoided,
-)
 
 async function loadAttachmentUrls(attachments: Array<{ fileId: number }>) {
   for (const att of attachments) {
@@ -141,13 +125,6 @@ async function voidExpense() {
   } catch { /* */ }
 }
 
-async function updateReimbursement(status: string) {
-  await api.patch(`/expenses/${route.params.id}/reimbursement-status`, { status })
-  showToast('已更新报销状态')
-  const res = await api.get(`/expenses/${route.params.id}`)
-  expense.value = res.data.data
-}
-
 async function linkOrder() {
   const no = prompt('输入小红书订单号补关联', orderNo.value || '')
   if (!no?.trim()) return
@@ -214,9 +191,6 @@ function toggleSupplement() {
           <div class="expense-detail__tags" data-testid="expense-status-tags">
             <span v-if="orderNo" class="expense-detail__tag">已关联订单</span>
             <span v-else-if="expense.pendingLinkStatus === 'pending_order'" class="expense-detail__tag expense-detail__tag--warn">待关联订单</span>
-            <span class="expense-detail__tag">
-              {{ statusLabels[expense.reimbursementStatus] || expense.reimbursementStatus }}
-            </span>
             <span class="expense-detail__tag">
               {{ attachmentCount ? `有 ${attachmentCount} 张凭证` : '暂无凭证' }}
             </span>
@@ -303,14 +277,6 @@ function toggleSupplement() {
             <span class="muted">备注</span>
             <span>{{ expense.remark }}</span>
           </div>
-          <div v-if="showReimbursementFields" class="expense-detail__row">
-            <span class="muted">报销状态</span>
-            <span>{{ statusLabels[expense.reimbursementStatus] || expense.reimbursementStatus }}</span>
-          </div>
-          <div v-if="expense.reimbursementPerson" class="expense-detail__row">
-            <span class="muted">报销人</span>
-            <span>{{ expense.reimbursementPerson }}</span>
-          </div>
           <div v-if="expense.customerPaymentStatus" class="expense-detail__row" data-testid="expense-payment-status">
             <span class="muted">打款状态</span>
             <span>{{ statusLabels[expense.customerPaymentStatus] || expense.customerPaymentStatus }}</span>
@@ -322,11 +288,6 @@ function toggleSupplement() {
           <div v-if="expense.saleId" class="expense-detail__row">
             <span class="muted">关联销售</span>
             <span>#{{ expense.saleId }}</span>
-          </div>
-          <div v-if="canMarkReimbursed" class="expense-detail__reimburse-action">
-            <ActionButton variant="secondary" data-testid="expense-mark-reimbursed" @click="updateReimbursement('reimbursed')">
-              标记已报销
-            </ActionButton>
           </div>
         </LuxuryCard>
 
@@ -512,9 +473,7 @@ function toggleSupplement() {
   flex-direction: column;
   gap: 10px;
 }
-.expense-detail__reimburse-action {
-  margin-top: 12px;
-}
+
 .expense-detail__logs-toggle {
   display: flex;
   align-items: center;

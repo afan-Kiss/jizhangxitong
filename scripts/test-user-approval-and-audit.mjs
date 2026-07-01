@@ -135,8 +135,8 @@ async function main() {
     headers: authHeaders(adminToken),
   })
   const row = list.json.data?.items?.find((i) => i.id === expenseId)
-  if (row?.submitterName) pass('报销明细显示提交人')
-  else fail('报销提交人')
+  if (row?.submitterName) pass('支出列表显示提交人')
+  else fail('支出提交人')
 
   const fanfan = users.json.data?.find((u) => u.username === 'fanfan')
   const disableFanfan = await fetchJson(`${BASE}/api/users/${fanfan.id}/disable`, {

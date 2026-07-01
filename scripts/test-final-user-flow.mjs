@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 最终用户全链路验收：登录→首页→扫码→记支出→销售→客户补偿→千帆→报销→利润一致
+ * 最终用户全链路验收：登录→首页→扫码→记支出→销售→客户补偿→千帆→利润一致
  */
 import { chromium } from 'playwright'
 import { RECOMMENDED_URL } from './lib/deploy-env.mjs'
@@ -155,7 +155,7 @@ async function testApiFlow(token) {
   if (Math.abs(snapAfter - costSnapshot) < 0.01) pass('I. 销售成本快照冻结', `${costSnapshot}`)
   else fail('I. 销售成本快照冻结', `${costSnapshot} -> ${snapAfter}`)
 
-  console.log('\n--- J-M. 客户补偿 & 报销 ---')
+  console.log('\n--- J-M. 客户补偿 ---')
   const profitBefore = Number(saleAfter.json.data?.finalProfit ?? 0)
   const comp = await api(token, '/api/expenses', {
     method: 'POST',
@@ -188,32 +188,20 @@ async function testApiFlow(token) {
       occurredAt: today,
       externalOrderNo: orderNo,
       saleId,
-      reimbursementStatus: 'pending',
-      reimbursementPerson: '测试员',
       remark: `${TAG}-staff`,
     }),
   })
-  if (staffComp.res.ok) pass('M. 员工垫付补偿进入报销')
-  else fail('M. 员工垫付补偿进入报销', staffComp.text)
+  if (staffComp.res.ok) pass('M. 员工垫付客户补偿可记账')
+  else fail('M. 员工垫付客户补偿可记账', staffComp.text)
 
-  console.log('\n--- N-P. 千帆 & 报销导出 ---')
+  console.log('\n--- N-O. 千帆 ---')
   if (comp.json.data?.externalOrderNo === orderNo) pass('N. 支出详情含小红书订单号')
   else fail('N. 支出详情含小红书订单号')
 
   if (health.json.qianfanOrderLinkEnabled) pass('O. 千帆有模板可打开')
   else pass('O. 千帆无模板可复制', 'health=false')
 
-  const start = monthStartDateString()
-  const preview = await api(token, '/api/expenses/export/reimbursement-excel/preview', {
-    method: 'POST',
-    body: JSON.stringify({ startDate: start, endDate: today, reimbursementStatus: 'all' }),
-  })
-  const ids = (preview.json.data?.preview || []).map((r) => r.id)
-  if (staffComp.json.data?.id && ids.includes(staffComp.json.data.id)) pass('P. 报销导出含员工垫付')
-  else if (preview.res.ok) fail('P. 报销导出含员工垫付')
-  else fail('P. 报销导出预览', preview.text)
-
-  console.log('\n--- Q-R. 利润一致 ---')
+  console.log('\n--- P-R. 利润一致 ---')
   const goodsProfit = await api(token, `/api/goods/${goodsId}/profit`)
   const saleDetail = await api(token, `/api/sales/${saleId}`)
   const gp = Number(goodsProfit.json.data?.summary?.finalProfit ?? NaN)
@@ -261,7 +249,7 @@ async function testUiFlow() {
       }
 
       if (await page.locator('[data-testid="desktop-sidebar"]').isVisible()) {
-        for (const label of ['首页', '记支出', '扫码工作台', '报销列表', '支出统计', '我的']) {
+        for (const label of ['首页', '记支出', '扫码工作台', '支出统计', '我的']) {
           const link = page.locator('.desktop-sidebar__link', { hasText: label })
           if (await link.count()) pass(`侧边栏 ${label}`)
           else fail(`侧边栏 ${label}`)

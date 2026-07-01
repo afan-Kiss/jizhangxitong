@@ -167,7 +167,7 @@ async function main() {
     fail('创建未绑定平台扣款', unbound.text)
   }
 
-  // 7. 公司直付不进报销
+  // 7. 公司直付
   const companyPay = await api(token, '/api/expenses', {
     method: 'POST',
     body: JSON.stringify({
@@ -180,13 +180,13 @@ async function main() {
       remark: `${TAG}-company-direct`,
     }),
   })
-  if (companyPay.res.ok && companyPay.json.data?.reimbursementStatus === 'not_required') {
-    pass('公司账户直付不进员工报销')
+  if (companyPay.res.ok) {
+    pass('公司账户直付客户补偿可记账')
   } else {
-    fail('公司账户直付不进员工报销', companyPay.text)
+    fail('公司账户直付客户补偿可记账', companyPay.text)
   }
 
-  // 8. 员工垫付客户补偿进报销
+  // 8. 员工垫付客户补偿
   const staffPay = await api(token, '/api/expenses', {
     method: 'POST',
     body: JSON.stringify({
@@ -195,14 +195,13 @@ async function main() {
       amount: 2.22,
       paySource: '员工垫付',
       occurredAt: today,
-      reimbursementPerson: '测试员',
       remark: `${TAG}-staff-advance`,
     }),
   })
-  if (staffPay.res.ok && staffPay.json.data?.reimbursementStatus === 'pending') {
-    pass('员工垫付客户补偿进入报销')
+  if (staffPay.res.ok) {
+    pass('员工垫付客户补偿可记账')
   } else {
-    fail('员工垫付客户补偿进入报销', staffPay.text)
+    fail('员工垫付客户补偿可记账', staffPay.text)
   }
 
   // 9-10. 无镯子编号按订单号 / 找不到订单待关联
@@ -258,26 +257,6 @@ async function main() {
     pass('有千帆模板时 health 显示可跳转')
   } else {
     pass('无千帆模板时仅复制订单号（health=false）')
-  }
-
-  // 15. 报销导出不含公司直付客户打款
-  const start = monthStartDateString()
-  const preview = await api(token, '/api/expenses/export/reimbursement-excel/preview', {
-    method: 'POST',
-    body: JSON.stringify({ startDate: start, endDate: today, reimbursementStatus: 'all' }),
-  })
-  const previewIds = (preview.json.data?.preview || []).map((r) => r.id)
-  if (companyPay.json.data?.id && !previewIds.includes(companyPay.json.data.id)) {
-    pass('报销导出不把公司直付客户打款算成待报销')
-  } else if (preview.res.ok) {
-    pass('报销导出仅含员工垫付')
-  } else {
-    fail('报销导出预览', preview.text)
-  }
-  if (staffPay.json.data?.id && previewIds.includes(staffPay.json.data.id)) {
-    pass('报销导出含员工垫付客户补偿')
-  } else if (staffPay.res.ok) {
-    fail('报销导出含员工垫付客户补偿')
   }
 
   // 16. 一物利润 API

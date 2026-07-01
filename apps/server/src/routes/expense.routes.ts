@@ -1,25 +1,15 @@
 import { Router } from 'express'
-import multer from 'multer'
-import path from 'path'
-import { config } from '../lib/config'
 import { authMiddleware, requirePermission, AuthRequest } from '../middleware/auth'
 import {
   addAttachments,
   createExpense,
   getExpense,
   getExpenseSummary,
-  getReimbursementSummary,
   linkExpense,
   listExpenses,
-  listPendingReimbursements,
   updateExpense,
-  updateReimbursementStatus,
   voidExpense,
 } from '../services/expense.service'
-import { createReimbursementExport, previewReimbursementExport } from '../services/export.service'
-import { ERROR_CODES } from '@jade-account/shared'
-
-const upload = multer({ dest: config.tempUploadDir })
 
 export const expenseRouter = Router()
 expenseRouter.use(authMiddleware)
@@ -31,8 +21,6 @@ expenseRouter.get('/', requirePermission('expense:view'), async (req: AuthReques
     endDate: req.query.endDate as string,
     expenseType: req.query.expenseType as string,
     paySource: req.query.paySource as string,
-    reimbursementStatus: req.query.reimbursementStatus as string,
-    reimbursementPerson: req.query.reimbursementPerson as string,
     braceletCode: req.query.braceletCode as string,
     businessType: req.query.businessType as string,
     externalOrderNo: req.query.externalOrderNo as string,
@@ -55,46 +43,6 @@ expenseRouter.get('/summary', requirePermission('expense:view'), async (req: Aut
     req.user!.userId,
   )
   res.json({ success: true, data })
-})
-
-expenseRouter.get('/reimbursements/summary', requirePermission('reimbursement:view'), async (req, res) => {
-  const data = await getReimbursementSummary({
-    startDate: req.query.startDate as string,
-    endDate: req.query.endDate as string,
-    expenseType: req.query.expenseType as string,
-    paySource: req.query.paySource as string,
-    reimbursementStatus: req.query.reimbursementStatus as string,
-    reimbursementPerson: req.query.reimbursementPerson as string,
-    braceletCode: req.query.braceletCode as string,
-    businessType: req.query.businessType as string,
-    externalOrderNo: req.query.externalOrderNo as string,
-    customerPaymentStatus: req.query.customerPaymentStatus as string,
-  })
-  res.json({ success: true, data })
-})
-
-expenseRouter.get('/pending-reimbursements', requirePermission('reimbursement:view'), async (_req, res) => {
-  const data = await listPendingReimbursements()
-  res.json({ success: true, data })
-})
-
-expenseRouter.post('/export/reimbursement-excel/preview', requirePermission('expense:export'), async (req, res) => {
-  const data = await previewReimbursementExport(req.body)
-  res.json({ success: true, data })
-})
-
-expenseRouter.post('/export/reimbursement-excel', requirePermission('expense:export'), async (req: AuthRequest, res) => {
-  try {
-    const data = await createReimbursementExport(req.body, req.user!)
-    res.json({ success: true, data })
-  } catch (err) {
-    const e = err as Error & { code?: string }
-    res.status(400).json({
-      success: false,
-      code: e.code || ERROR_CODES.LOCAL_WORKER_OFFLINE,
-      message: e.message,
-    })
-  }
 })
 
 expenseRouter.get('/:id', requirePermission('expense:view'), async (req, res) => {
@@ -143,15 +91,5 @@ expenseRouter.post('/:id/void', requirePermission('expense:void'), async (req: A
 
 expenseRouter.post('/:id/attachments', requirePermission('expense:attachment:upload'), async (req: AuthRequest, res) => {
   const expense = await addAttachments(Number(req.params.id), req.body.items || [], req.user)
-  res.json({ success: true, data: expense })
-})
-
-expenseRouter.patch('/:id/reimbursement-status', requirePermission('reimbursement:update'), async (req: AuthRequest, res) => {
-  const expense = await updateReimbursementStatus(
-    Number(req.params.id),
-    req.body.status,
-    req.body.remark,
-    req.user,
-  )
   res.json({ success: true, data: expense })
 })

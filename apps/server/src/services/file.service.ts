@@ -137,7 +137,7 @@ export async function getFileView(fileId: number, useThumb = false) {
 
 export async function readSingleFileForExport(fileId: number) {
   if (!workerHub.isOnline()) {
-    const err = new Error('本地电脑未连接，无法读取支出图片，暂时不能导出带图片的报销表')
+    const err = new Error('本地电脑未连接，无法读取支出图片')
     ;(err as Error & { code: string }).code = ERROR_CODES.LOCAL_WORKER_OFFLINE
     throw err
   }
@@ -160,7 +160,7 @@ export async function readSingleFileForExport(fileId: number) {
 
 export async function readFilesForExport(fileIds: number[]) {
   if (!workerHub.isOnline()) {
-    const err = new Error('本地电脑未连接，无法读取支出图片，暂时不能导出带图片的报销表')
+    const err = new Error('本地电脑未连接，无法读取支出图片')
     ;(err as Error & { code: string }).code = ERROR_CODES.LOCAL_WORKER_OFFLINE
     throw err
   }

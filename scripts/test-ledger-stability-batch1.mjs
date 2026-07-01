@@ -44,32 +44,6 @@ async function main() {
     pass('ExpenseStats 我记的与 mine 列表口径一致')
   }
 
-  const reimbSummary = await fetchJson(
-    `${api}/api/expenses/reimbursements/summary?startDate=${today}&endDate=${today}&paySource=${encodeURIComponent('员工垫付')}&reimbursementStatus=pending`,
-    { headers: authHeaders(token) },
-  )
-  if (!reimbSummary.res.ok) fail('报销汇总接口', reimbSummary.text.slice(0, 120))
-  else pass('报销汇总接口可用')
-
-  const pageList = await fetchJson(
-    `${api}/api/expenses?startDate=${today}&endDate=${today}&paySource=${encodeURIComponent('员工垫付')}&reimbursementStatus=pending&page=1&pageSize=5`,
-    { headers: authHeaders(token) },
-  )
-  const pageItems = pageList.json.data?.items || []
-  const pageReduce = pageItems
-    .filter((i) => i.reimbursementStatus === 'pending')
-    .reduce((s, i) => s + Number(i.amount || 0), 0)
-  const fullPending = Number(reimbSummary.json.data?.pendingAmount || 0)
-  const fullTotal = Number(reimbSummary.json.data?.total || 0)
-  if (fullTotal > pageItems.length && fullPending <= pageReduce + 0.01) {
-    fail('报销汇总非当前页 reduce', `full=${fullPending} pageReduce=${pageReduce}`)
-  } else {
-    pass('报销汇总来自全量统计')
-  }
-
-  if (fullTotal > 5) pass('报销列表 total 可大于单页（加载更多场景）')
-  else pass('报销列表 total 可大于单页（数据不足，跳过强校验）')
-
   let browser
   try {
     browser = await launchBrowser(chromium)
@@ -103,13 +77,6 @@ async function main() {
       await page.waitForSelector('[data-testid="expense-detail-page"], [data-testid="expense-amount"]', { timeout: 15000 })
       pass('ExpenseDetail 正常加载')
     }
-
-    await gotoStable(page, `${WEB_BASE}/reimbursements`)
-    await page.waitForSelector('[data-testid="reimburse-summary-card"]', { timeout: 15000 })
-    pass('报销页展示全量汇总卡')
-    const loadMore = page.locator('[data-testid="reimburse-load-more"]')
-    if (await loadMore.count()) pass('报销页有加载更多入口')
-    else pass('报销页有加载更多入口', '（当前页已显示全部）')
 
     await page.close()
   } finally {

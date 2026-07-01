@@ -25,7 +25,6 @@ const TYPE_TITLES: Record<string, string> = {
   profit: '利润明细',
   'customer-payments': '客户返款/补偿明细',
   refunds: '退款明细',
-  reimbursements: '待报销明细',
   'effective-sales': '有效成交明细',
   inventory: '在库货品明细',
 }
@@ -344,27 +343,6 @@ onMounted(() => fetchData(true))
           </div>
         </template>
 
-        <!-- 报销 -->
-        <template v-else-if="drillType === 'reimbursements'">
-          <div
-            v-for="item in data?.items || []"
-            :key="item.id"
-            class="bi-drill__row"
-            data-testid="bi-drill-row"
-            @click="goDetail(item.detailPath)"
-          >
-            <div class="bi-drill__row-head">
-              <span>{{ formatTime(item.occurredAt) }}</span>
-              <strong :class="moneyClass('expense')">¥{{ formatMoney(item.amount) }}</strong>
-            </div>
-            <div class="bi-drill__row-meta">
-              <span>员工 {{ item.reimbursementPerson || '未填' }}</span>
-              <span>{{ item.businessLabel }}</span>
-            </div>
-            <div class="bi-drill__row-foot">提交人 {{ item.createdByName }} · 凭证 {{ item.attachmentCount }} 张</div>
-          </div>
-        </template>
-
         <!-- 有效成交 -->
         <template v-else-if="drillType === 'effective-sales'">
           <div
@@ -420,9 +398,6 @@ onMounted(() => fetchData(true))
           <div class="section-title">摘要</div>
           <p class="muted">当前范围：{{ rangeText }}</p>
           <p v-if="drillType === 'profit'" class="muted">利润口径走系统统一计算，与总览一致。</p>
-          <router-link v-if="drillType === 'reimbursements'" to="/expense/export" class="bi-drill__export-link">
-            去导出报销表
-          </router-link>
         </LuxuryCard>
       </aside>
     </div>

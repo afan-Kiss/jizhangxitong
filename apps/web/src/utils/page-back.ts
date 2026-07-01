@@ -19,7 +19,7 @@ function isImmersiveTabRoute(path: string): boolean {
 
 /**
  * 是否显示页面返回按钮。
- * 子界面、详情、导出、报销列表等均显示；首页/支出统计/我的等 Tab 根页不显示。
+ * 子界面、详情等均显示；首页/支出统计/我的等 Tab 根页不显示。
  */
 export function shouldShowPageBack(path: string): boolean {
   if (path === '/login') return false

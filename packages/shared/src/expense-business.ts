@@ -6,7 +6,6 @@ export const EXPENSE_BUSINESS_TYPES = {
   customer_compensation: 'customer_compensation',
   after_sale_compensation: 'after_sale_compensation',
   platform_fee: 'platform_fee',
-  staff_reimbursement: 'staff_reimbursement',
   manual_pending: 'manual_pending',
 } as const
 
@@ -19,7 +18,6 @@ export const EXPENSE_BUSINESS_LABELS: Record<ExpenseBusinessType, string> = {
   customer_compensation: '客户补偿/安抚打款',
   after_sale_compensation: '售后补偿',
   platform_fee: '平台扣款',
-  staff_reimbursement: '员工垫付',
   manual_pending: '先记账后补关联',
 }
 
@@ -86,7 +84,6 @@ export function defaultExpenseTypeForBusiness(businessType: ExpenseBusinessType)
     case 'after_sale_compensation': return '售后补偿'
     case 'platform_fee': return '平台扣款'
     case 'item_cost': return '原料采购'
-    case 'staff_reimbursement': return '员工垫付'
     default: return '其他'
   }
 }

@@ -5,7 +5,6 @@ import api from '../api'
 import { useBreakpoint } from '../composables/useBreakpoint'
 import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
-import ActionButton from '../components/ActionButton.vue'
 import DateRangePicker from '../components/DateRangePicker.vue'
 import ExpenseItem from '../components/ExpenseItem.vue'
 import {
@@ -97,10 +96,6 @@ onMounted(() => {
           <div class="stat-value">¥{{ summary.totalAmount?.toFixed(2) }}</div>
         </div>
         <div class="stat-item">
-          <div class="stat-label">未报销</div>
-          <div class="stat-value">¥{{ summary.pendingAmount?.toFixed(2) }}</div>
-        </div>
-        <div class="stat-item">
           <div class="stat-label">客户补偿</div>
           <div class="stat-value">¥{{ summary.compensationAmount?.toFixed(2) }}</div>
         </div>
@@ -160,8 +155,6 @@ onMounted(() => {
       </div>
       <div v-if="!items.length && !loading" class="muted">暂无记录</div>
     </LuxuryCard>
-
-    <ActionButton block class="stats-export-btn" @click="router.push('/expense/export')">导出报销表</ActionButton>
   </AppShell>
 </template>
 
@@ -212,8 +205,5 @@ onMounted(() => {
 }
 .list-card__item--stacked :deep(.expense-item) {
   border-bottom: none;
-}
-.stats-export-btn {
-  margin-top: 4px;
 }
 </style>

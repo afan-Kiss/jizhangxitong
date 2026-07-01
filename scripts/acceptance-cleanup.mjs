@@ -36,8 +36,8 @@ async function main() {
   }
 
   const summaryBefore = await fetchJson(`${SERVER}/api/expenses/summary?period=today`, { headers: authHeaders(token) })
-  const pendingBefore = summaryBefore.json.data?.pendingAmount || 0
-  log('cleanup', `清理前未报销金额: ${pendingBefore}`)
+  const expenseBefore = summaryBefore.json.data?.totalAmount || 0
+  log('cleanup', `清理前今日支出总额: ${expenseBefore}`)
 
   const cleanup = await fetchJson(`${SERVER}/api/maintenance/cleanup-test-data`, {
     method: 'POST',
@@ -62,12 +62,11 @@ async function main() {
   for (const f of data.localFilesFailed || []) log('errors', `本地文件 ${f.path}: ${f.reason}`, false)
 
   const summaryAfter = await fetchJson(`${SERVER}/api/expenses/summary?period=today`, { headers: authHeaders(token) })
-  const pendingAfter = summaryAfter.json.data?.pendingAmount || 0
-  const noTestAmount = Math.abs(pendingAfter - Math.max(0, pendingBefore - 1.23)) < 0.02 || pendingAfter < pendingBefore
-  log('verify', `清理后未报销金额: ${pendingAfter}`, noTestAmount)
+  const expenseAfter = summaryAfter.json.data?.totalAmount || 0
+  log('verify', `清理后今日支出总额: ${expenseAfter}`, expenseAfter <= expenseBefore)
 
   const testExpenses = await fetchJson(
-    `${SERVER}/api/expenses?reimbursementStatus=all&pageSize=100`,
+    `${SERVER}/api/expenses?pageSize=100`,
     { headers: authHeaders(token) },
   )
   const hasTest = testExpenses.json.data?.items?.some(

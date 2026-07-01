@@ -67,17 +67,17 @@ function onRangeChange() {
   loadDashboard()
 }
 
-function goReimbursements() {
+function goDrilldown(type: string) {
   router.push({
-    path: '/reimbursements',
-    query: toRangeQuery(dateRange.value),
+    path: '/bi/drilldown',
+    query: { type, ...toRangeQuery(dateRange.value) },
   })
 }
 
-function exportThisMonth() {
+function goExpenseStats() {
   router.push({
-    path: '/expense/export',
-    query: { startDate: dateRange.value.startDate, endDate: dateRange.value.endDate },
+    path: '/expense/stats',
+    query: toRangeQuery(dateRange.value),
   })
 }
 
@@ -101,7 +101,7 @@ onMounted(async () => {
 
 const heroSubtitle = () => {
   const label = rangeLabel(dateRange.value)
-  return `报销总览 · ${label} · 点卡片管理待报销`
+  return `${label}经营简况 · 点卡片看明细`
 }
 </script>
 
@@ -121,18 +121,43 @@ const heroSubtitle = () => {
       <div class="home-page__kpi-grid">
         <button
           type="button"
-          class="home-page__kpi home-page__kpi--solo"
-          data-testid="kpi-reimbursements"
-          @click="goReimbursements"
+          class="home-page__kpi"
+          data-testid="kpi-expenses"
+          @click="goExpenseStats"
         >
           <MoneyCard
-            label="还有多少没报销"
-            :value="summary?.pendingReimbursementAmount ?? 0"
-            :sub="`${summary?.pendingReimbursementCount ?? 0} 笔待处理`"
-            highlight
+            label="支出总额"
+            :value="summary?.expenseAmount ?? 0"
+            sub="查看支出统计"
             :stagger="1"
           />
-          <span class="home-page__kpi-hint luxury-capsule">批量处理</span>
+        </button>
+        <button
+          type="button"
+          class="home-page__kpi"
+          data-testid="kpi-sales"
+          @click="goDrilldown('sales')"
+        >
+          <MoneyCard
+            label="卖了多少钱"
+            :value="summary?.saleAmount ?? 0"
+            sub="销售明细"
+            highlight
+            :stagger="2"
+          />
+        </button>
+        <button
+          type="button"
+          class="home-page__kpi"
+          data-testid="kpi-profit"
+          @click="goDrilldown('profit')"
+        >
+          <MoneyCard
+            label="毛利"
+            :value="summary?.netProfit ?? 0"
+            sub="利润明细"
+            :stagger="3"
+          />
         </button>
       </div>
     </LuxuryCard>
@@ -147,10 +172,6 @@ const heroSubtitle = () => {
         <button class="home-page__action" data-testid="home-scan-btn" @click="scan.openScan()">
           <van-icon name="scan" size="22" />
           <span>扫码工作台</span>
-        </button>
-        <button class="home-page__action" @click="exportThisMonth">
-          <van-icon name="down" size="22" />
-          <span>导出报销</span>
         </button>
         <button class="home-page__action" @click="router.push('/expense/stats')">
           <van-icon name="chart-trending-o" size="22" />
@@ -172,7 +193,6 @@ const heroSubtitle = () => {
           <ExpenseItem
             :type="item.expenseType"
             :amount="Number(item.amount)"
-            :person="item.reimbursementPerson"
             :pay-source="item.paySource"
             :bracelet-code="item.braceletCode"
             :occurred-at="item.occurredAt"
@@ -204,10 +224,11 @@ const heroSubtitle = () => {
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
-  max-width: 420px;
 }
-.home-page__kpi--solo {
-  max-width: 100%;
+@media (min-width: 480px) {
+  .home-page__kpi-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 .home-page__kpi {
   position: relative;
@@ -238,21 +259,10 @@ const heroSubtitle = () => {
     border-color var(--duration-fast),
     box-shadow var(--duration-normal);
 }
-.home-page__kpi-hint {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  pointer-events: none;
-}
 .home-page__actions {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
-}
-@media (min-width: 480px) {
-  .home-page__actions {
-    grid-template-columns: repeat(4, 1fr);
-  }
 }
 .home-page__action {
   display: flex;

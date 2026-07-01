@@ -129,7 +129,6 @@ function logout() {
 
     <LuxuryCard>
       <van-cell title="操作日志" is-link @click="router.push('/logs')" />
-      <van-cell title="报销导出" is-link @click="router.push('/expense/export')" />
     </LuxuryCard>
 
     <LuxuryCard v-if="canManagePermission" gold data-testid="settings-user-manage">

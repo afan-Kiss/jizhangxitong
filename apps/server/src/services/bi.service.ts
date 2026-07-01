@@ -40,7 +40,7 @@ export async function getBiSummary(range?: string, startDate?: string, endDate?:
   const resolved = resolveDateRange(range, startDate, endDate)
   const { start, end, key, startDate: sd, endDate: ed } = resolved
 
-  const [expenses, sales, refunds, pendingReimb, inventory] = await Promise.all([
+  const [expenses, sales, refunds, inventory] = await Promise.all([
     prisma.expense.findMany({
       where: { isVoided: false, isTrialRun: false, occurredAt: { gte: start, lte: end } },
     }),
@@ -51,14 +51,6 @@ export async function getBiSummary(range?: string, startDate?: string, endDate?:
     prisma.refund.findMany({
       where: { refundedAt: { gte: start, lte: end } },
       include: { sale: { select: { isTrialRun: true } } },
-    }),
-    prisma.expense.findMany({
-      where: {
-        isVoided: false,
-        isTrialRun: false,
-        reimbursementStatus: 'pending',
-        paySource: '员工垫付',
-      },
     }),
     prisma.bracelet.findMany({
       where: { scannerStatus: { in: INVENTORY_STATUSES } },
@@ -101,8 +93,6 @@ export async function getBiSummary(range?: string, startDate?: string, endDate?:
     netProfit,
     customerPaymentAmount,
     refundAmount,
-    pendingReimbursementAmount: pendingReimb.reduce((s, e) => s + toNumber(e.amount), 0),
-    pendingReimbursementCount: pendingReimb.length,
     inventoryCount,
     inventoryCost,
     effectiveSaleAmount: effective.effectiveSaleAmount,
@@ -159,8 +149,6 @@ export async function getBiDrilldown(params: DrilldownParams) {
       return drillCustomerPayments(rangeInfo, start, end, page, pageSize, q)
     case 'refunds':
       return drillRefunds(rangeInfo, start, end, page, pageSize, q)
-    case 'reimbursements':
-      return drillReimbursements(rangeInfo, page, pageSize, q)
     case 'effective-sales':
       return drillEffectiveSales(rangeInfo, start, end, page, pageSize, q)
     case 'inventory':
@@ -450,54 +438,6 @@ async function drillRefunds(
     summary: { totalAmount, count: rows.length, label: '已确认退款合计' },
     items: paged.items,
     unconfirmed: unconfirmedRows,
-    pagination: { total: paged.total, page, pageSize, hasMore: paged.hasMore },
-  }
-}
-
-async function drillReimbursements(
-  rangeInfo: { key: string; label: string; startDate: string; endDate: string },
-  page: number,
-  pageSize: number,
-  q: string,
-) {
-  const expenses = await prisma.expense.findMany({
-    where: {
-      isVoided: false,
-      isTrialRun: false,
-      reimbursementStatus: 'pending',
-      paySource: '员工垫付',
-    },
-    include: { _count: { select: { attachments: true } } },
-    orderBy: { occurredAt: 'desc' },
-  })
-
-  const userMap = await resolveUsersBrief(expenses.map((e) => e.createdBy))
-
-  const rows = expenses
-    .map((e) => ({
-      id: e.id,
-      occurredAt: e.occurredAt,
-      amount: toNumber(e.amount),
-      reimbursementPerson: e.reimbursementPerson,
-      expenseType: e.expenseType,
-      businessType: e.businessType,
-      businessLabel: EXPENSE_BUSINESS_LABELS[e.businessType as keyof typeof EXPENSE_BUSINESS_LABELS] || e.expenseType,
-      createdByName: userMap.get(e.createdBy)?.displayName || userMap.get(e.createdBy)?.username || '未知',
-      attachmentCount: e._count.attachments,
-      detailPath: `/expense/${e.id}`,
-    }))
-    .filter((r) => matchSearch(q, r.reimbursementPerson, r.createdByName, r.expenseType))
-
-  const totalAmount = rows.reduce((s, r) => s + r.amount, 0)
-  const paged = paginate(rows, page, pageSize)
-
-  return {
-    type: 'reimbursements',
-    title: '待报销明细',
-    range: rangeInfo,
-    summary: { totalAmount, count: rows.length },
-    items: paged.items,
-    exportPath: '/expense/export',
     pagination: { total: paged.total, page, pageSize, hasMore: paged.hasMore },
   }
 }
