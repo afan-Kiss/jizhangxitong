@@ -1,38 +1,46 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { onMounted, ref, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import api from '../api'
 import { useBreakpoint } from '../composables/useBreakpoint'
 import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import ActionButton from '../components/ActionButton.vue'
+import DateRangePicker from '../components/DateRangePicker.vue'
+import {
+  parseRouteRange,
+  rangeLabel,
+  toRangeQuery,
+  type DateRangeState,
+} from '../utils/date-range'
 
 const router = useRouter()
+const route = useRoute()
 const { isDesktop } = useBreakpoint()
-const period = ref('today')
+const dateRange = ref<DateRangeState>(parseRouteRange(route.query as Record<string, string>))
 const summary = ref<any>(null)
 const monthly = ref<any>(null)
 const items = ref<any[]>([])
 const loadError = ref('')
+const loading = ref(false)
 
-const periods = [
-  { key: 'today', label: '今天' },
-  { key: 'week', label: '本周' },
-  { key: '15days', label: '近15天' },
-  { key: 'month', label: '本月' },
-  { key: 'custom', label: '自定义' },
-]
+function syncRouteQuery() {
+  router.replace({ query: { ...toRangeQuery(dateRange.value) } })
+}
 
 async function load() {
+  loading.value = true
   loadError.value = ''
+  const { startDate, endDate } = dateRange.value
   try {
-    const res = await api.get(`/expenses/summary?period=${period.value}`)
+    const res = await api.get('/expenses/summary', {
+      params: { period: 'custom', startDate, endDate },
+    })
     summary.value = res.data.data
     const list = await api.get('/expenses', {
       params: {
-        startDate: summary.value.period.start.slice(0, 10),
-        endDate: summary.value.period.end.slice(0, 10),
+        startDate,
+        endDate,
         pageSize: 50,
         mine: 1,
       },
@@ -43,21 +51,41 @@ async function load() {
     monthly.value = m.data.data
   } catch {
     loadError.value = '数据没查出来，刷新试试'
+  } finally {
+    loading.value = false
   }
 }
 
-onMounted(load)
+function onRangeChange() {
+  syncRouteQuery()
+  load()
+}
+
+watch(
+  () => [route.query.range, route.query.startDate, route.query.endDate],
+  () => {
+    dateRange.value = parseRouteRange(route.query as Record<string, string>)
+    load()
+  },
+)
+
+onMounted(() => {
+  syncRouteQuery()
+  load()
+})
 </script>
 
 <template>
   <AppShell title="支出统计" :show-back="!isDesktop" @back="router.back()">
-    <p v-if="loadError" class="muted">{{ loadError }}</p>
+    <div data-testid="expense-stats-date-range">
+      <DateRangePicker v-model="dateRange" @change="onRangeChange" />
+    </div>
 
-    <van-tabs v-model:active="period" @change="load">
-      <van-tab v-for="p in periods" :key="p.key" :title="p.label" :name="p.key" />
-    </van-tabs>
+    <p v-if="loadError" class="muted">{{ loadError }}</p>
+    <p v-else-if="loading && !summary" class="muted">加载中…</p>
 
     <LuxuryCard v-if="summary" data-testid="expense-stats-summary">
+      <p class="range-hint muted">{{ rangeLabel(dateRange) }}</p>
       <div class="stat-grid">
         <div v-if="summary.myCount != null" class="stat-item">
           <div class="stat-label">我记的</div>
@@ -106,6 +134,7 @@ onMounted(load)
       <div v-for="(val, key) in summary.byType" :key="key" class="list-item">
         {{ key }}: ¥{{ Number(val).toFixed(2) }}
       </div>
+      <div v-if="!Object.keys(summary.byType || {}).length" class="muted">暂无分类数据</div>
     </LuxuryCard>
 
     <LuxuryCard>
@@ -113,7 +142,7 @@ onMounted(load)
       <div v-for="item in items" :key="item.id" class="list-item" @click="router.push(`/expense/${item.id}`)">
         {{ item.expenseType }} · ¥{{ Number(item.amount).toFixed(2) }} · {{ item.paySource }}
       </div>
-      <div v-if="!items.length" class="muted">暂无记录</div>
+      <div v-if="!items.length && !loading" class="muted">暂无记录</div>
     </LuxuryCard>
 
     <ActionButton block @click="router.push('/expense/export')">导出报销表</ActionButton>
@@ -121,6 +150,10 @@ onMounted(load)
 </template>
 
 <style scoped>
+.range-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
 .stat-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
