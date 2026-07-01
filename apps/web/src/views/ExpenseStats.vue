@@ -7,6 +7,7 @@ import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import ActionButton from '../components/ActionButton.vue'
 import DateRangePicker from '../components/DateRangePicker.vue'
+import ExpenseItem from '../components/ExpenseItem.vue'
 import {
   parseRouteRange,
   rangeLabel,
@@ -130,22 +131,37 @@ onMounted(() => {
     </LuxuryCard>
 
     <LuxuryCard v-if="summary">
-      <h4>按类型</h4>
-      <div v-for="(val, key) in summary.byType" :key="key" class="list-item">
-        {{ key }}: ¥{{ Number(val).toFixed(2) }}
+      <div class="section-title">按类型</div>
+      <div class="type-list">
+        <div v-for="(val, key) in summary.byType" :key="key" class="type-list__row">
+          <span class="type-list__label">{{ key }}</span>
+          <span class="type-list__amount money">¥{{ Number(val).toFixed(2) }}</span>
+        </div>
       </div>
       <div v-if="!Object.keys(summary.byType || {}).length" class="muted">暂无分类数据</div>
     </LuxuryCard>
 
     <LuxuryCard>
-      <h4>我的明细</h4>
-      <div v-for="item in items" :key="item.id" class="list-item" @click="router.push(`/expense/${item.id}`)">
-        {{ item.expenseType }} · ¥{{ Number(item.amount).toFixed(2) }} · {{ item.paySource }}
+      <div class="section-title">我的明细</div>
+      <div v-if="items.length" class="list-card">
+        <div
+          v-for="item in items"
+          :key="item.id"
+          class="list-card__item list-card__item--stacked"
+          @click="router.push(`/expense/${item.id}`)"
+        >
+          <ExpenseItem
+            :type="item.expenseType"
+            :amount="Number(item.amount)"
+            :pay-source="item.paySource"
+            :occurred-at="item.occurredAt"
+          />
+        </div>
       </div>
       <div v-if="!items.length && !loading" class="muted">暂无记录</div>
     </LuxuryCard>
 
-    <ActionButton block @click="router.push('/expense/export')">导出报销表</ActionButton>
+    <ActionButton block class="stats-export-btn" @click="router.push('/expense/export')">导出报销表</ActionButton>
   </AppShell>
 </template>
 
@@ -164,6 +180,40 @@ onMounted(() => {
 }
 .stat-label { font-size: 13px; color: var(--color-text-muted); }
 .stat-value { font-size: 18px; font-weight: 600; margin-top: 4px; }
-.list-item { padding: 10px 0; border-bottom: 1px solid rgba(0,0,0,0.06); cursor: pointer; }
 .rule-hint { font-size: 13px; line-height: 1.5; margin: 0 0 12px; }
+.type-list {
+  border: var(--border-gold);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+}
+.type-list__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(198, 161, 91, 0.08);
+}
+.type-list__row:last-child { border-bottom: none; }
+.type-list__label {
+  font-size: 14px;
+  color: var(--color-text-light);
+}
+.type-list__amount {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-gold-light);
+  flex-shrink: 0;
+}
+.list-card__item--stacked {
+  display: block;
+  padding: 0 16px;
+}
+.list-card__item--stacked :deep(.expense-item) {
+  border-bottom: none;
+}
+.stats-export-btn {
+  margin-top: 4px;
+}
 </style>
