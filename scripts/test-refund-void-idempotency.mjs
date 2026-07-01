@@ -58,9 +58,8 @@ async function testVoidIdempotency(token, today) {
   if (detail.json.data?.isVoided === true) pass('支出仍保持 isVoided=true')
   else fail('支出仍保持 isVoided=true', JSON.stringify(detail.json.data?.isVoided))
 
-  const logs = await api(token, '/api/operation-logs?pageSize=300')
-  const voidLogs = (logs.json.data?.items || []).filter(
-    (l) => l.targetType === 'expense' && l.targetId === expenseId && l.action === 'void_expense',
+  const voidLogs = (detail.json.data?.operationLogs || []).filter(
+    (l) => l.action === 'void_expense',
   )
   if (voidLogs.length === 1) pass('operationLog 不追加第二条 void_expense')
   else fail('operationLog 不追加第二条 void_expense', `count=${voidLogs.length}`)
