@@ -28,6 +28,8 @@ const FILE_ACCEPT = 'image/png,image/jpeg,image/jpg,image/webp,image/gif'
 
 const props = defineProps<{
   modelValue: UploadedItem[]
+  /** 电脑端：整页 Ctrl+左键 / Ctrl+V / 拖拽 添加外部图片 */
+  desktopPageShortcuts?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -54,6 +56,8 @@ const failedCount = ref(0)
 const dragOver = ref(false)
 const isDesktop = ref(false)
 const pasteScopeActive = ref(false)
+const pageMouseInside = ref(false)
+const pageRoot = ref<HTMLElement | null>(null)
 const probePassed = ref(false)
 const addInputId = `image-uploader-input-${Math.random().toString(36).slice(2, 9)}`
 
@@ -156,8 +160,75 @@ async function triggerFilePick() {
   if (!isDesktop.value || probing.value) return
   const ok = await probeUploadChannel()
   if (!ok) return
+
+  const w = window as Window & { showOpenFilePicker?: (opts: unknown) => Promise<Array<{ getFile: () => Promise<File> }>> }
+  if (typeof w.showOpenFilePicker === 'function') {
+    try {
+      const handles = await w.showOpenFilePicker({
+        multiple: true,
+        types: [{
+          description: '图片',
+          accept: {
+            'image/png': ['.png'],
+            'image/jpeg': ['.jpg', '.jpeg'],
+            'image/webp': ['.webp'],
+            'image/gif': ['.gif'],
+          },
+        }],
+      })
+      const files = await Promise.all(handles.map((h) => h.getFile()))
+      addFiles(files.filter(isImageFile))
+      return
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return
+    }
+  }
+
   probePassed.value = true
   fileInput.value?.click()
+}
+
+function extractFilesFromDataTransfer(dt: DataTransfer | null) {
+  if (!dt) return [] as File[]
+  const files: File[] = []
+  if (dt.files?.length) {
+    files.push(...Array.from(dt.files))
+  } else if (dt.items?.length) {
+    for (const item of Array.from(dt.items)) {
+      if (item.kind === 'file') {
+        const f = item.getAsFile()
+        if (f) files.push(f)
+      }
+    }
+  }
+  return files
+}
+
+function shortcutScopeActive() {
+  if (pasteScopeActive.value || pageMouseInside.value) return true
+  if (!props.desktopPageShortcuts || !pageRoot.value) return false
+  const active = document.activeElement
+  return !!(active && pageRoot.value.contains(active))
+}
+
+function shouldSkipShortcutClick(target: EventTarget | null) {
+  const el = target as HTMLElement | null
+  if (!el) return true
+  return !!el.closest(
+    'input, textarea, button, a, label, .van-popup, .van-dialog, .van-picker, .image-uploader__remove, .image-uploader__retry',
+  )
+}
+
+async function ingestDropEvent(e: DragEvent) {
+  dragOver.value = false
+  pageRoot.value?.classList.remove('external-image-drop-target--active')
+  if (!isDesktop.value) return
+  const files = extractFilesFromDataTransfer(e.dataTransfer)
+  if (!files.length) {
+    showToast('这张微信图片没拖出来，请先保存到电脑再上传。')
+    return
+  }
+  await ingestDesktopFiles(files)
 }
 
 function filesFromClipboard(data: DataTransfer | null) {
@@ -187,12 +258,79 @@ async function ingestDesktopFiles(files: File[]) {
 }
 
 async function onDocumentPaste(e: ClipboardEvent) {
-  if (!isDesktop.value || !pasteScopeActive.value) return
+  if (!isDesktop.value || !shortcutScopeActive()) return
   const files = filesFromClipboard(e.clipboardData)
   if (!files.length) return
   e.preventDefault()
   await ingestDesktopFiles(files)
 }
+
+async function onPageCtrlClick(e: MouseEvent) {
+  if (!isDesktop.value || !props.desktopPageShortcuts) return
+  if (!e.ctrlKey || e.button !== 0) return
+  if (shouldSkipShortcutClick(e.target)) return
+  e.preventDefault()
+  e.stopPropagation()
+  await triggerFilePick()
+}
+
+function onPageMouseEnter() {
+  pageMouseInside.value = true
+}
+
+function onPageMouseLeave(e: MouseEvent) {
+  if (pageRoot.value && e.relatedTarget && pageRoot.value.contains(e.relatedTarget as Node)) return
+  pageMouseInside.value = false
+}
+
+function onPageDragOver(e: DragEvent) {
+  if (!isDesktop.value || !props.desktopPageShortcuts) return
+  e.preventDefault()
+  dragOver.value = true
+  pageRoot.value?.classList.add('external-image-drop-target--active')
+}
+
+function onPageDragLeave(e: DragEvent) {
+  if (!isDesktop.value || !props.desktopPageShortcuts) return
+  if (pageRoot.value && e.relatedTarget && pageRoot.value.contains(e.relatedTarget as Node)) return
+  dragOver.value = false
+  pageRoot.value?.classList.remove('external-image-drop-target--active')
+}
+
+async function onPageDrop(e: DragEvent) {
+  if (!isDesktop.value || !props.desktopPageShortcuts) return
+  e.preventDefault()
+  e.stopPropagation()
+  pageRoot.value?.classList.remove('external-image-drop-target--active')
+  await ingestDropEvent(e)
+}
+
+function bindPageRoot(el: HTMLElement | null) {
+  unbindPageRoot()
+  if (!el || !props.desktopPageShortcuts) return
+  pageRoot.value = el
+  el.addEventListener('mouseenter', onPageMouseEnter)
+  el.addEventListener('mouseleave', onPageMouseLeave)
+  el.addEventListener('dragover', onPageDragOver)
+  el.addEventListener('dragleave', onPageDragLeave)
+  el.addEventListener('drop', onPageDrop)
+  el.addEventListener('click', onPageCtrlClick, true)
+}
+
+function unbindPageRoot() {
+  const el = pageRoot.value
+  if (!el) return
+  el.removeEventListener('mouseenter', onPageMouseEnter)
+  el.removeEventListener('mouseleave', onPageMouseLeave)
+  el.removeEventListener('dragover', onPageDragOver)
+  el.removeEventListener('dragleave', onPageDragLeave)
+  el.removeEventListener('drop', onPageDrop)
+  el.removeEventListener('click', onPageCtrlClick, true)
+  pageRoot.value = null
+  pageMouseInside.value = false
+}
+
+defineExpose({ bindPageRoot, unbindPageRoot })
 
 async function onAddAreaClick(e: MouseEvent) {
   if (!isDesktop.value) return
@@ -203,6 +341,7 @@ async function onAddAreaClick(e: MouseEvent) {
 
 async function onDropZoneClick(e: MouseEvent) {
   if (!isDesktop.value || !e.ctrlKey || e.button !== 0) return
+  if (props.desktopPageShortcuts) return
   const target = e.target as HTMLElement
   if (target.closest('.image-uploader__remove, .image-uploader__retry, .image-uploader__tag-btn')) return
   e.preventDefault()
@@ -242,32 +381,8 @@ async function onFileChange(e: Event) {
 async function handleDrop(e: DragEvent) {
   e.preventDefault()
   e.stopPropagation()
-  dragOver.value = false
-  if (!isDesktop.value) return
-
-  const ok = await probeUploadChannel()
-  if (!ok) return
-
-  const dt = e.dataTransfer
-  if (!dt) return
-
-  const files: File[] = []
-  if (dt.files?.length) {
-    files.push(...Array.from(dt.files))
-  } else if (dt.items?.length) {
-    for (const item of Array.from(dt.items)) {
-      if (item.kind === 'file') {
-        const f = item.getAsFile()
-        if (f) files.push(f)
-      }
-    }
-  }
-
-  if (!files.length) {
-    showToast('这张微信图片没拖出来，请先保存到电脑再上传。')
-    return
-  }
-  addFiles(files)
+  if (props.desktopPageShortcuts) return
+  await ingestDropEvent(e)
 }
 
 function onDragOver(e: DragEvent) {
@@ -352,6 +467,7 @@ onMounted(() => {
 onUnmounted(() => {
   mq?.removeEventListener('change', updateDesktopFlag)
   document.removeEventListener('paste', onDocumentPaste)
+  unbindPageRoot()
 })
 </script>
 
@@ -452,7 +568,7 @@ onUnmounted(() => {
             <span v-if="probing" class="image-uploader__ring" />
             <template v-else>
               <span class="image-uploader__plus">+</span>
-              <span data-testid="image-uploader-hint-desktop">点击添加 · Ctrl+点击 · Ctrl+V 粘贴 · 可拖拽</span>
+              <span data-testid="image-uploader-hint-desktop">Ctrl+左键选外部图片 · Ctrl+V 粘贴 · 可拖拽</span>
             </template>
           </div>
           <label

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import api from '../api'
@@ -38,6 +38,8 @@ const form = ref({
 const uploadedFiles = ref<Array<{ fileId: number; fileType: string; name: string; preview?: string }>>([])
 const uploadFailCount = ref(0)
 const loading = ref(false)
+const pageRef = ref<HTMLElement | null>(null)
+const uploaderRef = ref<{ bindPageRoot: (el: HTMLElement | null) => void; unbindPageRoot: () => void } | null>(null)
 const amountFocused = ref(false)
 const showXhsPicker = ref(false)
 
@@ -94,6 +96,23 @@ onMounted(async () => {
     showXhsPicker.value = route.query.focus === 'order'
     if (orderNo) await lookupOrder()
   }
+
+  await bindUploaderPageScope()
+})
+
+async function bindUploaderPageScope() {
+  await nextTick()
+  if (isDesktop.value && pageRef.value && uploaderRef.value) {
+    uploaderRef.value.bindPageRoot(pageRef.value)
+  }
+}
+
+watch(isDesktop, () => {
+  void bindUploaderPageScope()
+})
+
+onUnmounted(() => {
+  uploaderRef.value?.unbindPageRoot()
 })
 
 function savePrefs() {
@@ -210,7 +229,7 @@ async function onSubmit() {
 
 <template>
   <AppShell title="记支出" no-tab-pad :fixed-bottom="!isDesktop">
-    <div class="desktop-two-column expense-create" data-testid="expense-create-page">
+    <div ref="pageRef" class="desktop-two-column expense-create" data-testid="expense-create-page">
       <div class="desktop-two-column__main">
         <LuxuryCard gold padding="20px 16px">
           <div class="amount-zone" :class="{ 'amount-zone--focus': amountFocused }">
@@ -287,7 +306,12 @@ async function onSubmit() {
       <div class="desktop-two-column__aside">
         <LuxuryCard>
           <div class="section-title">凭证图片</div>
-          <ImageUploader v-model="uploadedFiles" @upload-failures="uploadFailCount = $event" />
+          <ImageUploader
+            ref="uploaderRef"
+            v-model="uploadedFiles"
+            desktop-page-shortcuts
+            @upload-failures="uploadFailCount = $event"
+          />
         </LuxuryCard>
 
         <div v-if="isDesktop" class="expense-create__save-desktop">
@@ -306,6 +330,11 @@ async function onSubmit() {
 
 <style scoped>
 .expense-create { overflow-x: hidden; max-width: 100%; }
+.expense-create.external-image-drop-target--active {
+  outline: 2px dashed rgba(198, 161, 91, 0.55);
+  outline-offset: 4px;
+  border-radius: var(--radius-card);
+}
 .expense-create__save-desktop { padding-top: 4px; }
 .expense-order-actions {
   display: grid;
