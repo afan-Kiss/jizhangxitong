@@ -8,6 +8,7 @@ import {
   createExpense,
   getExpense,
   getExpenseSummary,
+  getReimbursementSummary,
   linkExpense,
   listExpenses,
   listPendingReimbursements,
@@ -23,7 +24,8 @@ const upload = multer({ dest: config.tempUploadDir })
 export const expenseRouter = Router()
 expenseRouter.use(authMiddleware)
 
-expenseRouter.get('/', requirePermission('expense:view'), async (req, res) => {
+expenseRouter.get('/', requirePermission('expense:view'), async (req: AuthRequest, res) => {
+  const mine = req.query.mine === '1' || req.query.createdByMe === '1'
   const data = await listExpenses({
     startDate: req.query.startDate as string,
     endDate: req.query.endDate as string,
@@ -38,18 +40,36 @@ expenseRouter.get('/', requirePermission('expense:view'), async (req, res) => {
     pendingLinkStatus: req.query.pendingLinkStatus as string,
     onlyWithBracelet: req.query.onlyWithBracelet === 'true',
     needsAttachment: req.query.needsAttachment === 'true',
+    createdBy: mine ? req.user!.userId : undefined,
     page: Number(req.query.page || 1),
     pageSize: Number(req.query.pageSize || 20),
   })
   res.json({ success: true, data })
 })
 
-expenseRouter.get('/summary', requirePermission('expense:view'), async (req, res) => {
+expenseRouter.get('/summary', requirePermission('expense:view'), async (req: AuthRequest, res) => {
   const data = await getExpenseSummary(
     req.query.period as string,
     req.query.startDate as string,
     req.query.endDate as string,
+    req.user!.userId,
   )
+  res.json({ success: true, data })
+})
+
+expenseRouter.get('/reimbursements/summary', requirePermission('reimbursement:view'), async (req, res) => {
+  const data = await getReimbursementSummary({
+    startDate: req.query.startDate as string,
+    endDate: req.query.endDate as string,
+    expenseType: req.query.expenseType as string,
+    paySource: req.query.paySource as string,
+    reimbursementStatus: req.query.reimbursementStatus as string,
+    reimbursementPerson: req.query.reimbursementPerson as string,
+    braceletCode: req.query.braceletCode as string,
+    businessType: req.query.businessType as string,
+    externalOrderNo: req.query.externalOrderNo as string,
+    customerPaymentStatus: req.query.customerPaymentStatus as string,
+  })
   res.json({ success: true, data })
 })
 

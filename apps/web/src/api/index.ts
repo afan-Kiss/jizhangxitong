@@ -3,6 +3,12 @@ import { showToast } from 'vant'
 import { basePath, loginPath, withBase } from '../utils/base-path'
 import { isLoginRoute, resolveApiErrorMessage } from '../utils/api-errors'
 
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    skipGlobalToast?: boolean
+  }
+}
+
 const apiBase = `${basePath}/api`
 const api = axios.create({ baseURL: apiBase, timeout: 60000 })
 
@@ -28,7 +34,7 @@ api.interceptors.response.use(
         window.location.href = loginPath()
       }
       // 登录页错误密码：由 Login.vue 展示，避免重复 toast
-    } else if (!isLoginRoute()) {
+    } else if (!isLoginRoute() && !(err.config as { skipGlobalToast?: boolean })?.skipGlobalToast) {
       showToast(msg)
     }
 

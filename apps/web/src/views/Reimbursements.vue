@@ -6,6 +6,7 @@ import api from '../api'
 import { useBreakpoint } from '../composables/useBreakpoint'
 import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
+import ActionButton from '../components/ActionButton.vue'
 import PageHero from '../components/PageHero.vue'
 import DateRangePicker from '../components/DateRangePicker.vue'
 import {
@@ -21,6 +22,8 @@ const { isDesktop } = useBreakpoint()
 const items = ref<any[]>([])
 const total = ref(0)
 const loading = ref(false)
+const loadingMore = ref(false)
+const reimbursementSummary = ref<{ total: number; pendingCount: number; pendingAmount: number } | null>(null)
 const dateRange = ref<DateRangeState>(parseRouteRange(route.query as Record<string, string>))
 const filter = ref({
   expenseType: '',
@@ -65,43 +68,83 @@ function applyDateToFilter() {
   filter.value.page = 1
 }
 
-async function load() {
-  loading.value = true
+function buildFilterParams(includePage = true) {
+  const params = new URLSearchParams()
+  params.set('startDate', dateRange.value.startDate)
+  params.set('endDate', dateRange.value.endDate)
+  Object.entries(filter.value).forEach(([k, v]) => {
+    if (!v) return
+    if (!includePage && (k === 'page' || k === 'pageSize')) return
+    params.set(k, String(v))
+  })
+  return params
+}
+
+async function loadSummary() {
+  const res = await api.get(`/expenses/reimbursements/summary?${buildFilterParams(false)}`)
+  reimbursementSummary.value = res.data.data
+}
+
+async function load(reset = true) {
+  if (reset) {
+    filter.value.page = 1
+    loading.value = true
+  } else {
+    loadingMore.value = true
+  }
   try {
-    const params = new URLSearchParams()
-    params.set('startDate', dateRange.value.startDate)
-    params.set('endDate', dateRange.value.endDate)
-    Object.entries(filter.value).forEach(([k, v]) => {
-      if (v) params.set(k, String(v))
-    })
-    const res = await api.get(`/expenses?${params}`)
-    items.value = res.data.data.items
+    const res = await api.get(`/expenses?${buildFilterParams()}`)
+    if (reset) items.value = res.data.data.items
+    else items.value.push(...res.data.data.items)
     total.value = res.data.data.total
+    await loadSummary()
   } catch {
     showToast('数据没查出来，刷新试试')
+    if (!reset) filter.value.page = Math.max(1, filter.value.page - 1)
   } finally {
     loading.value = false
+    loadingMore.value = false
   }
+}
+
+async function loadMore() {
+  if (loadingMore.value || loading.value || items.value.length >= total.value) return
+  filter.value.page += 1
+  await load(false)
 }
 
 function onRangeChange() {
   syncRouteQuery()
   applyDateToFilter()
-  load()
+  load(true)
 }
 
 watch(
   () => [route.query.range, route.query.startDate, route.query.endDate],
   () => {
     dateRange.value = parseRouteRange(route.query as Record<string, string>)
+    applyDateToFilter()
+    load(true)
   },
 )
 
-watch(filter, load, { deep: true })
+watch(
+  () => [
+    filter.value.expenseType,
+    filter.value.businessType,
+    filter.value.externalOrderNo,
+    filter.value.braceletCode,
+    filter.value.customerPaymentStatus,
+    filter.value.paySource,
+    filter.value.reimbursementStatus,
+    filter.value.reimbursementPerson,
+  ],
+  () => load(true),
+)
 
 onMounted(() => {
   syncRouteQuery()
-  load()
+  load(true)
 })
 </script>
 
@@ -116,6 +159,18 @@ onMounted(() => {
     <div data-testid="reimburse-date-range">
       <DateRangePicker v-model="dateRange" @change="onRangeChange" />
     </div>
+
+    <LuxuryCard v-if="reimbursementSummary" dark gold data-testid="reimburse-summary-card">
+      <div class="reimburse__summary">
+        <div>
+          <div class="reimburse__summary-label">{{ rangeLabel(dateRange) }}未报销</div>
+          <div class="reimburse__summary-value" data-testid="reimburse-pending-summary">
+            {{ reimbursementSummary.pendingCount }} 笔 · ¥{{ Number(reimbursementSummary.pendingAmount).toFixed(2) }}
+          </div>
+        </div>
+        <div class="reimburse__summary-meta muted">筛选结果共 {{ reimbursementSummary.total }} 笔</div>
+      </div>
+    </LuxuryCard>
 
     <LuxuryCard>
       <div class="reimburse__range-hint muted">{{ rangeLabel(dateRange) }} · 共 {{ total }} 笔</div>
@@ -162,6 +217,16 @@ onMounted(() => {
         </div>
       </div>
       <div v-if="!items.length && !loading" class="muted">这段时间还没有待报销记录。</div>
+      <ActionButton
+        v-if="items.length < total"
+        plain
+        block
+        :loading="loadingMore"
+        data-testid="reimburse-load-more"
+        @click="loadMore"
+      >
+        加载更多（已显示 {{ items.length }} / {{ total }}）
+      </ActionButton>
     </LuxuryCard>
   </AppShell>
 </template>
@@ -175,6 +240,26 @@ onMounted(() => {
 .reimburse__range-hint {
   margin-bottom: 12px;
   font-size: 13px;
+}
+.reimburse__summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-end;
+}
+.reimburse__summary-label {
+  font-size: 14px;
+  color: var(--color-gold-light);
+}
+.reimburse__summary-value {
+  margin-top: 6px;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text-light);
+}
+.reimburse__summary-meta {
+  font-size: 13px;
+  white-space: nowrap;
 }
 .filter-grid {
   display: grid;

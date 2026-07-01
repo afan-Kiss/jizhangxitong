@@ -20,6 +20,8 @@ const auth = useAuthStore()
 const { isDesktop } = useBreakpoint()
 
 const expense = ref<any>(null)
+const loading = ref(true)
+const loadError = ref('')
 const statusLabels: Record<string, string> = {
   pending: '待报销',
   reimbursed: '已报销',
@@ -37,6 +39,7 @@ const supplementFiles = ref<Array<{ fileId: number; fileType: string; name: stri
 const supplementing = ref(false)
 const logsExpanded = ref(false)
 const showSupplementUploader = ref(false)
+const previewRequestSeq = ref(0)
 
 const orderNo = computed(() => expense.value?.externalOrderNo || expense.value?.sale?.externalOrderNo || '')
 const attachmentCount = computed(() => expense.value?.attachments?.length || 0)
@@ -70,24 +73,63 @@ const canMarkReimbursed = computed(() =>
   && !expense.value?.isVoided,
 )
 
-onMounted(async () => {
-  await loadQianfanConfig(api)
-  const res = await api.get(`/expenses/${route.params.id}`)
-  expense.value = res.data.data
-  for (const att of expense.value.attachments || []) {
-    thumbUrls.value[att.fileId] = await fileThumbUrl(att.fileId)
-    imageUrls.value[att.fileId] = await fileViewUrl(att.fileId)
+async function loadAttachmentUrls(attachments: Array<{ fileId: number }>) {
+  for (const att of attachments) {
+    try {
+      if (!thumbUrls.value[att.fileId]) {
+        thumbUrls.value[att.fileId] = await fileThumbUrl(att.fileId)
+      }
+    } catch { /* 单张缩略图失败不阻断 */ }
+    try {
+      if (!imageUrls.value[att.fileId]) {
+        imageUrls.value[att.fileId] = await fileViewUrl(att.fileId)
+      }
+    } catch { /* 单张大图失败不阻断 */ }
   }
-})
+}
+
+async function loadExpense() {
+  loading.value = true
+  loadError.value = ''
+  try {
+    await loadQianfanConfig(api)
+    const res = await api.get(`/expenses/${route.params.id}`)
+    if (!res.data.data) {
+      loadError.value = '支出详情没加载出来'
+      expense.value = null
+      return
+    }
+    expense.value = res.data.data
+    await loadAttachmentUrls(expense.value.attachments || [])
+  } catch {
+    expense.value = null
+    loadError.value = '支出详情没加载出来'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadExpense)
 
 async function openAttachmentPreview(att: { fileId: number; fileType?: string }) {
+  const token = ++previewRequestSeq.value
   previewAlt.value = att.fileType || '凭证图片'
   try {
-    previewSrc.value = imageUrls.value[att.fileId] || await fileViewUrl(att.fileId)
+    const url = imageUrls.value[att.fileId] || await fileViewUrl(att.fileId)
+    if (token !== previewRequestSeq.value) return
+    if (url) imageUrls.value[att.fileId] = url
+    previewSrc.value = url
+    previewOpen.value = true
   } catch {
-    previewSrc.value = thumbUrls.value[att.fileId] || null
+    if (token !== previewRequestSeq.value) return
+    const fallback = thumbUrls.value[att.fileId] || null
+    if (fallback) {
+      previewSrc.value = fallback
+      previewOpen.value = true
+    } else {
+      showToast('这张凭证暂时打不开')
+    }
   }
-  if (previewSrc.value) previewOpen.value = true
 }
 
 async function voidExpense() {
@@ -130,12 +172,7 @@ async function supplementAttachments() {
     showSupplementUploader.value = false
     const res = await api.get(`/expenses/${route.params.id}`)
     expense.value = res.data.data
-    for (const att of expense.value.attachments || []) {
-      if (!imageUrls.value[att.fileId]) {
-        thumbUrls.value[att.fileId] = await fileThumbUrl(att.fileId)
-        imageUrls.value[att.fileId] = await fileViewUrl(att.fileId)
-      }
-    }
+    await loadAttachmentUrls(expense.value.attachments || [])
   } catch (err: any) {
     showToast(err.response?.data?.message || '补传失败')
   } finally {
@@ -150,7 +187,18 @@ function toggleSupplement() {
 </script>
 
 <template>
-  <AppShell v-if="expense" title="支出详情" show-back data-testid="expense-detail-page">
+  <AppShell title="支出详情" show-back data-testid="expense-detail-page">
+    <div v-if="loading" class="expense-detail__state muted" data-testid="expense-detail-loading">
+      正在加载支出详情...
+    </div>
+    <LuxuryCard v-else-if="loadError" data-testid="expense-detail-error">
+      <p class="expense-detail__state">{{ loadError }}</p>
+      <div class="expense-detail__error-actions">
+        <ActionButton data-testid="expense-detail-retry" @click="loadExpense">重试</ActionButton>
+        <ActionButton plain data-testid="expense-detail-error-back" @click="router.back()">返回上一页</ActionButton>
+      </div>
+    </LuxuryCard>
+    <template v-else-if="expense">
     <div class="expense-detail" :class="{ 'expense-detail--desktop': isDesktop }">
       <div class="expense-detail__main">
         <LuxuryCard dark gold :stagger="0" padding="20px 18px" data-testid="expense-amount-card">
@@ -197,7 +245,8 @@ function toggleSupplement() {
               data-testid="expense-voucher-thumb"
               @click="openAttachmentPreview(att)"
             >
-              <img :src="thumbUrls[att.fileId]" alt="凭证" class="expense-detail__thumb" />
+              <img v-if="thumbUrls[att.fileId]" :src="thumbUrls[att.fileId]" alt="凭证" class="expense-detail__thumb" />
+              <span v-else class="expense-detail__thumb-placeholder">凭证</span>
             </button>
           </div>
           <div v-else class="muted">暂无凭证</div>
@@ -332,6 +381,7 @@ function toggleSupplement() {
         </div>
       </div>
     </div>
+    </template>
   </AppShell>
 
   <ImagePreviewModal
@@ -520,5 +570,28 @@ function toggleSupplement() {
   gap: 10px;
   margin-top: 8px;
   padding-bottom: 24px;
+}
+.expense-detail__state {
+  padding: 24px 8px;
+  text-align: center;
+  font-size: 14px;
+}
+.expense-detail__error-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+.expense-detail__thumb-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  border: var(--border-gold);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-sub);
+  font-size: 12px;
 }
 </style>

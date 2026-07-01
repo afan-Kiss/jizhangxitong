@@ -29,7 +29,14 @@ async function load() {
   try {
     const res = await api.get(`/expenses/summary?period=${period.value}`)
     summary.value = res.data.data
-    const list = await api.get(`/expenses?startDate=${summary.value.period.start.slice(0, 10)}&endDate=${summary.value.period.end.slice(0, 10)}&pageSize=50`)
+    const list = await api.get('/expenses', {
+      params: {
+        startDate: summary.value.period.start.slice(0, 10),
+        endDate: summary.value.period.end.slice(0, 10),
+        pageSize: 50,
+        mine: 1,
+      },
+    })
     items.value = list.data.data.items
     const now = new Date()
     const m = await api.get(`/stats/monthly?year=${now.getFullYear()}&month=${now.getMonth() + 1}`)
@@ -52,6 +59,10 @@ onMounted(load)
 
     <LuxuryCard v-if="summary" data-testid="expense-stats-summary">
       <div class="stat-grid">
+        <div v-if="summary.myCount != null" class="stat-item">
+          <div class="stat-label">我记的</div>
+          <div class="stat-value" data-testid="expense-stats-my-count">{{ summary.myCount }} 笔</div>
+        </div>
         <div class="stat-item">
           <div class="stat-label">支出总额</div>
           <div class="stat-value">¥{{ summary.totalAmount?.toFixed(2) }}</div>
@@ -98,7 +109,7 @@ onMounted(load)
     </LuxuryCard>
 
     <LuxuryCard>
-      <h4>明细列表</h4>
+      <h4>我的明细</h4>
       <div v-for="item in items" :key="item.id" class="list-item" @click="router.push(`/expense/${item.id}`)">
         {{ item.expenseType }} · ¥{{ Number(item.amount).toFixed(2) }} · {{ item.paySource }}
       </div>

@@ -36,6 +36,7 @@ export interface ExpenseFilter {
   isTrialRun?: boolean
   excludeTrial?: boolean
   needsAttachment?: boolean
+  createdBy?: number
   page?: number
   pageSize?: number
 }
@@ -72,6 +73,7 @@ function buildWhere(filter: ExpenseFilter) {
   if (filter.pendingLinkStatus) where.pendingLinkStatus = filter.pendingLinkStatus
   if (filter.onlyWithBracelet) where.braceletId = { not: null }
   if (filter.needsAttachment) where.needsAttachment = true
+  if (filter.createdBy) where.createdBy = filter.createdBy
   where.isTrialRun = false
   return where
 }
@@ -185,6 +187,24 @@ export async function listExpenses(filter: ExpenseFilter) {
     submitterName: userMap.get(e.createdBy)?.displayName || null,
   }))
   return { items: withCreator, total, page, pageSize }
+}
+
+export async function getReimbursementSummary(filter: ExpenseFilter) {
+  const where = buildWhere(filter)
+  const pendingWhere = { ...where, reimbursementStatus: 'pending' }
+  const [total, pendingAgg] = await Promise.all([
+    prisma.expense.count({ where }),
+    prisma.expense.aggregate({
+      where: pendingWhere,
+      _count: true,
+      _sum: { amount: true },
+    }),
+  ])
+  return {
+    total,
+    pendingCount: pendingAgg._count,
+    pendingAmount: toNumber(pendingAgg._sum.amount),
+  }
 }
 
 export async function getExpense(id: number) {
@@ -669,7 +689,12 @@ export async function addAttachments(
   return getExpense(expenseId)
 }
 
-export async function getExpenseSummary(period?: string, startDate?: string, endDate?: string) {
+export async function getExpenseSummary(
+  period?: string,
+  startDate?: string,
+  endDate?: string,
+  userId?: number,
+) {
   const now = new Date()
   let start: Date
   let end: Date = endOfDay(now)
@@ -728,9 +753,14 @@ export async function getExpenseSummary(period?: string, startDate?: string, end
     where: { isVoided: false, isTrialRun: false, needsAttachment: true },
   })
 
+  const totalCount = expenses.length
+  const myCount = userId ? expenses.filter((e) => e.createdBy === userId).length : undefined
+
   return {
     period: { start, end },
     totalAmount,
+    totalCount,
+    myCount,
     byType,
     byPaySource,
     byPerson,

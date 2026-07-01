@@ -60,6 +60,7 @@
     "test:final-user-flow": "node scripts/test-final-user-flow.mjs",
     "test:ui-regression": "node scripts/test-ui-regression.mjs",
     "test:core-ledger": "node scripts/test-core-ledger.mjs",
+    "test:ledger-stability-batch1": "node scripts/test-ledger-stability-batch1.mjs",
     "verify:deploy-version": "node scripts/verify-deploy-version.mjs"
   },
   "devDependencies": {
