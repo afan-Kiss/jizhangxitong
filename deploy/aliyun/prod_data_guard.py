@@ -91,6 +91,7 @@ fi
 def shell_restore_preserved_data(deploy_dir: str) -> str:
     data_dir = f"{deploy_dir}/{PRODUCTION_DATA_REL}"
     return f"""
+rm -f /tmp/jade-upload/accounting.db
 mkdir -p {data_dir}
 if [ -f /tmp/jade-upload/accounting.db ]; then
   echo "[deploy][FATAL] 检测到上传 accounting.db，生产环境禁止覆盖线上数据库" >&2

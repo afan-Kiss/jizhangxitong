@@ -248,7 +248,7 @@ def main() -> None:
             else:
                 print("[deploy] 服务器部署目录为空或不存在，将全新部署")
 
-            up_code = run(client, "mkdir -p /tmp/jade-upload")
+            up_code = run(client, "rm -rf /tmp/jade-upload && mkdir -p /tmp/jade-upload")
             if up_code != 0:
                 sys.exit(up_code)
             sftp_put(client, zip_path, "/tmp/jade-upload/jade-accounting.zip")
@@ -264,6 +264,7 @@ def main() -> None:
             f"""
 set -e
 SSL_BACKUP=/tmp/jade-ssl-backup-$$
+DEPLOY_BACKUP="{backup_path}"
 {shell_preserve_production_data(DEPLOY_DIR)}
 if [ -d {DEPLOY_DIR}/ssl ]; then cp -a {DEPLOY_DIR}/ssl "$SSL_BACKUP"; fi
 rm -rf {DEPLOY_DIR}
@@ -272,8 +273,17 @@ unzip -q /tmp/jade-upload/jade-accounting.zip -d {DEPLOY_DIR}
 if [ -d "$SSL_BACKUP" ]; then mkdir -p {DEPLOY_DIR}/ssl && cp -a "$SSL_BACKUP/." {DEPLOY_DIR}/ssl/; rm -rf "$SSL_BACKUP"; fi
 mkdir -p {DEPLOY_DIR}/logs {DEPLOY_DIR}/exports {DEPLOY_DIR}/web
 {shell_restore_preserved_data(DEPLOY_DIR)}
+PROD_DB="{DEPLOY_DIR}/apps/server/prisma/data/accounting.db"
+if [ ! -f "$PROD_DB" ] && [ -n "$DEPLOY_BACKUP" ] && [ -f "$DEPLOY_BACKUP/apps/server/prisma/data/accounting.db" ]; then
+  mkdir -p {DEPLOY_DIR}/apps/server/prisma/data
+  cp -a "$DEPLOY_BACKUP/apps/server/prisma/data/accounting.db" "$PROD_DB"
+  echo "[deploy][DATA] 从本次部署备份恢复 accounting.db"
+fi
+if [ -f "$PROD_DB" ]; then
+  echo "[deploy][DATA] 当前 accounting.db 大小: $(stat -c%s "$PROD_DB" 2>/dev/null || echo ?) bytes"
+fi
 cp /tmp/jade-upload/server.env {DEPLOY_DIR}/apps/server/.env
-sed -i 's/\\r$//' {DEPLOY_DIR}/deploy/aliyun/deploy.sh 2>/dev/null || true
+sed -i 's/\\r$$//' {DEPLOY_DIR}/deploy/aliyun/deploy.sh 2>/dev/null || true
 chmod +x {DEPLOY_DIR}/deploy/aliyun/*.sh 2>/dev/null || true
 """,
         )
