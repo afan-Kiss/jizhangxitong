@@ -191,11 +191,9 @@ async function main() {
     ['test:responsive', `node scripts/test-responsive.mjs`, TIMEOUTS.responsive + 180000],
     ['test:login', `node scripts/test-login.mjs`, TIMEOUTS.login + 30000],
     ['test:subpath', `node scripts/test-subpath-refresh.mjs`, TIMEOUTS.subpath + 30000],
-    ['test:customer-payments', `node scripts/test-customer-payments.mjs`, TIMEOUTS.acceptanceFull + 120000],
-    ['test:accounting-flow', `node scripts/test-accounting-flow.mjs`, TIMEOUTS.acceptanceFull + 60000],
-    ['test:effective-sales', `node scripts/test-effective-sales.mjs`, TIMEOUTS.acceptanceBasic + 30000],
     ['test:fund-expense', `node scripts/test-fund-expense.mjs`, TIMEOUTS.acceptanceBasic + 60000],
-    ['test:reimbursement-offline', `node scripts/test-reimbursement-offline.mjs`, TIMEOUTS.acceptanceBasic + 120000],
+    ['test:project-expense-only', `node scripts/test-project-expense-only.mjs`, TIMEOUTS.acceptanceFull + 120000],
+    ['test:accounting-flow', `node scripts/test-accounting-flow.mjs`, TIMEOUTS.acceptanceFull + 60000],
   ]
   for (const [label, script, timeout] of coreTests) {
     try {
@@ -207,10 +205,13 @@ async function main() {
     }
   }
 
-  runTiered('test:scan-workbench', `node scripts/test-scan-workbench.mjs`, 'external', {
-    env: testEnv,
-    timeout: TIMEOUTS.acceptanceFull + 60000,
-  })
+  try {
+    run('node scripts/test-scan-workbench.mjs', { env: testEnv, timeout: TIMEOUTS.acceptanceFull + 60000 })
+    deployReport.external.push({ name: 'test:scan-workbench', ok: true })
+  } catch (e) {
+    deployReport.external.push({ name: 'test:scan-workbench', ok: false, detail: e.message })
+    console.warn('\nWARN — test:scan-workbench 未通过（扫码模块已下线），不阻断部署')
+  }
 
   try {
     run('node scripts/test-worker-online.mjs', { env: testEnv, timeout: TIMEOUTS.workerOnline + 60000 })

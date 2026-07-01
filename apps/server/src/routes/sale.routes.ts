@@ -1,11 +1,16 @@
 import { Router } from 'express'
 import { authMiddleware, requirePermission, AuthRequest } from '../middleware/auth'
-import { createSale, getSale, listSales, lookupSales, refundSale, calculateSaleCost } from '../services/sale.service'
+import { getSale, listSales, lookupSales, calculateSaleCost } from '../services/sale.service'
 
 export const saleRouter = Router()
 saleRouter.use(authMiddleware)
 
-saleRouter.get('/', requirePermission('sale:view'), async (req, res) => {
+const MODULE_GONE = {
+  success: false,
+  message: '该模块已下线，现在系统只记录项目资金支出。',
+}
+
+saleRouter.get('/', requirePermission('expense:view'), async (req, res) => {
   const data = await listSales({
     page: Number(req.query.page || 1),
     pageSize: Number(req.query.pageSize || 20),
@@ -21,7 +26,7 @@ saleRouter.get('/', requirePermission('sale:view'), async (req, res) => {
   res.json({ success: true, data })
 })
 
-saleRouter.get('/lookup', requirePermission('sale:view'), async (req, res) => {
+saleRouter.get('/lookup', requirePermission('expense:view'), async (req, res) => {
   const data = await lookupSales({
     externalOrderNo: req.query.externalOrderNo as string,
     logisticsNo: req.query.logisticsNo as string,
@@ -31,12 +36,11 @@ saleRouter.get('/lookup', requirePermission('sale:view'), async (req, res) => {
   res.json({ success: true, data })
 })
 
-saleRouter.get('/cost-preview/:braceletId', requirePermission('sale:create'), async (req, res) => {
-  const cost = await calculateSaleCost(Number(req.params.braceletId))
-  res.json({ success: true, data: cost })
+saleRouter.get('/cost-preview/:braceletId', requirePermission('expense:view'), async (_req, res) => {
+  res.status(410).json(MODULE_GONE)
 })
 
-saleRouter.get('/:id', requirePermission('sale:view'), async (req, res) => {
+saleRouter.get('/:id', requirePermission('expense:view'), async (req, res) => {
   const sale = await getSale(Number(req.params.id))
   if (!sale) {
     res.status(404).json({ success: false, message: '销售记录不存在' })
@@ -45,25 +49,10 @@ saleRouter.get('/:id', requirePermission('sale:view'), async (req, res) => {
   res.json({ success: true, data: sale })
 })
 
-saleRouter.post('/', requirePermission('sale:create'), async (req: AuthRequest, res) => {
-  try {
-    const sale = await createSale(req.body, req.user!)
-    res.json({ success: true, data: sale })
-  } catch (err) {
-    const e = err as Error & { code?: string; statusCode?: number }
-    res.status(e.statusCode || 400).json({
-      success: false,
-      code: e.code,
-      message: e.message,
-    })
-  }
+saleRouter.post('/', requirePermission('expense:create'), async (_req: AuthRequest, res) => {
+  res.status(410).json(MODULE_GONE)
 })
 
-saleRouter.post('/:id/refund', requirePermission('sale:refund'), async (req: AuthRequest, res) => {
-  try {
-    const result = await refundSale(Number(req.params.id), req.body, req.user!)
-    res.json({ success: true, data: result })
-  } catch (err) {
-    res.status(400).json({ success: false, message: (err as Error).message })
-  }
+saleRouter.post('/:id/refund', requirePermission('expense:void'), async (_req: AuthRequest, res) => {
+  res.status(410).json(MODULE_GONE)
 })

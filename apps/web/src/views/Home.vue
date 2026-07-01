@@ -5,7 +5,6 @@ import api from '../api'
 import { useAuthStore } from '../stores/auth'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import MoneyCard from '../components/MoneyCard.vue'
-import WorkerStatus from '../components/WorkerStatus.vue'
 import ExpenseItem from '../components/ExpenseItem.vue'
 import PageHero from '../components/PageHero.vue'
 import DateRangePicker from '../components/DateRangePicker.vue'
@@ -15,16 +14,14 @@ import {
   toRangeQuery,
   type DateRangeState,
 } from '../utils/date-range'
-import { useScanOverlay } from '../composables/useScanOverlay'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
-const scan = useScanOverlay()
 
 const dateRange = ref<DateRangeState>(parseRouteRange(route.query as Record<string, string>))
-const summary = ref<any>(null)
-const todayStats = ref<any>(null)
+const homeStats = ref<any>(null)
+const periodSummary = ref<any>(null)
 const recentExpenses = ref<any[]>([])
 const recentLogs = ref<any[]>([])
 const loadError = ref('')
@@ -42,20 +39,17 @@ async function loadDashboard() {
   loading.value = true
   loadError.value = ''
   try {
-    const [bi, today, expenses, logs] = await Promise.all([
-      api.get('/bi/summary', {
-        params: {
-          range: dateRange.value.range,
-          startDate: dateRange.value.startDate,
-          endDate: dateRange.value.endDate,
-        },
-      }),
+    const { startDate, endDate } = dateRange.value
+    const [home, period, expenses, logs] = await Promise.all([
       api.get('/stats/home'),
+      api.get('/expenses/summary', {
+        params: { period: 'custom', startDate, endDate },
+      }),
       api.get('/expenses?pageSize=5'),
       api.get('/operation-logs?pageSize=5'),
     ])
-    summary.value = bi.data.data
-    todayStats.value = today.data.data
+    homeStats.value = home.data.data
+    periodSummary.value = period.data.data
     recentExpenses.value = expenses.data.data.items
     recentLogs.value = logs.data.data.items
   } catch {
@@ -70,17 +64,10 @@ function onRangeChange() {
   loadDashboard()
 }
 
-function goDrilldown(type: string) {
-  router.push({
-    path: '/bi/drilldown',
-    query: { type, ...toRangeQuery(dateRange.value) },
-  })
-}
-
-function goExpenseStats() {
+function goExpenseStats(query: Record<string, string> = {}) {
   router.push({
     path: '/expense/stats',
-    query: toRangeQuery(dateRange.value),
+    query: { ...toRangeQuery(dateRange.value), ...query },
   })
 }
 
@@ -94,7 +81,6 @@ watch(
 onMounted(async () => {
   try {
     await auth.fetchMe()
-    await auth.fetchWorkerStatus()
     syncRouteQuery()
     await loadDashboard()
   } catch {
@@ -102,18 +88,12 @@ onMounted(async () => {
   }
 })
 
-const heroSubtitle = () => {
-  const label = rangeLabel(dateRange.value)
-  return `${label}经营简况 · 专属经费记支出 · 点卡片看明细`
-}
+const heroSubtitle = () => '记录每一笔项目资金去向，可关联千帆订单'
 </script>
 
 <template>
   <div class="home-page page-enter" data-testid="home-page">
-    <PageHero title="店里经营情况" :subtitle="heroSubtitle()" test-id="home-hero" />
-    <div class="show-mobile-only home-page__worker">
-      <WorkerStatus :status="auth.workerStatus" compact />
-    </div>
+    <PageHero title="项目资金支出" :subtitle="heroSubtitle()" test-id="home-hero" />
 
     <DateRangePicker v-model="dateRange" @change="onRangeChange" />
 
@@ -122,61 +102,41 @@ const heroSubtitle = () => {
     <LuxuryCard dark :stagger="0" padding="18px 16px 16px">
       <div class="section-title">{{ rangeLabel(dateRange) }}简况</div>
       <div class="home-page__kpi-grid">
-        <button type="button" class="home-page__kpi" data-testid="kpi-today-expense" @click="goExpenseStats">
+        <button type="button" class="home-page__kpi" data-testid="kpi-today-expense" @click="goExpenseStats()">
           <MoneyCard
             label="今日支出"
-            :value="todayStats?.todayExpenseAmount ?? 0"
-            sub="今天记的经费支出"
+            :value="homeStats?.todayExpenseAmount ?? 0"
+            sub="今天记的支出"
             :stagger="0"
           />
         </button>
-        <button type="button" class="home-page__kpi" data-testid="kpi-expenses" @click="goExpenseStats">
+        <button type="button" class="home-page__kpi" data-testid="kpi-period-expense" @click="goExpenseStats()">
           <MoneyCard
-            label="本期经费支出"
-            :value="summary?.expenseAmount ?? 0"
+            label="本期支出"
+            :value="periodSummary?.totalAmount ?? 0"
             sub="按发生日期统计"
             :stagger="1"
           />
         </button>
-        <button type="button" class="home-page__kpi" data-testid="kpi-customer-payments" @click="goDrilldown('customer-payments')">
+        <button type="button" class="home-page__kpi" data-testid="kpi-month-expense" @click="goExpenseStats()">
           <MoneyCard
-            label="客户返款/补偿"
-            :value="summary?.customerPaymentAmount ?? 0"
-            sub="影响利润的客户打款"
+            label="本月支出"
+            :value="homeStats?.monthExpenseAmount ?? 0"
+            sub="自然月累计"
             :stagger="2"
           />
         </button>
-        <button type="button" class="home-page__kpi" data-testid="kpi-refunds" @click="goDrilldown('refunds')">
+        <button
+          type="button"
+          class="home-page__kpi"
+          data-testid="kpi-missing-attachment"
+          @click="goExpenseStats({ filter: 'missing-attachment' })"
+        >
           <MoneyCard
-            label="退款金额"
-            :value="summary?.refundAmount ?? 0"
-            sub="已确认退款"
+            label="待补凭证"
+            :value="homeStats?.missingAttachmentCount ?? 0"
+            sub="缺少凭证图片"
             :stagger="3"
-          />
-        </button>
-        <button type="button" class="home-page__kpi" data-testid="kpi-effective-sales" @click="goDrilldown('effective-sales')">
-          <MoneyCard
-            label="有效成交金额"
-            :value="summary?.effectiveSaleAmount ?? 0"
-            :sub="`${summary?.effectiveOrderCount ?? 0} 单`"
-            highlight
-            :stagger="4"
-          />
-        </button>
-        <button type="button" class="home-page__kpi" data-testid="kpi-inventory" @click="goDrilldown('inventory')">
-          <MoneyCard
-            label="在库货品"
-            :value="summary?.inventoryCost ?? 0"
-            :sub="`${summary?.inventoryCount ?? 0} 件在库`"
-            :stagger="5"
-          />
-        </button>
-        <button type="button" class="home-page__kpi home-page__kpi--wide" data-testid="kpi-profit" @click="goDrilldown('profit')">
-          <MoneyCard
-            label="净利润"
-            :value="summary?.netProfit ?? 0"
-            sub="销售额 - 成本 - 退款 - 客户补偿"
-            :stagger="6"
           />
         </button>
       </div>
@@ -189,17 +149,13 @@ const heroSubtitle = () => {
           <van-icon name="balance-pay" size="22" />
           <span>记一笔支出</span>
         </button>
-        <button class="home-page__action" data-testid="home-scan-btn" @click="scan.openScan()">
-          <van-icon name="scan" size="22" />
-          <span>扫码工作台</span>
+        <button class="home-page__action" data-testid="home-order-btn" @click="router.push('/expense/create?focus=order')">
+          <van-icon name="orders-o" size="22" />
+          <span>查询/关联订单</span>
         </button>
         <button class="home-page__action" @click="router.push('/expense/stats')">
           <van-icon name="chart-trending-o" size="22" />
           <span>支出统计</span>
-        </button>
-        <button class="home-page__action" data-testid="home-bi-btn" @click="goDrilldown('expenses')">
-          <van-icon name="orders-o" size="22" />
-          <span>经营明细</span>
         </button>
       </div>
     </LuxuryCard>
@@ -218,7 +174,6 @@ const heroSubtitle = () => {
             :type="item.expenseType"
             :amount="Number(item.amount)"
             :pay-source="item.paySource"
-            :bracelet-code="item.braceletCode"
             :occurred-at="item.occurredAt"
           />
         </div>
@@ -226,6 +181,7 @@ const heroSubtitle = () => {
 
       <LuxuryCard :stagger="7">
         <div class="section-title">最近操作</div>
+        <div v-if="!recentLogs.length" class="luxury-empty">暂无记录</div>
         <div v-for="log in recentLogs" :key="log.id" class="home-page__log muted">
           {{ formatLog(log) }}
         </div>
@@ -251,15 +207,7 @@ const heroSubtitle = () => {
 }
 @media (min-width: 768px) {
   .home-page__kpi-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-.home-page__kpi--wide {
-  grid-column: 1 / -1;
-}
-@media (min-width: 768px) {
-  .home-page__kpi--wide {
-    grid-column: span 1;
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 .home-page__kpi {
@@ -283,7 +231,7 @@ const heroSubtitle = () => {
 }
 @media (min-width: 480px) {
   .home-page__actions {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 .home-page__action {

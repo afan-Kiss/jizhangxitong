@@ -2,7 +2,6 @@
 import { onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import api from '../api'
-import { useBreakpoint } from '../composables/useBreakpoint'
 import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import DateRangePicker from '../components/DateRangePicker.vue'
@@ -16,7 +15,6 @@ import {
 
 const router = useRouter()
 const route = useRoute()
-const { isDesktop } = useBreakpoint()
 const dateRange = ref<DateRangeState>(parseRouteRange(route.query as Record<string, string>))
 const summary = ref<any>(null)
 const monthly = ref<any>(null)
@@ -37,14 +35,14 @@ async function load() {
       params: { period: 'custom', startDate, endDate },
     })
     summary.value = res.data.data
-    const list = await api.get('/expenses', {
-      params: {
-        startDate,
-        endDate,
-        pageSize: 50,
-        mine: 1,
-      },
-    })
+    const listParams: Record<string, string | number> = {
+      startDate,
+      endDate,
+      pageSize: 50,
+      mine: 1,
+    }
+    if (route.query.filter === 'missing-attachment') listParams.needsAttachment = 1
+    const list = await api.get('/expenses', { params: listParams })
     items.value = list.data.data.items
     const now = new Date()
     const m = await api.get(`/stats/monthly?year=${now.getFullYear()}&month=${now.getMonth() + 1}`)
@@ -62,7 +60,7 @@ function onRangeChange() {
 }
 
 watch(
-  () => [route.query.range, route.query.startDate, route.query.endDate],
+  () => [route.query.range, route.query.startDate, route.query.endDate, route.query.filter],
   () => {
     dateRange.value = parseRouteRange(route.query as Record<string, string>)
     load()
@@ -87,47 +85,49 @@ onMounted(() => {
     <LuxuryCard v-if="summary" data-testid="expense-stats-summary">
       <p class="range-hint muted">{{ rangeLabel(dateRange) }}</p>
       <div class="stat-grid">
-        <div v-if="summary.myCount != null" class="stat-item">
-          <div class="stat-label">我记的</div>
-          <div class="stat-value" data-testid="expense-stats-my-count">{{ summary.myCount }} 笔</div>
-        </div>
         <div class="stat-item">
           <div class="stat-label">支出总额</div>
           <div class="stat-value">¥{{ summary.totalAmount?.toFixed(2) }}</div>
         </div>
         <div class="stat-item">
-          <div class="stat-label">客户补偿</div>
-          <div class="stat-value">¥{{ summary.compensationAmount?.toFixed(2) }}</div>
+          <div class="stat-label">支出笔数</div>
+          <div class="stat-value">{{ summary.totalCount }} 笔</div>
+        </div>
+        <div v-if="summary.myCount != null" class="stat-item">
+          <div class="stat-label">我记的笔数</div>
+          <div class="stat-value" data-testid="expense-stats-my-count">{{ summary.myCount }} 笔</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">待补凭证</div>
+          <div class="stat-value">{{ summary.needsAttachmentCount ?? 0 }} 笔</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">已关联订单</div>
+          <div class="stat-value">{{ summary.linkedOrderCount ?? 0 }} 笔</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">未关联订单</div>
+          <div class="stat-value">{{ summary.unlinkedOrderCount ?? 0 }} 笔</div>
         </div>
       </div>
     </LuxuryCard>
 
-    <LuxuryCard v-if="monthly" gold>
-      <div class="section-title">运营月报</div>
-      <p class="muted rule-hint">{{ monthly.ruleHint }}</p>
-      <p class="muted rule-hint">净利润 = 销售额 - 成本 - 已确认退款 - 客户补偿/返款</p>
+    <LuxuryCard v-if="monthly" gold data-testid="expense-stats-monthly">
+      <div class="section-title">本月支出月报</div>
       <div class="stat-grid">
         <div class="stat-item">
-          <div class="stat-label">有效成交金额</div>
-          <div class="stat-value">¥{{ Number(monthly.effectiveSaleAmount).toFixed(2) }}</div>
+          <div class="stat-label">本月支出</div>
+          <div class="stat-value">¥{{ Number(monthly.expenseTotal).toFixed(2) }}</div>
         </div>
         <div class="stat-item">
-          <div class="stat-label">有效订单数</div>
-          <div class="stat-value">{{ monthly.effectiveOrderCount }}</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">退款影响</div>
-          <div class="stat-value">¥{{ Number(monthly.refundImpact).toFixed(2) }}</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">净利润</div>
-          <div class="stat-value">¥{{ Number(monthly.grossProfit).toFixed(2) }}</div>
+          <div class="stat-label">本月笔数</div>
+          <div class="stat-value">{{ monthly.expenseCount }} 笔</div>
         </div>
       </div>
     </LuxuryCard>
 
-    <LuxuryCard v-if="summary">
-      <div class="section-title">按类型</div>
+    <LuxuryCard v-if="summary?.byType">
+      <div class="section-title">按支出分类</div>
       <div class="type-list">
         <div v-for="(val, key) in summary.byType" :key="key" class="type-list__row">
           <span class="type-list__label">{{ key }}</span>
@@ -137,8 +137,18 @@ onMounted(() => {
       <div v-if="!Object.keys(summary.byType || {}).length" class="muted">暂无分类数据</div>
     </LuxuryCard>
 
+    <LuxuryCard v-if="summary?.byPaySource">
+      <div class="section-title">按付款来源</div>
+      <div class="type-list">
+        <div v-for="(val, key) in summary.byPaySource" :key="key" class="type-list__row">
+          <span class="type-list__label">{{ key }}</span>
+          <span class="type-list__amount money">¥{{ Number(val).toFixed(2) }}</span>
+        </div>
+      </div>
+    </LuxuryCard>
+
     <LuxuryCard>
-      <div class="section-title">我的明细</div>
+      <div class="section-title">支出明细</div>
       <div v-if="items.length" class="list-card">
         <div
           v-for="item in items"
@@ -160,21 +170,17 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.range-hint {
-  margin: 0 0 12px;
-  font-size: 13px;
-}
+.range-hint { margin: 0 0 12px; font-size: 13px; }
 .stat-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 @media (min-width: 1200px) {
-  .stat-grid { grid-template-columns: repeat(4, 1fr); }
+  .stat-grid { grid-template-columns: repeat(3, 1fr); }
 }
 .stat-label { font-size: 13px; color: var(--color-text-muted); }
 .stat-value { font-size: 18px; font-weight: 600; margin-top: 4px; }
-.rule-hint { font-size: 13px; line-height: 1.5; margin: 0 0 12px; }
 .type-list {
   border: var(--border-gold);
   border-radius: var(--radius-card);
@@ -190,21 +196,7 @@ onMounted(() => {
   border-bottom: 1px solid rgba(198, 161, 91, 0.08);
 }
 .type-list__row:last-child { border-bottom: none; }
-.type-list__label {
-  font-size: 14px;
-  color: var(--color-text-light);
-}
-.type-list__amount {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-gold-light);
-  flex-shrink: 0;
-}
-.list-card__item--stacked {
-  display: block;
-  padding: 0 16px;
-}
-.list-card__item--stacked :deep(.expense-item) {
-  border-bottom: none;
-}
+.type-list__label { font-size: 14px; color: var(--color-text-light); }
+.type-list__amount { font-size: 16px; font-weight: 600; color: var(--color-gold-light); }
+.list-card__item--stacked { display: block; padding: 0 16px; }
 </style>

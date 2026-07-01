@@ -3,7 +3,6 @@ import {
   PENDING_LINK_STATUSES,
   defaultExpenseTypeForBusiness,
   buildQianfanOrderUrl,
-  isProfitDeductingExpense,
   DEFAULT_PAY_SOURCE,
   type ExpenseBusinessType,
 } from '@jade-account/shared'
@@ -240,8 +239,8 @@ export async function createExpense(
   if (!input.amount || input.amount <= 0) throw new Error('金额必须大于 0')
 
   const paySource = (input.paySource || DEFAULT_PAY_SOURCE).trim()
-  if (paySource === '员工垫付') {
-    throw new Error('请使用专属经费记支出，员工垫付报销流程已下线')
+  if (paySource === '员工垫付' || paySource === '专属经费') {
+    throw new Error('请使用项目专用资金记支出')
   }
 
   const businessType = (input.businessType || EXPENSE_BUSINESS_TYPES.normal) as ExpenseBusinessType
@@ -472,8 +471,8 @@ export async function updateExpense(
   delete data.payeeAccount
   if (input.occurredAt) data.occurredAt = parseDateInput(input.occurredAt)
   if (input.amount !== undefined && input.amount <= 0) throw new Error('金额得填一下')
-  if (input.paySource === '员工垫付') {
-    throw new Error('请使用专属经费记支出，员工垫付报销流程已下线')
+  if (input.paySource === '员工垫付' || input.paySource === '专属经费') {
+    throw new Error('请使用项目专用资金记支出')
   }
   if (input.payeeAccount !== undefined) {
     data.payeeAccountMasked = maskPayeeAccount(input.payeeAccount)
@@ -673,16 +672,14 @@ export async function getExpenseSummary(
     byPaySource[e.paySource] = (byPaySource[e.paySource] || 0) + toNumber(e.amount)
   }
 
-  const compensationAmount = expenses
-    .filter((e) => isProfitDeductingExpense(e))
-    .reduce((s, e) => s + toNumber(e.amount), 0)
-
   const needsAttachment = await prisma.expense.count({
     where: { isVoided: false, isTrialRun: false, needsAttachment: true },
   })
 
   const totalCount = expenses.length
   const myCount = userId ? expenses.filter((e) => e.createdBy === userId).length : undefined
+  const linkedOrderCount = expenses.filter((e) => !!e.externalOrderNo?.trim()).length
+  const unlinkedOrderCount = expenses.filter((e) => !e.externalOrderNo?.trim()).length
 
   return {
     period: { start, end },
@@ -691,7 +688,8 @@ export async function getExpenseSummary(
     myCount,
     byType,
     byPaySource,
-    compensationAmount,
+    linkedOrderCount,
+    unlinkedOrderCount,
     needsAttachmentCount: needsAttachment,
   }
 }

@@ -36,7 +36,7 @@ expenseRouter.get('/', requirePermission('expense:view'), async (req: AuthReques
     customerPaymentStatus: req.query.customerPaymentStatus as string,
     pendingLinkStatus: req.query.pendingLinkStatus as string,
     onlyWithBracelet: req.query.onlyWithBracelet === 'true',
-    needsAttachment: req.query.needsAttachment === 'true',
+    needsAttachment: req.query.needsAttachment === '1' || req.query.needsAttachment === 'true',
     createdBy: mine ? req.user!.userId : undefined,
     page: Number(req.query.page || 1),
     pageSize: Number(req.query.pageSize || 20),

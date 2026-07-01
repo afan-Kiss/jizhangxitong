@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** 专属经费记支出验收 */
+/** 项目专用资金记支出验收 */
 import {
   SERVER, login, fetchJson, authHeaders, ensureServerRunning,
 } from './lib/services.mjs'
@@ -30,15 +30,15 @@ async function main() {
     method: 'POST',
     body: JSON.stringify({
       amount: 3.21,
-      expenseType: '日常物料',
+      expenseType: '办公杂费',
       businessType: 'normal',
       occurredAt: today,
       remark: `${TAG}-default-pay`,
     }),
   })
   const exp = created.json.data
-  if (created.res.ok && exp?.paySource === '专属经费') pass('新建支出默认专属经费')
-  else fail('新建支出默认专属经费', created.text?.slice(0, 120))
+  if (created.res.ok && exp?.paySource === '项目专用资金') pass('新建支出默认项目专用资金')
+  else fail('新建支出默认项目专用资金', created.text?.slice(0, 120))
 
   if (exp?.reimbursementStatus === 'not_required') pass('新建支出 reimbursementStatus=not_required')
   else fail('新建支出 reimbursementStatus', exp?.reimbursementStatus)
@@ -47,13 +47,13 @@ async function main() {
     method: 'POST',
     body: JSON.stringify({
       amount: 1,
-      expenseType: '日常物料',
+      expenseType: '办公杂费',
       paySource: '员工垫付',
       occurredAt: today,
       remark: `${TAG}-reject-staff`,
     }),
   })
-  if (!staffPay.res.ok && /专属经费|报销/.test(staffPay.json.message || staffPay.text || '')) {
+  if (!staffPay.res.ok && /项目专用资金|员工垫付/.test(staffPay.json.message || staffPay.text || '')) {
     pass('拒绝员工垫付记支出')
   } else {
     fail('拒绝员工垫付记支出', staffPay.text?.slice(0, 120))
@@ -70,7 +70,7 @@ async function main() {
     })
   }
 
-  console.log(`\n${failed ? 'FAIL' : 'PASS'} — 专属经费记支出\n`)
+  console.log(`\n${failed ? 'FAIL' : 'PASS'} — 项目专用资金记支出\n`)
   process.exit(failed ? 1 : 0)
 }
 

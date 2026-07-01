@@ -35,7 +35,7 @@ function accountWebBase(webBase) {
   return webBase.includes('/account') ? webBase : `${webBase}/account`
 }
 const reportsDir = path.join(ROOT, 'reports')
-const HOME_MARKERS = ['店里经营情况', '今日支出', '快捷操作', '本期经费支出']
+const HOME_MARKERS = ['项目资金支出', '今日支出', '本期支出', '本月支出', '待补凭证']
 
 const VIEWPORTS = [
   { name: 'mobile', width: 390, height: 844, desktop: false },
@@ -136,21 +136,14 @@ async function runViewportInner(browser, vp, creds) {
       if (await sidebar.isVisible().catch(() => false)) throw new Error('Sidebar 不应显示')
     })
 
-    await check('扫码页 Tab 显隐正确', async () => {
+    await check('旧扫码路由显示下线', async () => {
       await gotoStable(page, `${WEB_BASE}/scan`)
-      if (await tabBar.isVisible().catch(() => false)) {
-        throw new Error('扫码页不应显示 TabBar')
+      const text = await page.evaluate(() => document.body?.innerText || '')
+      if (!/已下线|只记录项目资金支出/.test(text)) {
+        throw new Error('扫码页应显示下线提示')
       }
-      await gotoStable(page, `${WEB_BASE}/`)
-      if (!(await tabBar.isVisible())) throw new Error('返回首页 TabBar 应显示')
     })
   }
-
-  await check('Worker 状态可见', async () => {
-    await gotoStable(page, `${WEB_BASE}/`)
-    const text = await page.evaluate(() => document.body?.innerText || '')
-    if (!/本地助手|公司电脑/.test(text)) throw new Error('未见 Worker 状态文案')
-  })
 
   if (vp.desktop) {
     await check('记支出页两栏布局', async () => {

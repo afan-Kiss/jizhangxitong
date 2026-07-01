@@ -9,55 +9,33 @@ export const DEFAULT_SETTINGS = {
   qianfan_order_detail_url_template: '',
 } as const
 
-export const DEFAULT_PAY_SOURCE = '专属经费' as const
+export const DEFAULT_PAY_SOURCE = '项目专用资金' as const
 
-export const EXPENSE_TYPES = [
-  '原料采购',
-  '加工费',
-  '抛光费',
-  '证书鉴定费',
-  '镶嵌成本',
-  '物流保险',
-  '包装耗材',
-  '差旅交通',
-  '营销推广',
-  '客户返款',
-  '客户退差价',
-  '客户心理落差补偿',
-  '售后补偿',
-  '退货运费补偿',
-  '平台扣款',
-  '小红书服务费',
-  '客户补偿',
-  '包装盒',
-  '证书费',
-  '快递费',
-  '成本调整',
-  '日常物料',
-  '系统/软件',
+/** 项目资金支出分类（前端记支出 / 统计展示） */
+export const PROJECT_EXPENSE_CATEGORIES = [
+  '好评返现',
+  '快递/运费',
+  '包装物料',
+  '平台费用',
+  '运营推广',
+  '售后处理',
+  '软件/工具',
+  '办公杂费',
   '其他支出',
-  '其他',
 ] as const
 
+/** @deprecated 历史兼容；新记录请用 PROJECT_EXPENSE_CATEGORIES */
+export const EXPENSE_TYPES = [...PROJECT_EXPENSE_CATEGORIES] as const
+
 export const PAY_SOURCES = [
-  '专属经费',
+  '项目专用资金',
   '微信',
   '支付宝',
   '银行卡',
-  '现金',
   '老板付款',
-  '娟姐转账',
   '财务转账',
   '其他',
 ] as const
-
-export const BI_METRIC_HINTS = {
-  expenseAmount: '按支出发生日期 occurredAt 统计',
-  saleAmount: '按成交日期 soldAt 统计',
-  refundAmount: '按退款日期 refundedAt 统计',
-  inventoryCost: '当前在库累计',
-  netProfit: '销售额 - 成本 - 已确认退款 - 客户补偿/返款',
-} as const
 
 export const FILE_TYPES = [
   'payment_screenshot',
@@ -67,31 +45,31 @@ export const FILE_TYPES = [
   'other',
 ] as const
 
-export const PLATFORMS = ['小红书', '微信私域', '其他'] as const
-
-export const SALE_STATUSES = ['sold', 'refunded', 'returned_available'] as const
-
+/** 当前系统启用的权限（支出 + 管理） */
 export const PERMISSIONS = [
-  'bracelet:view',
-  'bracelet:cost:view',
-  'bracelet:sync',
   'expense:view',
   'expense:create',
   'expense:update',
   'expense:void',
   'expense:attachment:view',
   'expense:attachment:upload',
+  'log:view',
+  'setting:update',
+  'permission:manage',
+] as const
+
+/** @deprecated 历史库中可能存在，不再分配给新角色 */
+export const DEPRECATED_PERMISSIONS = [
+  'bracelet:view',
+  'bracelet:cost:view',
+  'bracelet:sync',
   'sale:view',
   'sale:create',
   'sale:update',
   'sale:refund',
   'cost:adjust',
-  'setting:update',
-  'log:view',
-  'permission:manage',
 ] as const
 
-/** 仅系统管理员保留；其余权限为全公司共享账本能力 */
 export const ADMIN_ONLY_PERMISSIONS = ['permission:manage', 'setting:update'] as const
 
 export const SHARED_BUSINESS_PERMISSIONS = PERMISSIONS.filter(
@@ -99,22 +77,14 @@ export const SHARED_BUSINESS_PERMISSIONS = PERMISSIONS.filter(
 )
 
 export const PERMISSION_LABELS: Record<string, string> = {
-  'bracelet:view': '查看镯子列表与详情',
-  'bracelet:cost:view': '查看镯子真实成本',
-  'bracelet:sync': '从扫码枪同步镯子',
   'expense:view': '查看支出记录',
   'expense:create': '新建支出',
   'expense:update': '修改支出',
   'expense:void': '作废支出',
   'expense:attachment:view': '查看付款/聊天截图',
   'expense:attachment:upload': '上传支出凭证',
-  'sale:view': '查看销售记录',
-  'sale:create': '新建销售',
-  'sale:update': '修改销售',
-  'sale:refund': '销售退款/退货',
-  'cost:adjust': '调整镯子成本',
-  'setting:update': '修改系统设置',
   'log:view': '查看操作日志',
+  'setting:update': '修改系统设置',
   'permission:manage': '管理角色与权限',
 }
 
@@ -122,6 +92,6 @@ export const FILE_TYPE_LABELS: Record<string, string> = {
   payment_screenshot: '付款截图',
   after_sale_problem: '售后问题图',
   chat_screenshot: '聊天截图',
-  bracelet_photo: '镯子图片',
+  bracelet_photo: '凭证图片',
   other: '其他凭证',
 }

@@ -2,14 +2,11 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { showToast } from 'vant'
 import api from '../api'
-import { PERMISSION_LABELS } from '@jade-account/shared'
+import { PERMISSION_LABELS, PERMISSIONS } from '@jade-account/shared'
 import LuxuryCard from '../components/LuxuryCard.vue'
 
 const GROUP_LABELS: Record<string, string> = {
-  bracelet: '镯子',
   expense: '支出',
-  sale: '销售',
-  cost: '成本',
   setting: '系统设置',
   log: '日志',
   permission: '权限管理',
@@ -59,7 +56,9 @@ async function loadAll() {
   ])
   users.value = u.data.data
   roles.value = r.data.data
-  permissions.value = p.data.data
+  permissions.value = p.data.data.filter((item: { code: string }) =>
+    (PERMISSIONS as readonly string[]).includes(item.code),
+  )
   if (!selectedRoleId.value && roles.value.length) selectRole(roles.value[0].id)
 }
 

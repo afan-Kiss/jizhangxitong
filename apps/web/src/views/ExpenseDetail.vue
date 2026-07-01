@@ -6,7 +6,6 @@ import api, { fileViewUrl, fileThumbUrl } from '../api'
 import { useAuthStore } from '../stores/auth'
 import { useBreakpoint } from '../composables/useBreakpoint'
 import { loadQianfanConfig } from '../composables/useQianfan'
-import { EXPENSE_BUSINESS_LABELS } from '@jade-account/shared'
 import AppShell from '../components/AppShell.vue'
 import LuxuryCard from '../components/LuxuryCard.vue'
 import ActionButton from '../components/ActionButton.vue'
@@ -42,20 +41,7 @@ const orderNo = computed(() => expense.value?.externalOrderNo || expense.value?.
 const attachmentCount = computed(() => expense.value?.attachments?.length || 0)
 const logCount = computed(() => expense.value?.operationLogs?.length || 0)
 
-const expenseTypeLabel = computed(() => {
-  if (!expense.value) return ''
-  const bt = expense.value.businessType
-  if (bt && EXPENSE_BUSINESS_LABELS[bt as keyof typeof EXPENSE_BUSINESS_LABELS]) {
-    return EXPENSE_BUSINESS_LABELS[bt as keyof typeof EXPENSE_BUSINESS_LABELS]
-  }
-  return expense.value.expenseType || '支出'
-})
-
-const profitImpactText = computed(() => {
-  if (!expense.value) return ''
-  if (expense.value.affectsProfit) return '会扣这单利润'
-  return '不影响订单利润'
-})
+const expenseTypeLabel = computed(() => expense.value?.expenseType || '支出')
 
 async function loadAttachmentUrls(attachments: Array<{ fileId: number }>) {
   for (const att of attachments) {
@@ -187,7 +173,6 @@ function toggleSupplement() {
             {{ expenseTypeLabel }} · {{ expense.paySource }}
           </div>
           <div class="expense-detail__date muted" data-testid="expense-date">{{ expense.occurredAt?.slice(0, 10) }}</div>
-          <div class="expense-detail__impact" data-testid="expense-profit-impact">{{ profitImpactText }}</div>
           <div class="expense-detail__tags" data-testid="expense-status-tags">
             <span v-if="orderNo" class="expense-detail__tag">已关联订单</span>
             <span v-else-if="expense.pendingLinkStatus === 'pending_order'" class="expense-detail__tag expense-detail__tag--warn">待关联订单</span>
@@ -200,6 +185,10 @@ function toggleSupplement() {
         <LuxuryCard v-if="orderNo" :stagger="1" data-testid="expense-order-card">
           <div class="section-title">关联订单</div>
           <OrderLink :order-no="orderNo" hide-hint data-testid="expense-detail-order-no" />
+          <div v-if="expense.logisticsNo" class="expense-detail__row">
+            <span class="muted">物流单号</span>
+            <span>{{ expense.logisticsNo }}</span>
+          </div>
         </LuxuryCard>
 
         <LuxuryCard v-else-if="expense.pendingLinkStatus === 'pending_order'" :stagger="1" data-testid="expense-pending-order-card">
@@ -254,40 +243,20 @@ function toggleSupplement() {
         <LuxuryCard :stagger="3" data-testid="expense-purpose-card">
           <div class="section-title">这笔钱的用途</div>
           <div class="expense-detail__row">
-            <span class="muted">支出类型</span>
+            <span class="muted">支出分类</span>
             <span>{{ expenseTypeLabel }}</span>
           </div>
           <div class="expense-detail__row">
-            <span class="muted">付款账户</span>
-            <span data-testid="expense-pay-source">{{ expense.paySource || '专属经费' }}</span>
+            <span class="muted">付款来源</span>
+            <span data-testid="expense-pay-source">{{ expense.paySource || '项目专用资金' }}</span>
           </div>
           <div class="expense-detail__row">
-            <span class="muted">发生日期</span>
+            <span class="muted">支出时间</span>
             <span>{{ expense.occurredAt?.slice(0, 10) }}</span>
-          </div>
-          <div class="expense-detail__row">
-            <span class="muted">是否影响利润</span>
-            <span>{{ profitImpactText }}</span>
-          </div>
-          <div v-if="expense.expenseSummary" class="expense-detail__row">
-            <span class="muted">摘要</span>
-            <span>{{ expense.expenseSummary }}</span>
           </div>
           <div v-if="expense.remark" class="expense-detail__row">
             <span class="muted">备注</span>
             <span>{{ expense.remark }}</span>
-          </div>
-          <div v-if="expense.customerPaymentStatus" class="expense-detail__row" data-testid="expense-payment-status">
-            <span class="muted">打款状态</span>
-            <span>{{ statusLabels[expense.customerPaymentStatus] || expense.customerPaymentStatus }}</span>
-          </div>
-          <div v-if="expense.braceletCode" class="expense-detail__row">
-            <span class="muted">货品编号</span>
-            <span>{{ expense.braceletCode }}</span>
-          </div>
-          <div v-if="expense.saleId" class="expense-detail__row">
-            <span class="muted">关联销售</span>
-            <span>#{{ expense.saleId }}</span>
           </div>
         </LuxuryCard>
 
