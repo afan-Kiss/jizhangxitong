@@ -4,6 +4,7 @@ import { showToast } from 'vant'
 import api from '../api'
 import { useAuthStore } from '../stores/auth'
 import { confirmAction } from '../utils/confirm-dialog'
+import ActionButton from './ActionButton.vue'
 
 const auth = useAuthStore()
 
@@ -111,26 +112,33 @@ async function saveRole(user: any) {
     <div class="section-title">员工账号管理</div>
     <van-loading v-if="loading" />
     <div v-for="user in users" :key="user.id" class="user-manage__item">
-      <div class="user-manage__head">
-        <strong>{{ user.name }}</strong>
-        <span class="muted">@{{ user.username }}</span>
-        <span class="user-manage__status">{{ statusLabels[user.status] || user.status }}</span>
+      <div class="user-manage__info">
+        <div class="user-manage__head">
+          <strong>{{ user.name }}</strong>
+          <span class="muted">@{{ user.username }}</span>
+          <span class="user-manage__status">{{ statusLabels[user.status] || user.status }}</span>
+        </div>
+        <div class="muted user-manage__meta">
+          注册：{{ user.createdAt?.slice(0, 10) || '-' }}
+          <span v-if="user.approvedAt"> · 审核：{{ user.approvedAt?.slice(0, 10) }} {{ user.approvedBy?.name || '' }}</span>
+        </div>
+        <div class="user-manage__roles muted">角色：{{ user.roles?.join('、') || '未分配' }}</div>
       </div>
-      <div class="muted user-manage__meta">
-        注册：{{ user.createdAt?.slice(0, 10) || '-' }}
-        <span v-if="user.approvedAt"> · 审核：{{ user.approvedAt?.slice(0, 10) }} {{ user.approvedBy?.name || '' }}</span>
-      </div>
-      <div class="user-manage__roles muted">角色：{{ user.roles?.join('、') || '未分配' }}</div>
+
       <div v-if="user.status === 'pending'" class="user-manage__actions">
         <select v-model="user._rolePick" class="user-manage__select">
           <option value="员工">员工</option>
           <option value="管理员">管理员</option>
         </select>
-        <button type="button" @click="approve(user)">通过</button>
-        <button type="button" class="danger" @click="reject(user)">拒绝</button>
+        <ActionButton variant="primary" @click="approve(user)">通过</ActionButton>
+        <ActionButton variant="danger" @click="reject(user)">拒绝</ActionButton>
       </div>
+
       <div v-else class="user-manage__actions">
-        <div v-if="user.status === 'active' || user.status === 'disabled'" class="user-manage__role-row">
+        <div
+          v-if="user.status === 'active' || user.status === 'disabled'"
+          class="user-manage__role-row"
+        >
           <label class="user-manage__role-label muted">权限</label>
           <select
             v-model="user._rolePick"
@@ -141,21 +149,27 @@ async function saveRole(user: any) {
             <option value="员工">员工</option>
             <option value="管理员">管理员</option>
           </select>
-          <button
-            type="button"
+          <ActionButton
+            variant="secondary"
             data-testid="user-role-save"
             :disabled="user.protected && user._rolePick !== '管理员'"
             @click="saveRole(user)"
           >
             保存权限
-          </button>
+          </ActionButton>
         </div>
-        <button type="button" @click="editDisplayName(user)">改显示名</button>
-        <button v-if="!user.protected && user.id !== auth.user?.id" type="button" @click="toggleDisable(user)">
-          {{ user.status === 'disabled' ? '启用' : '禁用' }}
-        </button>
-        <span v-else-if="user.protected" class="muted">受保护管理员</span>
-        <span v-else-if="user.id === auth.user?.id" class="muted">当前登录账号</span>
+        <div class="user-manage__btns-row">
+          <ActionButton variant="ghost" @click="editDisplayName(user)">改显示名</ActionButton>
+          <ActionButton
+            v-if="!user.protected && user.id !== auth.user?.id"
+            :variant="user.status === 'disabled' ? 'primary' : 'danger'"
+            @click="toggleDisable(user)"
+          >
+            {{ user.status === 'disabled' ? '启用' : '禁用' }}
+          </ActionButton>
+          <span v-else-if="user.protected" class="user-manage__hint muted">受保护管理员</span>
+          <span v-else-if="user.id === auth.user?.id" class="user-manage__hint muted">当前登录账号</span>
+        </div>
       </div>
     </div>
     <p v-if="!users.length && !loading" class="muted">暂无员工账号</p>
@@ -164,8 +178,14 @@ async function saveRole(user: any) {
 
 <style scoped>
 .user-manage__item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   padding: 14px 0;
   border-bottom: 1px solid rgba(198, 161, 91, 0.1);
+}
+.user-manage__info {
+  min-width: 0;
 }
 .user-manage__head {
   display: flex;
@@ -177,36 +197,67 @@ async function saveRole(user: any) {
   font-size: 12px;
   color: var(--color-gold);
 }
-.user-manage__meta, .user-manage__roles {
+.user-manage__meta,
+.user-manage__roles {
   margin-top: 4px;
   font-size: 12px;
 }
 .user-manage__actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-  align-items: center;
+  flex-direction: column;
+  gap: 10px;
 }
-.user-manage__role-row {
+.user-manage__role-row,
+.user-manage__btns-row {
   display: flex;
   flex-wrap: wrap;
+  gap: 10px;
   align-items: center;
-  gap: 8px;
-  width: 100%;
 }
 .user-manage__role-label {
   font-size: 12px;
+  white-space: nowrap;
 }
-.user-manage__actions button,
-.user-manage__select {
-  border: 1px solid rgba(198, 161, 91, 0.35);
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 8px;
-  padding: 6px 12px;
+.user-manage__hint {
   font-size: 12px;
+  white-space: nowrap;
+  padding: 0 4px;
 }
-.user-manage__actions .danger {
-  color: var(--color-danger);
+.user-manage__select {
+  height: 34px;
+  min-width: 88px;
+  border: 1px solid rgba(198, 161, 91, 0.35);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-btn, 8px);
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--color-text-light);
+  font-family: inherit;
+}
+.user-manage__select:disabled {
+  opacity: 0.55;
+}
+.user-manage__actions :deep(.action-btn) {
+  height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+@media (min-width: 721px) {
+  .user-manage__item {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+  }
+  .user-manage__info {
+    flex: 1;
+  }
+  .user-manage__actions {
+    flex-shrink: 0;
+    max-width: 340px;
+    align-items: flex-end;
+  }
 }
 </style>
