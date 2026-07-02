@@ -10,6 +10,7 @@ module.exports = {
       max_memory_restart: '512M',
       env: {
         NODE_ENV: 'production',
+        DATABASE_URL: 'file:/www/wwwroot/jade-accounting/apps/server/prisma/data/accounting.db',
       },
       error_file: '/www/wwwroot/jade-accounting/logs/server-error.log',
       out_file: '/www/wwwroot/jade-accounting/logs/server-out.log',

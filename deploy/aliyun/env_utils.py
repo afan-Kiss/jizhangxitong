@@ -62,10 +62,10 @@ def merge_preserved_env(existing: dict[str, str], backup: dict[str, str] | None 
     return merged
 
 
-def normalize_database_url(url: Optional[str]) -> str:
+def normalize_database_url(url: Optional[str], deploy_dir: str = "/www/wwwroot/jade-accounting") -> str:
     u = (url or "").strip()
-    if u in ("", "file:./data/accounting.db"):
-        return "file:./prisma/data/accounting.db"
+    if u in ("", "file:./data/accounting.db", "file:./prisma/data/accounting.db"):
+        return f"file:{deploy_dir}/apps/server/prisma/data/accounting.db"
     return u
 
 
