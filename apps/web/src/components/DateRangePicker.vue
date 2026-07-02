@@ -17,7 +17,7 @@ const props = withDefaults(
   /** dark：系统默认深色；light：报账中心等浅色页面 */
   theme?: 'dark' | 'light'
 }>(),
-  { theme: 'dark' },
+  { theme: 'light' },
 )
 
 const emit = defineEmits<{

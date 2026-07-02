@@ -25,6 +25,7 @@
     "setup:admin": "node scripts/setup-admin.mjs",
     "set:admin-password": "node scripts/set-admin-password.mjs",
     "data:reset-keep-fanfan": "node scripts/reset-data-keep-fanfan.mjs",
+    "data:reset-empty": "node scripts/reset-data-empty.mjs",
     "db:prepare-prod": "node scripts/db-prepare-prod.mjs",
     "health-check": "node scripts/system-health-check.mjs",
     "check:autostart": "node scripts/check-autostart.mjs",

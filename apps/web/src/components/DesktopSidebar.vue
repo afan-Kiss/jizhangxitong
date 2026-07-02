@@ -1,52 +1,36 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import { desktopNav, isNavActive } from '../config/nav'
-import { useScanOverlay } from '../composables/useScanOverlay'
-import BraceletIcon from './BraceletIcon.vue'
 
 const route = useRoute()
-const scan = useScanOverlay()
-
-function onNavClick(item: { path: string }, e: MouseEvent) {
-  if (item.path !== '/scan') return
-  e.preventDefault()
-  scan.openScan()
-}
 
 function isActive(path: string) {
-  if (path === '/scan') {
-    return scan.cameraVisible.value || scan.resultVisible.value || isNavActive(path, route.path)
-  }
   return isNavActive(path, route.path)
 }
 </script>
 
 <template>
-  <aside class="desktop-sidebar glass-surface" data-testid="desktop-sidebar">
+  <aside class="desktop-sidebar" data-testid="desktop-sidebar">
     <div class="desktop-sidebar__brand">
-      <div class="desktop-sidebar__mark" aria-hidden="true">
-        <span class="desktop-sidebar__diamond">◆</span>
-      </div>
+      <div class="desktop-sidebar__mark" aria-hidden="true">◆</div>
       <div>
-        <div class="desktop-sidebar__title">项目资金支出记录</div>
-        <div class="desktop-sidebar__sub">记录 · 统计 · 关联订单</div>
+        <div class="desktop-sidebar__title">项目资金支出</div>
+        <div class="desktop-sidebar__sub">记录 · 统计 · 报账</div>
       </div>
     </div>
     <nav class="desktop-sidebar__nav">
       <router-link
         v-for="item in desktopNav"
         :key="item.path"
-        :to="item.path === '/scan' ? route.path : item.path"
-        class="desktop-sidebar__link luxury-hover"
+        :to="item.path"
+        class="desktop-sidebar__link"
         :class="{ 'desktop-sidebar__link--active': isActive(item.path) }"
-        @click="onNavClick(item, $event)"
       >
-        <BraceletIcon v-if="item.custom" :size="18" :active="isActive(item.path)" />
-        <van-icon v-else :name="item.icon" size="18" />
+        <van-icon :name="item.icon" size="18" />
         <span>{{ item.label }}</span>
       </router-link>
     </nav>
-    <div class="desktop-sidebar__footer muted">墨玉绿 · 香槟金</div>
+    <div class="desktop-sidebar__footer">珠宝公司内部财务工具</div>
   </aside>
 </template>
 
@@ -56,13 +40,11 @@ function isActive(path: string) {
   flex-shrink: 0;
   min-height: 100vh;
   padding: 20px 12px;
-  background:
-    linear-gradient(180deg, rgba(18, 28, 24, 0.88) 0%, rgba(14, 20, 18, 0.92) 100%);
-  border-right: 1px solid rgba(215, 181, 109, 0.1);
-  color: var(--color-text-light);
+  background: var(--color-sidebar);
+  border-right: 1px solid #e7ddc8;
+  color: var(--color-text-main);
   display: flex;
   flex-direction: column;
-  box-shadow: 4px 0 24px rgba(8, 12, 10, 0.25);
 }
 
 .desktop-sidebar__brand {
@@ -70,7 +52,7 @@ function isActive(path: string) {
   align-items: flex-start;
   gap: 12px;
   padding: 8px 10px 20px;
-  border-bottom: 1px solid rgba(215, 181, 109, 0.1);
+  border-bottom: 1px solid #e7ddc8;
   margin-bottom: 16px;
 }
 
@@ -81,29 +63,22 @@ function isActive(path: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at 30% 30%, rgba(215, 181, 109, 0.25), rgba(31, 77, 58, 0.35));
-  border: 1px solid rgba(215, 181, 109, 0.22);
-  box-shadow: 0 0 16px rgba(215, 181, 109, 0.12);
-}
-
-.desktop-sidebar__diamond {
-  color: var(--color-gold-light);
+  background: #fff;
+  border: 1px solid #e7ddc8;
+  color: var(--color-gold);
   font-size: 13px;
-  line-height: 1;
 }
 
 .desktop-sidebar__title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--color-gold-light);
+  color: var(--color-text-main);
 }
 
 .desktop-sidebar__sub {
   margin-top: 4px;
   font-size: 11px;
-  color: rgba(248, 244, 234, 0.48);
-  letter-spacing: 0.06em;
+  color: var(--color-text-sub);
 }
 
 .desktop-sidebar__nav {
@@ -117,26 +92,26 @@ function isActive(path: string) {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 12px;
-  border-radius: 12px;
+  padding: 11px 12px;
+  border-radius: 10px;
   text-decoration: none;
-  color: rgba(248, 244, 234, 0.68);
+  color: var(--color-text-sub);
   font-size: 14px;
   border: 1px solid transparent;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
 .desktop-sidebar__link:hover {
-  color: var(--color-text-light);
-  background: rgba(255, 255, 255, 0.04);
-  transform: translateX(2px);
+  color: var(--color-text-main);
+  background: rgba(255, 255, 255, 0.55);
 }
 
 .desktop-sidebar__link--active {
-  background: linear-gradient(135deg, rgba(90, 143, 120, 0.22) 0%, rgba(215, 181, 109, 0.08) 100%);
-  color: var(--color-gold-light);
-  font-weight: 500;
-  border-color: rgba(215, 181, 109, 0.28);
-  box-shadow: inset 0 0 0 1px rgba(215, 181, 109, 0.1), 0 0 20px rgba(215, 181, 109, 0.08);
+  background: #fff;
+  color: var(--color-gold-deep);
+  font-weight: 600;
+  border-color: #e7ddc8;
+  box-shadow: var(--shadow-card);
 }
 
 .desktop-sidebar__link--active :deep(.van-icon) {
@@ -145,9 +120,8 @@ function isActive(path: string) {
 
 .desktop-sidebar__footer {
   padding: 14px 10px 6px;
-  font-size: 10px;
+  font-size: 11px;
   text-align: center;
-  opacity: 0.55;
-  letter-spacing: 0.12em;
+  color: var(--color-text-muted);
 }
 </style>

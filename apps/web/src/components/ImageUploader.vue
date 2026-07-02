@@ -641,8 +641,8 @@ onUnmounted(() => {
   justify-content: center;
   margin: 0;
   border-radius: 16px;
-  background: rgba(16, 22, 20, 0.55);
-  color: var(--color-gold-light);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--color-gold-deep);
   font-size: 16px;
   font-weight: 600;
   pointer-events: none;

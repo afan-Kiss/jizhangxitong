@@ -9,8 +9,10 @@ export async function getHomeDashboard() {
 
   return {
     todayExpenseAmount: expenseToday.totalAmount,
+    todayExpenseCount: expenseToday.totalCount,
     monthExpenseAmount: expenseMonth.totalAmount,
     missingAttachmentCount: expenseToday.needsAttachmentCount,
+    pendingReimbursementAmount: expenseMonth.pendingReimbursementAmount,
     labels: {
       expense: '今日支出',
       month: '本月支出',

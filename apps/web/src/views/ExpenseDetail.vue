@@ -217,7 +217,7 @@ function toggleSupplement() {
     <template v-else-if="expense">
     <div class="expense-detail" :class="{ 'expense-detail--desktop': isDesktop }">
       <div class="expense-detail__main">
-        <LuxuryCard dark gold :stagger="0" padding="20px 18px" data-testid="expense-amount-card">
+        <LuxuryCard gold :stagger="0" padding="20px 18px" data-testid="expense-amount-card">
           <div v-if="expense.isVoided" class="expense-detail__void-badge" data-testid="expense-void-badge">
             已作废<span v-if="expense.voidReason"> · {{ expense.voidReason }}</span>
           </div>

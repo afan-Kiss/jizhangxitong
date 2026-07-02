@@ -228,7 +228,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <AppShell title="项目资金报账中心" no-tab-pad>
+  <AppShell no-tab-pad>
     <div class="report-center" data-testid="expense-stats-page">
       <header class="rc-header">
         <div class="rc-header__text">
@@ -402,20 +402,14 @@ onMounted(() => {
 
 <style scoped>
 .report-center {
-  --rc-bg: #f7f4ec;
+  --rc-bg: transparent;
   --rc-card: #ffffff;
   --rc-text: #1f2933;
   --rc-muted: #667085;
   --rc-gold: #b08d57;
-  --rc-border: #e9e1d0;
-  margin: -8px -16px 0;
-  padding: 16px;
+  --rc-border: #e7ddc8;
   min-height: 100%;
-  background: var(--rc-bg);
   color: var(--rc-text);
-}
-@media (min-width: 768px) {
-  .report-center { margin: 0; padding: 0 0 24px; border-radius: 16px; }
 }
 .rc-header {
   display: flex;

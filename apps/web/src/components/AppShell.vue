@@ -7,14 +7,11 @@ import { shouldShowPageBack } from '../utils/page-back'
 const props = withDefaults(
   defineProps<{
     title?: string
-    /** 仅用于强制隐藏返回（Tab 根页一般不必传） */
     hideBack?: boolean
     noTabPad?: boolean
     fixedBottom?: boolean
   }>(),
-  {
-    hideBack: false,
-  },
+  { hideBack: false },
 )
 
 const emit = defineEmits<{ back: [] }>()
@@ -52,12 +49,11 @@ function goBack() {
     }"
   >
     <header
-      v-if="title"
+      v-if="title && showBackButton"
       class="app-shell__page-head"
       :class="{ 'app-shell__page-head--sticky': !isDesktop }"
     >
       <button
-        v-if="showBackButton"
         type="button"
         class="app-shell__back"
         data-testid="page-back-btn"
@@ -66,7 +62,6 @@ function goBack() {
       >
         ← 返回
       </button>
-      <h1 class="app-shell__page-title">{{ title }}</h1>
     </header>
     <div class="app-shell__body page-enter">
       <slot />
@@ -79,9 +74,8 @@ function goBack() {
 
 <style scoped>
 .app-shell {
-  min-height: 100vh;
+  min-height: 100%;
   padding-bottom: calc(64px + env(safe-area-inset-bottom));
-  background: transparent;
 }
 .app-shell--no-tab {
   padding-bottom: env(safe-area-inset-bottom);
@@ -96,9 +90,7 @@ function goBack() {
 .app-shell__page-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 0 0 14px;
-  flex-wrap: wrap;
+  margin: 0 0 12px;
 }
 .app-shell__page-head--sticky {
   position: sticky;
@@ -107,50 +99,23 @@ function goBack() {
   margin-left: -16px;
   margin-right: -16px;
   padding: calc(8px + env(safe-area-inset-top)) 16px 10px;
-  background: linear-gradient(180deg, rgba(16, 24, 20, 0.98) 0%, rgba(16, 24, 20, 0.92) 70%, transparent 100%);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(215, 181, 109, 0.1);
+  background: rgba(246, 241, 231, 0.95);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid #e7ddc8;
 }
 .app-shell__back {
   flex-shrink: 0;
   min-height: 36px;
-  border: 1px solid rgba(215, 181, 109, 0.35);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--color-gold-light);
+  border: 1px solid #e7ddc8;
+  background: #fff;
+  color: var(--color-gold-deep);
   border-radius: 999px;
   padding: 6px 14px;
   font-size: 14px;
-  line-height: 1.2;
   cursor: pointer;
-  transition:
-    border-color var(--duration-fast),
-    transform var(--duration-fast),
-    box-shadow var(--duration-fast);
-}
-@media (hover: hover) {
-  .app-shell__back:hover {
-    border-color: var(--color-gold-border-hover);
-    box-shadow: var(--shadow-glow);
-    transform: translateY(-1px);
-  }
-}
-.app-shell__page-title {
-  margin: 0;
-  flex: 1;
-  min-width: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-text-champagne);
-  line-height: 1.3;
-}
-.app-shell--desktop .app-shell__page-title {
-  font-size: 22px;
 }
 .app-shell__body {
   padding: 0 0 16px;
-}
-.app-shell--desktop .app-shell__body {
-  padding: 0 0 8px;
 }
 .app-shell__footer {
   position: fixed;
@@ -158,20 +123,16 @@ function goBack() {
   right: 0;
   bottom: 0;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, transparent 0%, rgba(16, 24, 20, 0.96) 24%);
-  backdrop-filter: var(--blur-glass);
+  background: #fff;
   z-index: 90;
-  box-shadow: 0 -4px 28px rgba(8, 12, 10, 0.35);
-  border-top: 1px solid rgba(215, 181, 109, 0.1);
+  box-shadow: 0 -4px 16px rgba(31, 41, 51, 0.06);
+  border-top: 1px solid #e7ddc8;
 }
 .app-shell__footer--static {
   position: static;
   padding: 16px 0 0;
   background: transparent;
-  backdrop-filter: none;
   box-shadow: none;
-}
-.app-shell--no-tab .app-shell__footer:not(.app-shell__footer--static) {
-  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  border-top: none;
 }
 </style>

@@ -23,16 +23,15 @@ body {
 
 .muted {
   color: var(--color-text-sub);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
 .section-title {
   margin: 0 0 12px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--color-text-champagne);
-  letter-spacing: 0.04em;
+  color: var(--color-text-main);
 }
 
 .section-title--sub {
@@ -41,28 +40,17 @@ body {
   color: var(--color-text-sub);
 }
 
-.luxury-card .section-title,
-.luxury-card--dark .section-title {
-  color: var(--color-text-light);
-}
-
-/* Vant 全局微调 — 深色玻璃 */
+/* Vant 全局微调 — 浅色 */
 .van-nav-bar {
-  background: transparent !important;
-}
-.van-nav-bar .van-icon {
-  color: var(--color-text-main);
-}
-.van-nav-bar__title {
-  color: var(--color-text-main) !important;
+  background: var(--color-bg-elevated) !important;
 }
 .van-cell-group--inset {
-  margin: 0 16px;
+  margin: 0;
   border-radius: var(--radius-card);
   overflow: hidden;
-  border: var(--border-glass);
+  border: var(--border-gold);
   box-shadow: var(--shadow-card);
-  background: var(--color-card-light);
+  background: #fff;
 }
 .van-field__label {
   color: var(--color-text-sub) !important;
@@ -71,38 +59,111 @@ body {
   color: var(--color-text-main) !important;
 }
 .van-cell {
-  background: transparent !important;
+  background: #fff !important;
   color: var(--color-text-main);
 }
 .van-cell__title {
   color: var(--color-text-sub);
 }
 .van-cell::after {
-  border-color: rgba(215, 181, 109, 0.08) !important;
+  border-color: #f0ebe0 !important;
 }
 .van-toast {
-  background: var(--color-card-dark) !important;
-  color: var(--color-text-light) !important;
+  background: #fff !important;
+  color: var(--color-text-main) !important;
   border: var(--border-gold);
-  box-shadow: var(--shadow-card), var(--shadow-glow);
+  box-shadow: var(--shadow-card-hover);
 }
 .van-popup {
-  background: var(--color-card-dark) !important;
+  background: #fff !important;
   border: var(--border-gold);
 }
 .van-dialog {
-  background: var(--color-card-dark) !important;
+  background: #fff !important;
   border: var(--border-gold);
 }
 .van-dialog__header {
-  color: var(--color-text-light) !important;
+  color: var(--color-text-main) !important;
 }
 .van-dialog__message {
   color: var(--color-text-sub) !important;
 }
-
-/* 表单 focus 金边 */
 .van-field:focus-within {
-  box-shadow: inset 0 0 0 1px rgba(215, 181, 109, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(176, 141, 87, 0.25);
   border-radius: 8px;
+}
+
+/* 全局 UI 工具类 */
+.ui-card {
+  background: var(--color-card);
+  border: 1px solid #e7ddc8;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 16px;
+}
+
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-btn);
+  border: 1px solid #e7ddc8;
+  background: #fff;
+  color: var(--color-text-main);
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+.ui-btn:hover {
+  border-color: var(--color-gold-border-hover);
+  box-shadow: var(--shadow-glow);
+}
+.ui-btn--gold {
+  background: linear-gradient(135deg, #c7a45d, #b08d57);
+  border-color: #b08d57;
+  color: #fff;
+  font-weight: 600;
+}
+.ui-btn--ghost {
+  background: #fbf8f1;
+}
+
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 500;
+  background: #f3efe6;
+  color: var(--color-text-sub);
+}
+.ui-badge--pending { background: #fef3e2; color: #c2410c; }
+.ui-badge--success { background: #e8f5ee; color: #2f855a; }
+.ui-badge--muted { background: #f3f4f6; color: #667085; }
+
+.ui-empty {
+  text-align: center;
+  padding: 40px 24px;
+  color: var(--color-text-sub);
+}
+.ui-empty__title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-main);
+}
+.ui-empty__desc {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.ui-empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
 }

@@ -44,8 +44,7 @@ function logout() {
 </script>
 
 <template>
-  <header class="desktop-header glass-surface" data-testid="desktop-header">
-    <div class="desktop-header__title">项目资金支出记录</div>
+  <header class="desktop-header" data-testid="desktop-header">
     <div class="desktop-header__right">
       <WorkerStatus :status="auth.workerStatus" compact />
       <div v-if="auth.user" ref="menuRoot" class="desktop-header__menu">
@@ -83,34 +82,15 @@ function logout() {
 .desktop-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
   min-height: var(--header-height);
-  padding: 10px 24px;
-  background: rgba(16, 24, 20, 0.78);
-  border-bottom: 1px solid rgba(215, 181, 109, 0.12);
-  box-shadow: 0 4px 24px rgba(8, 12, 10, 0.2);
+  padding: 10px 28px;
+  background: var(--color-bg-elevated);
+  border-bottom: 1px solid #e7ddc8;
   position: sticky;
   top: 0;
   z-index: 50;
-}
-.desktop-header::after {
-  content: '';
-  position: absolute;
-  left: 24px;
-  right: 24px;
-  bottom: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(215, 181, 109, 0.35), transparent);
-  pointer-events: none;
-}
-
-.desktop-header__title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-gold-light);
-  letter-spacing: 0.04em;
-  white-space: nowrap;
 }
 
 .desktop-header__right {
@@ -143,30 +123,24 @@ function logout() {
   gap: 6px;
   padding: 7px 14px;
   border-radius: var(--radius-pill);
-  background: rgba(90, 143, 120, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: var(--color-text-light);
+  background: #fff;
+  border: 1px solid #e7ddc8;
+  color: var(--color-text-main);
   font-size: 13px;
   white-space: nowrap;
   cursor: pointer;
-  transition:
-    background var(--duration-fast),
-    border-color var(--duration-fast),
-    box-shadow var(--duration-fast),
-    transform var(--duration-fast);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .desktop-header__user:hover,
 .desktop-header__user--open {
-  background: rgba(90, 143, 120, 0.2);
   border-color: var(--color-gold-border-hover);
-  box-shadow: 0 0 18px var(--color-gold-glow);
-  transform: translateY(-1px);
+  box-shadow: var(--shadow-glow);
 }
 
 .desktop-header__caret {
-  opacity: 0.75;
-  transition: transform var(--duration-fast);
+  opacity: 0.6;
+  transition: transform 0.15s;
 }
 
 .desktop-header__caret--open {
@@ -179,12 +153,11 @@ function logout() {
   right: 0;
   min-width: 156px;
   padding: 6px;
-  border-radius: 14px;
-  border: 1px solid rgba(215, 181, 109, 0.18);
-  background: rgba(20, 30, 26, 0.96);
-  box-shadow: var(--shadow-card), 0 16px 40px rgba(8, 12, 10, 0.35);
+  border-radius: 12px;
+  border: 1px solid #e7ddc8;
+  background: #fff;
+  box-shadow: var(--shadow-card-hover);
   z-index: 60;
-  backdrop-filter: blur(16px);
 }
 
 .desktop-header__dropdown-item {
@@ -196,23 +169,18 @@ function logout() {
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: var(--color-text-light);
+  color: var(--color-text-main);
   font-size: 14px;
   text-align: left;
   cursor: pointer;
 }
 
 .desktop-header__dropdown-item:hover {
-  background: rgba(90, 143, 120, 0.16);
-  box-shadow: inset 0 0 0 1px rgba(215, 181, 109, 0.15);
+  background: #faf6ee;
 }
 
 .desktop-header__dropdown-item--danger {
-  color: #e8a8a0;
-}
-
-.desktop-header__dropdown-item--danger:hover {
-  background: rgba(180, 72, 60, 0.16);
+  color: var(--color-danger);
 }
 
 .user-menu-fade-enter-active,

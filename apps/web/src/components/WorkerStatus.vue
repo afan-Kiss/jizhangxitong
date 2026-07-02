@@ -45,7 +45,7 @@ const fullyReady = computed(() => Boolean(status.value.uploadChannelReady))
     :class="{ 'worker-status--offline': !fullyReady, 'worker-status--compact': compact }"
     data-testid="worker-status"
   >
-    <div class="worker-status__title muted">项目资金支出记录系统 · 本地 Worker</div>
+    <div class="worker-status__title muted" v-if="!compact">本地 Worker 状态</div>
     <StatusPill :type="pillType" dot>
       {{ displayMessage }}
     </StatusPill>

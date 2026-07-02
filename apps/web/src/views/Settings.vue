@@ -48,7 +48,11 @@ function logout() {
 </script>
 
 <template>
-  <AppShell title="我的">
+  <AppShell>
+    <header class="settings-hero">
+      <h1>我的</h1>
+      <p class="muted">账号、系统配置与权限管理</p>
+    </header>
     <LuxuryCard gold data-testid="settings-system-status">
       <div class="section-title">系统状态</div>
       <van-cell title="版本号" :value="healthInfo.version || '未知'" data-testid="settings-app-version" />
@@ -91,19 +95,23 @@ function logout() {
 .logout-btn {
   width: 100%;
   height: 46px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid #e7ddc8;
   border-radius: 12px;
-  background: transparent;
+  background: #fff;
   color: var(--color-text-sub);
   font-size: 15px;
+  cursor: pointer;
 }
-.settings-hint {
-  margin: 0 0 12px;
-  font-size: 13px;
-  line-height: 1.5;
+.settings-hero {
+  margin-bottom: 16px;
+}
+.settings-hero h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
 }
 .settings-hint code {
   font-size: 12px;
-  color: var(--color-gold-light);
+  color: var(--color-gold-deep);
 }
 </style>

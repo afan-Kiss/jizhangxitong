@@ -55,35 +55,26 @@ const resolvedVariant = computed(() => props.variant || (props.plain ? 'secondar
 .action-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .action-btn--primary {
-  background: linear-gradient(135deg, var(--color-jade-deep) 0%, #2a5a45 55%, rgba(215, 181, 109, 0.75) 130%);
-  color: var(--color-text-light);
-  box-shadow: 0 8px 24px rgba(31, 77, 58, 0.28);
+  background: linear-gradient(135deg, #c7a45d, #b08d57);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(176, 141, 87, 0.25);
 }
 @media (hover: hover) {
   .action-btn--primary:hover:not(:disabled) {
-    border-color: var(--color-gold-border-hover);
-    box-shadow: 0 8px 28px rgba(31, 77, 58, 0.32), var(--shadow-glow);
+    border-color: #96733f;
+    box-shadow: 0 6px 18px rgba(176, 141, 87, 0.3);
     transform: translateY(-1px);
   }
 }
 .action-btn--secondary {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--color-text-light);
-  border: var(--border-glass);
-  backdrop-filter: var(--blur-glass);
-}
-@media (hover: hover) {
-  .action-btn--secondary:hover:not(:disabled),
-  .action-btn--ghost:hover:not(:disabled) {
-    border-color: var(--color-gold-border-hover);
-    box-shadow: var(--shadow-glow);
-    transform: translateY(-1px);
-  }
+  background: #fff;
+  color: var(--color-text-main);
+  border: 1px solid #e7ddc8;
 }
 .action-btn--ghost {
-  background: transparent;
+  background: #fbf8f1;
   color: var(--color-text-sub);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid #e7ddc8;
 }
 .action-btn--danger {
   background: rgba(232, 138, 132, 0.08);

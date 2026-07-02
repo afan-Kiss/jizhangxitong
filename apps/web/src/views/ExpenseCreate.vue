@@ -238,8 +238,12 @@ async function onSubmit() {
 </script>
 
 <template>
-  <AppShell title="记支出" no-tab-pad :fixed-bottom="!isDesktop">
+  <AppShell no-tab-pad :fixed-bottom="!isDesktop">
     <div ref="pageRef" class="desktop-two-column expense-create" data-testid="expense-create-page">
+      <header class="expense-create__hero">
+        <h1>记一笔项目支出</h1>
+        <p>填写金额、分类与凭证，保存后自动进入统计与报账中心</p>
+      </header>
       <div class="desktop-two-column__main">
         <LuxuryCard gold padding="20px 16px">
           <div class="amount-zone" :class="{ 'amount-zone--focus': amountFocused }">
@@ -367,12 +371,26 @@ async function onSubmit() {
   gap: 8px;
   margin-top: 8px;
 }
+.expense-create__hero {
+  margin-bottom: 16px;
+}
+.expense-create__hero h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text-main);
+}
+.expense-create__hero p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-sub);
+}
 .order-card {
   margin-top: 12px;
   padding: 14px;
   border-radius: 12px;
-  background: rgba(78, 125, 105, 0.1);
-  border: var(--border-glass);
+  background: #fbf8f1;
+  border: 1px solid #e7ddc8;
   font-size: 14px;
   line-height: 1.6;
 }
@@ -382,7 +400,7 @@ async function onSubmit() {
 .amount-zone__prefix { font-size: 28px; font-weight: 600; color: var(--color-gold); }
 .amount-zone__input {
   flex: 1; border: none; background: transparent;
-  font-size: 36px; font-weight: 600; color: var(--color-text-light);
+  font-size: 36px; font-weight: 600; color: var(--color-text-main);
   outline: none; min-width: 0;
 }
 .pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -390,30 +408,32 @@ async function onSubmit() {
   padding: 10px 14px;
   min-height: 44px;
   border-radius: var(--radius-pill);
-  border: var(--border-glass);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid #e7ddc8;
+  background: #fff;
   font-size: 13px;
   color: var(--color-text-sub);
 }
 .pill--active {
-  background: rgba(78, 125, 105, 0.18);
-  border-color: rgba(198, 161, 91, 0.3);
-  color: var(--color-gold-light);
+  background: #faf6ee;
+  border-color: var(--color-gold);
+  color: var(--color-gold-deep);
+  font-weight: 600;
 }
 .pay-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .pay-card {
   padding: 16px 14px;
   min-height: 52px;
-  border-radius: 14px;
-  border: var(--border-glass);
-  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  border: 1px solid #e7ddc8;
+  background: #fff;
   font-size: 14px;
   color: var(--color-text-main);
 }
 .pay-card--active {
-  border-color: rgba(198, 161, 91, 0.35);
-  background: rgba(198, 161, 91, 0.1);
-  color: var(--color-gold-light);
+  border-color: var(--color-gold);
+  background: #faf6ee;
+  color: var(--color-gold-deep);
+  font-weight: 600;
 }
 :deep(.field-custom) { background: transparent; }
 </style>

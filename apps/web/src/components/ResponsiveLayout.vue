@@ -58,11 +58,7 @@ const hideMobileTab = computed(() => shouldHideMobileTab(route.path, isWide.valu
 <style scoped>
 .responsive-layout {
   min-height: 100vh;
-  background:
-    radial-gradient(ellipse 85% 55% at 8% -8%, var(--color-bg-mesh-1) 0%, transparent 58%),
-    radial-gradient(ellipse 55% 42% at 98% 92%, var(--color-bg-mesh-2) 0%, transparent 52%),
-    radial-gradient(ellipse 40% 35% at 50% 50%, var(--color-bg-mesh-3) 0%, transparent 65%),
-    linear-gradient(180deg, #141f1a 0%, var(--color-bg) 40%, var(--color-bg-deep) 100%);
+  background: var(--color-bg);
 }
 
 .responsive-layout--desktop {
@@ -75,12 +71,12 @@ const hideMobileTab = computed(() => shouldHideMobileTab(route.path, isWide.valu
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  background: var(--color-bg);
 }
 
 .responsive-layout__content {
   flex: 1;
-  padding-left: 16px;
-  padding-right: 16px;
+  padding: 16px;
   overflow-x: hidden;
 }
 
@@ -91,16 +87,13 @@ const hideMobileTab = computed(() => shouldHideMobileTab(route.path, isWide.valu
 
 @media (min-width: 768px) {
   .responsive-layout__content:not(.responsive-layout__content--login) {
-    padding-left: 24px;
-    padding-right: 24px;
+    padding: 20px 28px 28px;
   }
 }
 
 @media (min-width: 1200px) {
   .responsive-layout__content:not(.responsive-layout__content--login) {
-    padding-left: 32px;
-    padding-right: 32px;
-    padding-bottom: 24px;
+    padding: 24px 32px 32px;
   }
 }
 </style>
