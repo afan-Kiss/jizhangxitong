@@ -63,6 +63,7 @@
     "test:project-expense-only": "node scripts/test-project-expense-only.mjs",
     "test:idempotent-ledger": "node scripts/test-idempotent-ledger.mjs",
     "test:money-export-consistency": "node scripts/test-money-export-consistency.mjs",
+    "test:reconcile-system": "node scripts/test-reconcile-system.mjs",
     "test:prod-db-guard": "node scripts/test-prod-db-guard.mjs",
     "test:ledger-stability-batch1": "node scripts/test-ledger-stability-batch1.mjs",
     "verify:deploy-version": "node scripts/verify-deploy-version.mjs"

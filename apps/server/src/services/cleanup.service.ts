@@ -1,3 +1,4 @@
+import { isAcceptanceTestExpense, isAcceptanceTestLedgerEntry, isAcceptanceTestSale } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
 import { voidExpense } from './expense.service'
 import { refundSale } from './sale.service'
@@ -5,31 +6,7 @@ import { workerHub } from '../websocket/worker-hub'
 import { AuthRequest } from '../middleware/auth'
 import { toNumber } from '../lib/utils'
 
-const TEST_TEXT_MARKERS = [
-  'test_auto_check',
-  'test_auto_check_multi_images',
-  'test-accounting-flow',
-  'test-project-expense-only',
-  '自动联调测试',
-]
-
-function isTestText(text?: string | null) {
-  if (!text) return false
-  return TEST_TEXT_MARKERS.some((m) => text.includes(m))
-}
-
-/** 仅匹配自动化测试产生的支出，不误伤用户真实记录 */
-export function isAcceptanceTestExpense(expense: {
-  remark?: string | null
-  expenseSummary?: string | null
-  externalOrderNo?: string | null
-}) {
-  if (isTestText(expense.remark) || isTestText(expense.expenseSummary)) return true
-  const remark = String(expense.remark || '')
-  if (/^FUND-\d+(-default-pay|-reject-staff)?$/i.test(remark.trim())) return true
-  if (/^TEST-\d+/.test(String(expense.externalOrderNo || ''))) return true
-  return false
-}
+export { isAcceptanceTestExpense } from '@jade-account/shared'
 
 export interface CleanupResult {
   expensesVoided: number[]
@@ -40,6 +17,7 @@ export interface CleanupResult {
   filesSkipped: Array<{ id: number; reason: string }>
   localFilesDeleted: string[]
   localFilesFailed: Array<{ path: string; reason: string }>
+  ledgerEntriesDeleted: number[]
 }
 
 export async function cleanupAcceptanceTestData(operator: AuthRequest['user']): Promise<CleanupResult> {
@@ -52,6 +30,7 @@ export async function cleanupAcceptanceTestData(operator: AuthRequest['user']): 
     filesSkipped: [],
     localFilesDeleted: [],
     localFilesFailed: [],
+    ledgerEntriesDeleted: [],
   }
 
   const allExpenses = await prisma.expense.findMany({
@@ -77,13 +56,9 @@ export async function cleanupAcceptanceTestData(operator: AuthRequest['user']): 
     }
   }
 
-  const testSales = await prisma.sale.findMany({
-    where: { customerRemark: { contains: 'test_auto_check' } },
-  })
-
-  for (const sale of testSales) {
-    if (!isTestText(sale.customerRemark)) {
-      result.salesSkipped.push({ id: sale.id, reason: '不含测试标记，跳过' })
+  const allSales = await prisma.sale.findMany()
+  for (const sale of allSales) {
+    if (!isAcceptanceTestSale(sale)) {
       continue
     }
     if (sale.status === 'refunded') {
@@ -106,6 +81,7 @@ export async function cleanupAcceptanceTestData(operator: AuthRequest['user']): 
       OR: [
         { originalName: { contains: 'acceptance' } },
         { originalName: { contains: 'test_auto' } },
+        { originalName: { contains: 'acceptance-test' } },
       ],
       attachments: { none: {} },
     },
@@ -115,7 +91,30 @@ export async function cleanupAcceptanceTestData(operator: AuthRequest['user']): 
     await tryDeleteFileRecord(file.id, file.localPath, file.thumbPath, result)
   }
 
+  await cleanupTestLedgerEntries(result)
+
   return result
+}
+
+async function cleanupTestLedgerEntries(result: CleanupResult) {
+  const rows = await prisma.financeLedger.findMany({
+    select: { id: true, refType: true, refId: true, entryType: true, expenseId: true },
+  })
+
+  for (const row of rows) {
+    let shouldDelete = isAcceptanceTestLedgerEntry(row)
+
+    if (row.expenseId) {
+      const expense = await prisma.expense.findUnique({ where: { id: row.expenseId } })
+      if (expense && isAcceptanceTestExpense(expense)) shouldDelete = true
+      if (!expense && isAcceptanceTestLedgerEntry(row)) shouldDelete = true
+    }
+
+    if (shouldDelete) {
+      await prisma.financeLedger.delete({ where: { id: row.id } })
+      result.ledgerEntriesDeleted.push(row.id)
+    }
+  }
 }
 
 async function tryDeleteFileRecord(

@@ -12,6 +12,8 @@ import ActionButton from '../components/ActionButton.vue'
 import OrderLink from '../components/OrderLink.vue'
 import ImageUploader from '../components/ImageUploader.vue'
 import ImagePreviewModal from '../components/ImagePreviewModal.vue'
+import { EXPENSE_OPERATORS } from '@jade-account/shared'
+import { resolveApiErrorMessage } from '../utils/api-errors'
 
 const route = useRoute()
 const router = useRouter()
@@ -37,6 +39,10 @@ const supplementing = ref(false)
 const logsExpanded = ref(false)
 const showSupplementUploader = ref(false)
 const previewRequestSeq = ref(0)
+const editForm = ref({ occurredAt: '', operatorName: '' })
+const savingBasic = ref(false)
+
+const canEditBasic = computed(() => auth.hasPermission('expense:update') && !expense.value?.isVoided)
 
 const orderNo = computed(() => expense.value?.externalOrderNo || expense.value?.sale?.externalOrderNo || '')
 const attachmentCount = computed(() => expense.value?.attachments?.length || 0)
@@ -59,6 +65,39 @@ async function loadAttachmentUrls(attachments: Array<{ fileId: number }>) {
   }
 }
 
+function syncEditForm(data: any) {
+  if (!data) return
+  editForm.value = {
+    occurredAt: String(data.occurredAt || '').slice(0, 10),
+    operatorName: data.operatorName || data.reimbursementPerson || '',
+  }
+}
+
+async function saveBasicInfo() {
+  if (!editForm.value.occurredAt) {
+    showToast('请选择支出日期')
+    return
+  }
+  if (!editForm.value.operatorName) {
+    showToast('请选择经手人')
+    return
+  }
+  savingBasic.value = true
+  try {
+    const res = await api.patch(`/expenses/${route.params.id}`, {
+      occurredAt: editForm.value.occurredAt,
+      operatorName: editForm.value.operatorName,
+    })
+    expense.value = res.data.data
+    syncEditForm(expense.value)
+    showToast('已保存')
+  } catch (err: unknown) {
+    showToast(resolveApiErrorMessage(err))
+  } finally {
+    savingBasic.value = false
+  }
+}
+
 async function loadExpense() {
   loading.value = true
   loadError.value = ''
@@ -71,6 +110,7 @@ async function loadExpense() {
       return
     }
     expense.value = res.data.data
+    syncEditForm(expense.value)
     await loadAttachmentUrls(expense.value.attachments || [])
   } catch {
     expense.value = null
@@ -260,17 +300,52 @@ function toggleSupplement() {
             <span>{{ expenseTypeLabel }}</span>
           </div>
           <div class="expense-detail__row">
-            <span class="muted">经手人</span>
-            <span data-testid="expense-operator">{{ expense.operatorName || expense.reimbursementPerson || '未标记' }}</span>
-          </div>
-          <div class="expense-detail__row">
             <span class="muted">付款来源</span>
             <span data-testid="expense-pay-source">{{ expense.paySource || '项目专用资金' }}</span>
           </div>
-          <div class="expense-detail__row">
-            <span class="muted">支出时间</span>
-            <span>{{ expense.occurredAt?.slice(0, 10) }}</span>
-          </div>
+
+          <template v-if="canEditBasic">
+            <div class="expense-detail__edit-block">
+              <label class="expense-detail__edit-label">经手人</label>
+              <div class="expense-detail__operator-grid">
+                <button
+                  v-for="name in EXPENSE_OPERATORS"
+                  :key="name"
+                  type="button"
+                  class="expense-detail__operator-btn"
+                  :class="{ 'expense-detail__operator-btn--active': editForm.operatorName === name }"
+                  :data-testid="`expense-edit-operator-${name}`"
+                  @click="editForm.operatorName = name"
+                >{{ name }}</button>
+              </div>
+            </div>
+            <div class="expense-detail__edit-block">
+              <label class="expense-detail__edit-label">支出日期</label>
+              <input
+                v-model="editForm.occurredAt"
+                type="date"
+                class="expense-detail__date-input"
+                data-testid="expense-edit-date"
+              />
+            </div>
+            <ActionButton
+              block
+              :loading="savingBasic"
+              data-testid="expense-save-basic-btn"
+              @click="saveBasicInfo"
+            >保存日期和经手人</ActionButton>
+          </template>
+          <template v-else>
+            <div class="expense-detail__row">
+              <span class="muted">经手人</span>
+              <span data-testid="expense-operator">{{ expense.operatorName || expense.reimbursementPerson || '未标记' }}</span>
+            </div>
+            <div class="expense-detail__row">
+              <span class="muted">支出时间</span>
+              <span>{{ expense.occurredAt?.slice(0, 10) }}</span>
+            </div>
+          </template>
+
           <div v-if="expense.remark" class="expense-detail__row">
             <span class="muted">备注</span>
             <span>{{ expense.remark }}</span>
@@ -539,5 +614,44 @@ function toggleSupplement() {
   background: rgba(255, 255, 255, 0.06);
   color: var(--color-text-sub);
   font-size: 12px;
+}
+.expense-detail__edit-block {
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(198, 161, 91, 0.08);
+}
+.expense-detail__edit-label {
+  display: block;
+  font-size: 13px;
+  color: var(--color-text-sub);
+  margin-bottom: 8px;
+}
+.expense-detail__operator-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.expense-detail__operator-btn {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(198, 161, 91, 0.35);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-light);
+  font-size: 14px;
+  cursor: pointer;
+}
+.expense-detail__operator-btn--active {
+  border-color: var(--color-gold);
+  background: rgba(198, 161, 91, 0.15);
+  color: var(--color-gold-light);
+}
+.expense-detail__date-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(198, 161, 91, 0.35);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-light);
+  font-size: 14px;
 }
 </style>

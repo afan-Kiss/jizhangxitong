@@ -1,6 +1,7 @@
 /**
  * 清理 test_auto_check 验收测试数据
  */
+import { isAcceptanceTestExpense } from '@jade-account/shared'
 import {
   SERVER, login, fetchJson, authHeaders, ensureServerRunning, writeMarkdownReport,
 } from './lib/services.mjs'
@@ -39,6 +40,31 @@ async function main() {
   const expenseBefore = summaryBefore.json.data?.totalAmount || 0
   log('cleanup', `清理前今日支出总额: ${expenseBefore}`)
 
+  let clientVoided = 0
+  for (let page = 1; page <= 50; page += 1) {
+    const list = await fetchJson(`${SERVER}/api/expenses?page=${page}&pageSize=100`, {
+      headers: authHeaders(token),
+    })
+    const items = list.json.data?.items || []
+    if (!items.length) break
+    for (const expense of items) {
+      if (expense.isVoided || !isAcceptanceTestExpense(expense)) continue
+      const voidRes = await fetchJson(`${SERVER}/api/expenses/${expense.id}/void`, {
+        method: 'POST',
+        headers: authHeaders(token),
+        body: JSON.stringify({ voidReason: 'acceptance test cleanup' }),
+      })
+      if (voidRes.res.ok) {
+        clientVoided += 1
+        log('cleanup', `客户端作废测试支出 #${expense.id}`)
+      } else {
+        log('errors', `作废支出 #${expense.id} 失败: ${voidRes.text}`, false)
+      }
+    }
+    if (items.length < 100) break
+  }
+  if (clientVoided === 0) log('cleanup', '客户端扫描：无活跃测试支出')
+
   const cleanup = await fetchJson(`${SERVER}/api/maintenance/cleanup-test-data`, {
     method: 'POST',
     headers: authHeaders(token),
@@ -55,6 +81,7 @@ async function main() {
   log('cleanup', `退款销售: ${data.salesRefunded.join(', ') || '无'}`)
   log('cleanup', `删除文件元数据: ${data.filesDeleted.join(', ') || '无'}`)
   log('cleanup', `删除本地文件: ${data.localFilesDeleted.length} 个`)
+  log('cleanup', `删除账本分录: ${(data.ledgerEntriesDeleted || []).join(', ') || '无'}`)
 
   for (const s of data.expensesSkipped || []) log('skipped', `支出 id=${s.id}: ${s.reason}`)
   for (const s of data.salesSkipped || []) log('skipped', `销售 id=${s.id}: ${s.reason}`)
@@ -70,16 +97,9 @@ async function main() {
     { headers: authHeaders(token) },
   )
   const hasTest = testExpenses.json.data?.items?.some(
-    (e) =>
-      !e.isVoided && (
-        (e.remark?.includes('test_auto_check') || e.expenseSummary?.includes('test_auto_check'))
-        || e.remark?.includes('test-accounting-flow')
-        || e.remark?.includes('test-project-expense-only')
-        || /^FUND-\d+/.test(String(e.remark || ''))
-        || /^TEST-\d+/.test(String(e.externalOrderNo || ''))
-      ),
+    (e) => !e.isVoided && isAcceptanceTestExpense(e),
   )
-  log('verify', `活跃支出中无 test_auto_check: ${!hasTest}`, !hasTest)
+  log('verify', `活跃支出中无测试数据: ${!hasTest}`, !hasTest)
 
   const reportPath = await writeMarkdownReport(report, 'cleanup')
   console.log(`\n报告已写入: ${reportPath}\n`)

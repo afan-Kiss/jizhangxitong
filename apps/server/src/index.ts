@@ -7,6 +7,7 @@ import { workerHub } from './websocket/worker-hub'
 import { ensureDirs } from './services/file.service'
 import { cleanupLegacyTrialData } from './services/trial-legacy-cleanup'
 import { syncEmployeeRolePermissions } from './services/user.service'
+import { startDailyReconcileScheduler } from './reconcile/reconcile-scheduler'
 
 process.on('uncaughtException', (err) => {
   console.error('[fatal] uncaughtException:', err)
@@ -56,6 +57,7 @@ async function main() {
   server.listen(config.port, () => {
     console.log(`和田玉镯子记账系统服务端已启动 [${config.nodeEnv}]: http://localhost:${config.port}`)
     console.log(`Worker WebSocket: ws://localhost:${config.port}/ws/worker`)
+    startDailyReconcileScheduler()
   })
 }
 
