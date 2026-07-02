@@ -1,4 +1,4 @@
-# Start local Worker and wait until remote reports online=true
+﻿# Start local Worker and wait until remote reports online=true
 param(
   [string]$ProjectRoot = (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent),
   [int]$WaitSeconds = 45,

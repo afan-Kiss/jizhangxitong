@@ -1,4 +1,4 @@
-# 停止本机所有记账 Worker（含 deploy 目录、tsx dev:worker 残留）
+﻿# 停止本机所有记账 Worker（含 deploy 目录、tsx dev:worker 残留）
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '_common.ps1')
 Initialize-ConsoleUtf8

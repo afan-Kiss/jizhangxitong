@@ -1,4 +1,4 @@
-# Shared helpers for Windows scripts
+﻿# Shared helpers for Windows scripts
 param()
 
 function Initialize-ConsoleUtf8 {

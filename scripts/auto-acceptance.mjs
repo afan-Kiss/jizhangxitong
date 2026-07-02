@@ -210,8 +210,6 @@ async function main() {
     body: JSON.stringify({
       platform: '其他',
       customerName: '自动验收',
-      braceletCode: testCode,
-      braceletId,
       saleAmount: 9999,
       soldAt: new Date().toISOString().slice(0, 10),
       customerRemark: 'test_auto_check',
