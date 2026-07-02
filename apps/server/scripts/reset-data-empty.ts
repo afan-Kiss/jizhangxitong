@@ -16,10 +16,18 @@ if (!process.env.ALLOW_PROD_DATA_RESET) {
 
 function resolveDbPath(): string {
   const url = (process.env.DATABASE_URL || '').trim().replace(/^["']|["']$/g, '')
+  const candidates: string[] = []
   const fileMatch = url.match(/^file:(.+)$/i)
-  if (!fileMatch) throw new Error(`仅支持 SQLite file: DATABASE_URL（当前: ${url || '空'}）`)
-  const raw = fileMatch[1].replace(/^\/+([A-Za-z]:)/, '$1')
-  return path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw)
+  if (fileMatch) {
+    const raw = fileMatch[1].replace(/^\/+([A-Za-z]:)/, '$1')
+    candidates.push(path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw))
+  }
+  candidates.push(path.resolve(process.cwd(), 'prisma/data/accounting.db'))
+  candidates.push(path.resolve(process.cwd(), 'data/accounting.db'))
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p
+  }
+  throw new Error(`数据库不存在，已尝试: ${[...new Set(candidates)].join(' | ')}`)
 }
 
 function gitHead(): string {
