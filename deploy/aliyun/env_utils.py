@@ -17,6 +17,7 @@ PRESERVE_ENV_KEYS = (
     "CONTROL_SERVICE_TOKEN",
     "CONTROL_SERVER_URL",
     "XHS_COOKIE_PROJECT",
+    "ZHUBO_ANALYSIS_URL",
     "QIANFAN_ORDER_DETAIL_URL_TEMPLATE",
 )
 
@@ -138,5 +139,7 @@ def build_server_env(
         val = merged.get(key, "").strip()
         if val:
             values[key] = val
+    if not values.get("ZHUBO_ANALYSIS_URL"):
+        values["ZHUBO_ANALYSIS_URL"] = "http://127.0.0.1:4723"
 
     return format_env_lines(values), jwt, worker

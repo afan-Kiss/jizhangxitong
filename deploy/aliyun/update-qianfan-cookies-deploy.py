@@ -165,11 +165,13 @@ def main() -> None:
     _, env_text = run(c, f"cat {REMOTE_ENV} 2>/dev/null || true")
     new_env = upsert_env(env_text, "CONTROL_SERVICE_TOKEN", SERVICE_TOKEN)
     new_env = upsert_env(new_env, "CONTROL_SERVER_URL", "http://127.0.0.1:4790")
+    new_env = upsert_env(new_env, "ZHUBO_ANALYSIS_URL", "http://127.0.0.1:4723")
     with c.open_sftp().file(REMOTE_ENV, "w") as f:
         f.write(new_env)
 
     pm2_env = (
         f"PORT=4790 COOKIES_PATH={SECRETS_DIR}/qianfan-cookies.json "
+        f"ZHUBO_ANALYSIS_URL=http://127.0.0.1:4723 "
         f"SERVICE_TOKEN={SERVICE_TOKEN}"
     )
     run(

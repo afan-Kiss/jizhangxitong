@@ -5,6 +5,14 @@ const PORT = Number(process.env.PORT || 4790);
 const TOKEN = String(process.env.SERVICE_TOKEN || '').trim();
 const COOKIES_PATH =
   process.env.COOKIES_PATH || '/www/wwwroot/jade-accounting/secrets/qianfan-cookies.json';
+const ZHUBO_BASE = String(process.env.ZHUBO_ANALYSIS_URL || 'http://127.0.0.1:4723').replace(/\/$/, '');
+
+const SHOP_KEYS = {
+  'XY祥钰珠宝': 'xyxiangyu',
+  '拾玉居和田玉': 'shiyuju',
+  '和田雅玉': 'hetianyayu',
+  '祥钰珠宝': 'xiangyu',
+};
 
 function loadCookies() {
   return JSON.parse(fs.readFileSync(COOKIES_PATH, 'utf8'));
@@ -30,6 +38,40 @@ function authOk(req) {
   return TOKEN && (bearer === TOKEN || x === TOKEN);
 }
 
+async function loadFromZhubo(shop) {
+  const shopKey = SHOP_KEYS[shop];
+  if (!shopKey) return null;
+  try {
+    const url = `${ZHUBO_BASE}/api/shop-cookies/plain?shopKey=${encodeURIComponent(shopKey)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    const data = await res.json().catch(() => ({}));
+    const payload = data.data ?? data;
+    const value = String(payload.cookie || '').trim();
+    if (!res.ok || !value) return null;
+    return {
+      value,
+      updatedAt: payload.updatedAt || new Date().toISOString(),
+      source: 'zhubo-analysis',
+    };
+  } catch (err) {
+    console.warn('[qianfan-cookie-resolver] zhubo fallback failed', shop, err?.message || err);
+    return null;
+  }
+}
+
+async function resolveCookie(shop) {
+  try {
+    const cookies = loadCookies();
+    const row = cookies[shop];
+    if (row?.value) {
+      return { ...row, source: row.source || 'manual-update' };
+    }
+  } catch (err) {
+    console.warn('[qianfan-cookie-resolver] local cookies read failed', err?.message || err);
+  }
+  return loadFromZhubo(shop);
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url || '/', 'http://127.0.0.1');
   if (url.pathname === '/api/health') {
@@ -44,25 +86,31 @@ const server = http.createServer((req, res) => {
       return;
     }
     const shop = canonical(url.searchParams.get('shopName') || '');
-    const cookies = loadCookies();
-    const row = cookies[shop];
-    if (!row || !row.value) {
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'not found' }));
-      return;
-    }
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify({
-        ok: true,
-        platform: 'qianfan',
-        shopName: shop,
-        keyName: 'cookie',
-        value: row.value,
-        updatedAt: row.updatedAt,
-        source: 'manual-update',
-      }),
-    );
+    resolveCookie(shop)
+      .then((row) => {
+        if (!row?.value) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'not found' }));
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            ok: true,
+            platform: 'qianfan',
+            shopName: shop,
+            keyName: 'cookie',
+            value: row.value,
+            updatedAt: row.updatedAt,
+            source: row.source || 'manual-update',
+          }),
+        );
+      })
+      .catch((err) => {
+        console.error('[qianfan-cookie-resolver] resolve error', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'internal' }));
+      });
     return;
   }
   res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -70,5 +118,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log('[qianfan-cookie-resolver] listening', PORT);
+  console.log('[qianfan-cookie-resolver] listening', PORT, 'zhubo fallback', ZHUBO_BASE);
 });
