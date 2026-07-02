@@ -34,7 +34,10 @@ def run(c: paramiko.SSHClient, cmd: str) -> tuple[int, str]:
     out = (o.read() + e.read()).decode("utf-8", errors="replace")
     code = o.channel.recv_exit_status()
     if out.strip():
-        print(out.rstrip())
+        try:
+            print(out.rstrip())
+        except UnicodeEncodeError:
+            print(out.encode("ascii", errors="replace").decode("ascii"))
     return code, out
 
 
