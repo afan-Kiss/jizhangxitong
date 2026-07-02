@@ -19,12 +19,11 @@ echo "=== 清理前磁盘 ==="
 df -h / /www 2>/dev/null || df -h /
 
 echo ""
-echo "=== 清理 /www/backup 下 jade-accounting 相关 ==="
-BEFORE_BACKUP=$(du -sh /www/backup/jade-accounting* 2>/dev/null | awk '{s+=$1} END {print s}' || true)
+echo "=== 清理 /www/backup 下 jade-accounting 相关（保留最近 5 份）==="
 ls -d /www/backup/jade-accounting-* 2>/dev/null | wc -l | xargs -I{} echo "jade-accounting 备份目录数: {}"
-rm -rf /www/backup/jade-accounting-*
+ls -dt /www/backup/jade-accounting-* 2>/dev/null | tail -n +6 | xargs -r rm -rf
 rm -f /www/backup/nginx-jade-accounting*.bak
-echo "已删除 /www/backup/jade-accounting-* 与 nginx-jade-accounting*.bak"
+echo "已清理旧 jade-accounting 备份（保留最近 5 份）"
 
 echo ""
 echo "=== 清理 /tmp 下 jade 临时文件 ==="

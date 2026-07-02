@@ -1,6 +1,13 @@
 import WebSocket from 'ws'
 import { RPC_METHODS, RpcMessage, WORKER_DISPLAY_NAME, WORKER_WINDOW_TITLE } from '@jade-account/shared'
 import { ensureBaseDirs, fileExists, readFileByPath, saveUpload, deleteLocalFile, assertPathAllowed } from './file-store'
+import {
+  ensureBackupRoot,
+  finalizeBackupSession,
+  getBackupRootDir,
+  initBackupSession,
+  writeBackupChunk,
+} from './backup-store'
 import { workerLog, nextBackoffMs } from './logger'
 import { acquireWorkerLock, releaseWorkerLock } from './single-instance'
 import {
@@ -134,6 +141,33 @@ async function handleRpc(msg: RpcMessage) {
         }
         return { success: true, data: results }
       }
+      case RPC_METHODS.BACKUP_INIT: {
+        const data = await initBackupSession({
+          sessionId: String(msg.params.sessionId || ''),
+          relativeDir: String(msg.params.relativeDir || ''),
+          fileName: String(msg.params.fileName || 'accounting.db'),
+          totalChunks: Number(msg.params.totalChunks || 1),
+        })
+        await workerLog(`备份会话开始: ${data.destPath}`)
+        return { success: true, data }
+      }
+      case RPC_METHODS.BACKUP_WRITE_CHUNK: {
+        const data = await writeBackupChunk({
+          sessionId: String(msg.params.sessionId || ''),
+          index: Number(msg.params.index || 0),
+          base64: String(msg.params.base64 || ''),
+        })
+        return { success: true, data }
+      }
+      case RPC_METHODS.BACKUP_FINALIZE: {
+        const manifest = (msg.params.manifest as Record<string, unknown>) || {}
+        const data = await finalizeBackupSession({
+          sessionId: String(msg.params.sessionId || ''),
+          manifest,
+        })
+        await workerLog(`生产库已备份到本地: ${data.databasePath}`)
+        return { success: true, data }
+      }
       default:
         return { success: false, error: `Unknown method: ${msg.method}` }
     }
@@ -173,6 +207,7 @@ function connect() {
       token: WORKER_WS_TOKEN,
       localBaseInfo: {
         fileBase: FILE_BASE_DIR,
+        backupRoot: getBackupRootDir(),
         serverWsUrl: SERVER_WS_URL,
       },
     }))
@@ -231,6 +266,7 @@ function connect() {
 
 async function main() {
   await ensureBaseDirs()
+  await ensureBackupRoot()
   await workerLog(`======== ${WORKER_WINDOW_TITLE} 启动 ========`)
   await workerLog(`cwd: ${process.cwd()}`)
   await workerLog(`workerDir: ${WORKER_DIR}`)
@@ -238,6 +274,7 @@ async function main() {
   await workerLog(`SERVER_WS_URL: ${SERVER_WS_URL}`)
   await workerLog(`WORKER_ID: ${WORKER_ID}`)
   await workerLog(`FILE_BASE_DIR: ${FILE_BASE_DIR || '(default)'}`)
+  await workerLog(`BACKUP_ROOT_DIR: ${getBackupRootDir()}`)
   await workerLog(`WORKER_WS_TOKEN: ${maskToken(WORKER_WS_TOKEN)}`)
   if (/localhost|127\.0\.0\.1/i.test(SERVER_WS_URL) && SERVER_WS_URL !== PRODUCTION_WS) {
     await workerLog('警告: SERVER_WS_URL 指向 localhost，不会连接阿里云')

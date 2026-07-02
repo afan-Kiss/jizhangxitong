@@ -281,6 +281,27 @@ class WorkerHub {
   async deleteLocalFile(localPath: string, thumbPath?: string) {
     return this.callRpc(RPC_METHODS.FILE_DELETE_LOCAL, { localPath, thumbPath: thumbPath || '' })
   }
+
+  async initBackupSession(
+    params: Record<string, unknown>,
+    timeoutMs?: number,
+  ) {
+    return this.callRpc(RPC_METHODS.BACKUP_INIT, params, timeoutMs)
+  }
+
+  async writeBackupChunk(
+    params: Record<string, unknown>,
+    timeoutMs?: number,
+  ) {
+    return this.callRpc(RPC_METHODS.BACKUP_WRITE_CHUNK, params, timeoutMs)
+  }
+
+  async finalizeBackupSession(
+    params: Record<string, unknown>,
+    timeoutMs?: number,
+  ) {
+    return this.callRpc(RPC_METHODS.BACKUP_FINALIZE, params, timeoutMs)
+  }
 }
 
 export const workerHub = new WorkerHub()

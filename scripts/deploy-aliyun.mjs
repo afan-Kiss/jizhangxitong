@@ -185,6 +185,31 @@ async function main() {
 
   const workerReport = await verifyWorkerRemote(remoteUrl)
 
+  if (workerReport.online) {
+    try {
+      run('node scripts/backup-prod-db-via-worker.mjs', {
+        env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl },
+        timeout: 180000,
+      })
+      deployReport.external.push({ name: 'backup:prod-db（Worker 落盘）', ok: true })
+    } catch (e) {
+      deployReport.external.push({
+        name: 'backup:prod-db（Worker 落盘）',
+        ok: false,
+        warnOnly: true,
+        detail: e.message,
+      })
+      console.warn('\nWARN — 部署后生产库本地备份未成功，请手动运行「一键备份生产数据库.bat」')
+    }
+  } else {
+    deployReport.external.push({
+      name: 'backup:prod-db（Worker 落盘）',
+      ok: false,
+      warnOnly: true,
+      detail: 'Worker 离线，已跳过',
+    })
+  }
+
   const testEnv = { ...process.env, ACCEPTANCE_SERVER: remoteUrl }
 
   runTiered('remote-acceptance（含 Excel/Worker 上传）', `node scripts/remote-acceptance.mjs`, 'external', {

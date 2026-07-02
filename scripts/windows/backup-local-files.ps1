@@ -56,6 +56,24 @@ $manifest = @{
 }
 $manifest | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $dest 'backup-manifest.json') -Encoding UTF8
 
+Write-Host ""
+Write-Host "=== 尝试备份云端生产数据库（经本地 Worker）==="
+try {
+  Push-Location $ProjectRoot
+  node scripts/backup-prod-db-via-worker.mjs
+  if ($LASTEXITCODE -eq 0) {
+    Write-Host "生产数据库已备份到 D:\jewelry-account-backups\*-prod\"
+  } elseif ($LASTEXITCODE -eq 2) {
+    Write-Host "跳过生产库备份：本地 Worker 未连接（可先运行一键启动本地Worker.bat）"
+  } else {
+    $failed += "prod-db-backup exit $LASTEXITCODE"
+  }
+} catch {
+  $failed += "prod-db-backup: $($_.Exception.Message)"
+} finally {
+  Pop-Location
+}
+
 # 保留策略
 if (Test-Path $BackupRoot) {
   Get-ChildItem $BackupRoot -Directory | Where-Object {

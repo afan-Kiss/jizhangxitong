@@ -30,6 +30,7 @@
     "health-check": "node scripts/system-health-check.mjs",
     "check:autostart": "node scripts/check-autostart.mjs",
     "check:backup": "node scripts/check-backup-status.mjs",
+    "backup:prod-db": "node scripts/backup-prod-db-via-worker.mjs",
     "deploy:aliyun": "node scripts/deploy-aliyun.mjs",
     "rotate:worker-token": "node scripts/rotate-worker-token.mjs",
     "rotate:admin-password": "node scripts/rotate-admin-password.mjs",

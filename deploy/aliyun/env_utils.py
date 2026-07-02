@@ -62,6 +62,13 @@ def merge_preserved_env(existing: dict[str, str], backup: dict[str, str] | None 
     return merged
 
 
+def normalize_database_url(url: Optional[str]) -> str:
+    u = (url or "").strip()
+    if u in ("", "file:./data/accounting.db"):
+        return "file:./prisma/data/accounting.db"
+    return u
+
+
 def format_env_lines(values: dict[str, str]) -> str:
     order = [
         "NODE_ENV",
@@ -118,7 +125,7 @@ def build_server_env(
         "NODE_ENV": "production",
         "SERVER_PORT": "4731",
         "PORT": "4731",
-        "DATABASE_URL": merged.get("DATABASE_URL") or "file:./data/accounting.db",
+        "DATABASE_URL": normalize_database_url(merged.get("DATABASE_URL")),
         "JWT_SECRET": jwt,
         "JWT_EXPIRES_IN": merged.get("JWT_EXPIRES_IN") or "7d",
         "WORKER_WS_TOKEN": worker,

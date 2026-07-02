@@ -42,6 +42,9 @@ export const RPC_METHODS = {
   FILE_DELETE_LOCAL: 'file.deleteLocal',
   WORKER_UPLOAD_PROBE: 'worker.uploadProbe',
   WORKER_SCAN_PROBE: 'worker.scanProbe',
+  BACKUP_INIT: 'backup.init',
+  BACKUP_WRITE_CHUNK: 'backup.writeChunk',
+  BACKUP_FINALIZE: 'backup.finalize',
 } as const
 
 export const ERROR_CODES = {

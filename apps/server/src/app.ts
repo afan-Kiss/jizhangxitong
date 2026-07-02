@@ -24,6 +24,7 @@ import { workerApiRouter } from './routes/worker.routes'
 import { userRouter } from './routes/user.routes'
 import { reconcileRouter } from './routes/reconcile.routes'
 import { financeRouter } from './routes/finance.routes'
+import { backupRouter } from './routes/backup.routes'
 import { getSystemStatus } from './services/system-status.service'
 import { isQianfanOrderLinkEnabled } from './services/settings.service'
 
@@ -74,6 +75,7 @@ export function createApp() {
   app.use('/api/bi', biRouter)
   app.use('/api/reconcile', reconcileRouter)
   app.use('/api/finance', financeRouter)
+  app.use('/api/backup', backupRouter)
   app.use('/api/xhs', xhsOrderRouter)
   app.use('/api/qianfan', qianfanRouter)
 
