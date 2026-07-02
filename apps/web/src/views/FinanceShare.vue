@@ -57,6 +57,14 @@ function printPage() {
         <div class="fshare__kpi"><span>待报账金额</span><strong>¥{{ Number(data.summary.pendingReimbursementAmount || 0).toFixed(2) }}</strong></div>
       </section>
 
+      <section v-if="!data.summary.totalCount" class="fshare__empty">
+        <h2>当前时间范围内还没有支出</h2>
+        <p>
+          本链接时间范围为 {{ data.startDate }} 至 {{ data.endDate }}。
+          记一笔支出并落在该范围内后，刷新此页即可看到报账数据。
+        </p>
+      </section>
+
       <section v-if="data.byType?.length" class="fshare__card">
         <h2>分类汇总</h2>
         <table class="fshare__table">
@@ -78,6 +86,20 @@ function printPage() {
           <thead><tr><th>经手人</th><th>金额</th><th>笔数</th></tr></thead>
           <tbody>
             <tr v-for="row in data.byOperator" :key="row.name">
+              <td>{{ row.name }}</td>
+              <td class="num">¥{{ row.amount.toFixed(2) }}</td>
+              <td>{{ row.count }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section v-if="data.byPaySource?.length" class="fshare__card">
+        <h2>付款来源汇总</h2>
+        <table class="fshare__table">
+          <thead><tr><th>付款来源</th><th>金额</th><th>笔数</th></tr></thead>
+          <tbody>
+            <tr v-for="row in data.byPaySource" :key="row.name">
               <td>{{ row.name }}</td>
               <td class="num">¥{{ row.amount.toFixed(2) }}</td>
               <td>{{ row.count }}</td>
@@ -189,5 +211,24 @@ function printPage() {
 .fshare__table .num { text-align: right; font-weight: 600; color: #b08d57; }
 .fshare__state { text-align: center; padding: 48px 16px; color: #667085; }
 .fshare__state--error { color: #c44; }
+.fshare__empty {
+  background: #fff;
+  border: 1px dashed #e9e1d0;
+  border-radius: 12px;
+  padding: 28px 20px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+.fshare__empty h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  color: #1f2933;
+}
+.fshare__empty p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #667085;
+}
 @media print { .fshare__actions { display: none; } }
 </style>

@@ -168,12 +168,7 @@ function exportExcel() {
 
 async function copyShareLink() {
   if (lastShareUrl.value) {
-    try {
-      await navigator.clipboard.writeText(lastShareUrl.value)
-      showToast('已复制财务外链')
-    } catch {
-      showToast(lastShareUrl.value)
-    }
+    modalOpen.value = true
     return
   }
   modalOpen.value = true
@@ -388,6 +383,7 @@ onMounted(() => {
         v-model:open="modalOpen"
         :start-date="dateRange.startDate"
         :end-date="dateRange.endDate"
+        :share-url="lastShareUrl"
         @shared="onShared"
       />
 
