@@ -65,6 +65,7 @@ async function testExpenseFlow(token) {
       businessType: 'normal',
       paySource: '项目专用资金',
       occurredAt: today,
+      operatorName: '范帅',
       externalOrderNo: `TEST-${Date.now()}`,
       remark: 'test-project-expense-only',
     }),

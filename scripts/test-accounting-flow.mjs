@@ -55,6 +55,7 @@ async function testExpenseFlow(token) {
       expenseType: '包装物料',
       paySource: '微信',
       occurredAt: today,
+      operatorName: '范帅',
       remark: 'test-accounting-flow',
     }),
   })

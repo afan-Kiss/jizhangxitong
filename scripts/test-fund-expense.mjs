@@ -33,6 +33,7 @@ async function main() {
       expenseType: '办公杂费',
       businessType: 'normal',
       occurredAt: today,
+      operatorName: '范帅',
       remark: `${TAG}-default-pay`,
     }),
   })
@@ -66,6 +67,7 @@ async function main() {
       expenseType: '办公杂费',
       paySource: '专属经费',
       occurredAt: today,
+      operatorName: '范帅',
       remark: `${TAG}-legacy-map`,
     }),
   })
