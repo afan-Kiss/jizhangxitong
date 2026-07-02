@@ -59,6 +59,26 @@ async function main() {
     fail('拒绝员工垫付记支出', staffPay.text?.slice(0, 120))
   }
 
+  const legacyPay = await api(token, '/api/expenses', {
+    method: 'POST',
+    body: JSON.stringify({
+      amount: 1.11,
+      expenseType: '办公杂费',
+      paySource: '专属经费',
+      occurredAt: today,
+      remark: `${TAG}-legacy-map`,
+    }),
+  })
+  if (legacyPay.res.ok && legacyPay.json.data?.paySource === '项目专用资金') {
+    pass('专属经费兼容映射为项目专用资金')
+    await api(token, `/api/expenses/${legacyPay.json.data.id}/void`, {
+      method: 'POST',
+      body: JSON.stringify({ voidReason: `${TAG} cleanup` }),
+    })
+  } else {
+    fail('专属经费兼容映射为项目专用资金', legacyPay.text?.slice(0, 120))
+  }
+
   const summary = await api(token, `/api/expenses/summary?period=custom&startDate=${today}&endDate=${today}`)
   if (summary.res.ok && summary.json.data?.totalAmount != null) pass('支出统计接口可用')
   else fail('支出统计接口', summary.text?.slice(0, 120))

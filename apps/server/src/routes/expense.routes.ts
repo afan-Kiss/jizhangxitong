@@ -10,10 +10,14 @@ import {
   updateExpense,
   voidExpense,
 } from '../services/expense.service'
+import {
+  createExpenseExport,
+  downloadExpenseExport,
+} from '../services/export.service'
 
 const REIMBURSEMENT_GONE = {
   success: false,
-  message: '报销功能已下线，现在统一使用专属经费记支出。',
+  message: '报销功能已下线，现在统一使用项目专用资金记支出。',
 }
 
 function reimbursementGone(_req: unknown, res: { status: (n: number) => { json: (b: unknown) => void } }) {
@@ -21,6 +25,24 @@ function reimbursementGone(_req: unknown, res: { status: (n: number) => { json: 
 }
 
 export const expenseRouter = Router()
+
+expenseRouter.get('/export/:id/download', async (req, res) => {
+  try {
+    const token = String(req.query.token || '')
+    const file = await downloadExpenseExport(Number(req.params.id), token)
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.fileName)}"`)
+    res.status(200).send(file.buffer)
+  } catch (err) {
+    const message = (err as Error).message
+    const status = /不存在|无效|过期/.test(message) ? 404 : 400
+    res.status(status).json({ success: false, message })
+  }
+})
+
 expenseRouter.use(authMiddleware)
 
 expenseRouter.get('/', requirePermission('expense:view'), async (req: AuthRequest, res) => {
@@ -58,6 +80,30 @@ expenseRouter.get('/reimbursements/summary', reimbursementGone)
 expenseRouter.get('/pending-reimbursements', reimbursementGone)
 expenseRouter.post('/export/reimbursement-excel/preview', reimbursementGone)
 expenseRouter.post('/export/reimbursement-excel', reimbursementGone)
+
+expenseRouter.post('/export/excel', requirePermission('expense:view'), async (req: AuthRequest, res) => {
+  try {
+    const data = await createExpenseExport({
+      startDate: req.body.startDate,
+      endDate: req.body.endDate,
+      expenseType: req.body.expenseType,
+      paySource: req.body.paySource,
+      braceletCode: req.body.braceletCode,
+      businessType: req.body.businessType,
+      externalOrderNo: req.body.externalOrderNo,
+      customerPaymentStatus: req.body.customerPaymentStatus,
+      pendingLinkStatus: req.body.pendingLinkStatus,
+      onlyWithBracelet: req.body.onlyWithBracelet,
+      needsAttachment: req.body.needsAttachment,
+      isVoided: req.body.isVoided,
+      createdBy: req.body.createdBy,
+      remarkContains: req.body.remarkContains || req.body.q,
+    }, req.user!)
+    res.json({ success: true, data })
+  } catch (err) {
+    res.status(400).json({ success: false, message: (err as Error).message })
+  }
+})
 
 expenseRouter.get('/:id', requirePermission('expense:view'), async (req, res) => {
   const expense = await getExpense(Number(req.params.id))

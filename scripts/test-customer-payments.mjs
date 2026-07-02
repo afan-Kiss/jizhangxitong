@@ -64,7 +64,7 @@ async function main() {
     pass('无现成销售，部分利润测试将用待关联流程', '')
   }
 
-  // 1. 客户返款扣利润
+  // 1. 客户返款可记账（纯支出系统不扣销售利润）
   if (saleId && orderNo) {
     const refund = await api(token, '/api/expenses', {
       method: 'POST',
@@ -83,10 +83,10 @@ async function main() {
       pass('创建客户返款支出')
       const after = await api(token, `/api/sales/${saleId}`)
       const profitAfter = Number(after.json.data?.finalProfit ?? 0)
-      if (profitAfter <= profitBefore - 12) {
-        pass('客户返款扣销售利润', `${profitBefore} -> ${profitAfter}`)
+      if (Math.abs(profitAfter - profitBefore) < 0.02) {
+        pass('客户返款不扣销售利润（纯支出）', `${profitBefore} -> ${profitAfter}`)
       } else {
-        fail('客户返款扣销售利润', `${profitBefore} -> ${profitAfter}`)
+        fail('客户返款不扣销售利润（纯支出）', `${profitBefore} -> ${profitAfter}`)
       }
       if (refund.json.data?.externalOrderNo === orderNo) pass('支出详情含小红书订单号')
       else fail('支出详情含小红书订单号')
@@ -95,7 +95,7 @@ async function main() {
     }
   }
 
-  // 2-4. 各类补偿扣利润
+  // 2-4. 各类补偿可记账，不扣单品利润
   const deductTypes = [
     { businessType: 'customer_compensation', expenseType: '客户心理落差补偿', label: '心理落差补偿' },
     { businessType: 'after_sale_compensation', expenseType: '售后补偿', label: '售后补偿' },
@@ -120,11 +120,11 @@ async function main() {
     })
     const after = await api(token, `/api/sales/${saleId}`)
     const p1 = Number(after.json.data?.finalProfit ?? 0)
-    if (res.res.ok && p1 <= p0 - 5) pass(`创建${t.label}并扣利润`)
-    else fail(`创建${t.label}并扣利润`, res.text || `${p0}->${p1}`)
+    if (res.res.ok && Math.abs(p1 - p0) < 0.02) pass(`创建${t.label}且不扣利润`)
+    else fail(`创建${t.label}且不扣利润`, res.text || `${p0}->${p1}`)
   }
 
-  // 5. 平台扣款绑定订单扣利润
+  // 5. 平台扣款绑定订单可记账，不扣单品利润
   if (saleId) {
     const before = await api(token, `/api/sales/${saleId}`)
     const p0 = Number(before.json.data?.finalProfit ?? 0)
@@ -143,8 +143,8 @@ async function main() {
     })
     const after = await api(token, `/api/sales/${saleId}`)
     const p1 = Number(after.json.data?.finalProfit ?? 0)
-    if (res.res.ok && p1 <= p0 - 3) pass('平台扣款绑定订单扣利润')
-    else fail('平台扣款绑定订单扣利润', `${p0}->${p1}`)
+    if (res.res.ok && Math.abs(p1 - p0) < 0.02) pass('平台扣款绑定订单不扣单品利润')
+    else fail('平台扣款绑定订单不扣单品利润', `${p0}->${p1}`)
   }
 
   // 6. 平台扣款未绑订单不扣单品（仅费用统计）
@@ -198,7 +198,7 @@ async function main() {
       remark: `${TAG}-staff-advance`,
     }),
   })
-  if (!staffPay.res.ok && /专属经费|报销/.test(staffPay.json.message || staffPay.text || '')) {
+  if (!staffPay.res.ok && /员工垫付|专属经费|报销|项目专用资金/.test(staffPay.json.message || staffPay.text || '')) {
     pass('拒绝员工垫付记支出')
   } else {
     fail('拒绝员工垫付记支出', staffPay.text)
@@ -229,7 +229,7 @@ async function main() {
     fail('找不到订单可保存为待关联', noBracelet.json.data?.pendingLinkStatus)
   }
 
-  // 11. 补关联后利润刷新
+  // 11. 补关联后支出可关联（纯支出系统不刷新单品利润）
   if (saleId && noBracelet.json.data?.id) {
     const beforeLink = await api(token, `/api/sales/${saleId}`)
     const p0 = Number(beforeLink.json.data?.finalProfit ?? 0)
@@ -243,8 +243,8 @@ async function main() {
     })
     const afterLink = await api(token, `/api/sales/${saleId}`)
     const p1 = Number(afterLink.json.data?.finalProfit ?? 0)
-    if (link.res.ok && p1 <= p0 - 4) pass('补关联订单后利润刷新')
-    else fail('补关联订单后利润刷新', link.text || `${p0}->${p1}`)
+    if (link.res.ok && Math.abs(p1 - p0) < 0.02) pass('补关联订单后利润不变（纯支出）')
+    else fail('补关联订单后利润不变（纯支出）', link.text || `${p0}->${p1}`)
   }
 
   // lookup API
@@ -289,13 +289,14 @@ async function testUi(token) {
     const pwdInput = page.locator('input[type="password"]')
     if (!(await pwdInput.count())) {
       pass('记支出页不依赖扫码', '（本地无 SPA，跳过 UI）')
-      pass('记支出页有客户返款业务类型', '（跳过）')
+      pass('记支出页有支出表单（纯支出模式）', '（跳过）')
       pass('扫码工作台客户返款入口', '（跳过）')
       pass('手机端无横向滚动', '（跳过）')
       pass('电脑端记支出布局正常', '（跳过）')
       return
     }
     const pwd = await getAdminPassword()
+    await page.locator('input:not([type="password"])').first().fill('fanfan')
     await pwdInput.fill(pwd || 'admin123')
     await page.getByRole('button', { name: /进入系统/ }).click()
     await page.waitForTimeout(1500)
@@ -312,18 +313,17 @@ async function testUi(token) {
       await page.waitForTimeout(800)
     }
     const hasCreatePage = (await page.getByTestId('expense-create-page').count()) > 0
-      || (await page.getByText('这笔钱属于什么').count()) > 0
     if (hasCreatePage) {
       pass('记支出页不依赖扫码')
     } else {
       fail('记支出页不依赖扫码', await page.evaluate(() => document.body.innerText.slice(0, 200)))
     }
-    const hasRefundBiz = (await page.getByTestId('expense-biz-customer_refund').count()) > 0
-      || (await page.getByTestId('expense-business-cards').count() > 0 && await page.getByText('客户返款/退差价').count() > 0)
-    if (hasRefundBiz) {
-      pass('记支出页有客户返款业务类型')
+    const hasExpenseForm = (await page.getByTestId('expense-save-btn').count()) > 0
+      && (await page.getByTestId('expense-amount-input').count()) > 0
+    if (hasExpenseForm) {
+      pass('记支出页有支出表单（纯支出模式）')
     } else {
-      fail('记支出页有客户返款业务类型')
+      fail('记支出页有支出表单（纯支出模式）')
     }
 
     const health = await fetchJson(`${BASE}/api/health`)
@@ -351,7 +351,7 @@ async function testUi(token) {
     if (await expenseLink2.count()) await expenseLink2.click()
     else await gotoStable(page, `${webBase}/expense/create`, { timeout: 30000 })
     await page.waitForTimeout(800)
-    if ((await page.getByText('这笔钱属于什么').count()) > 0) pass('电脑端记支出布局正常')
+    if ((await page.getByTestId('expense-create-page').count()) > 0) pass('电脑端记支出布局正常')
     else fail('电脑端记支出布局正常')
 
     await page.setViewportSize({ width: 390, height: 844 })

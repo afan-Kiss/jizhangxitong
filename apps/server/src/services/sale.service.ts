@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma'
 import { generateNo, toNumber } from '../lib/utils'
+import { parseMoneyInput } from '../lib/money'
 import { isConfirmedRefund } from '@jade-account/shared'
 import { AuthRequest } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
@@ -48,7 +49,8 @@ export async function createSale(
   },
   operator: AuthRequest['user'],
 ) {
-  if (!input.saleAmount || input.saleAmount <= 0) throw new Error('销售金额必须大于 0')
+  if (!input.saleAmount && input.saleAmount !== 0) throw new Error('销售金额必须大于 0')
+  const saleAmount = parseMoneyInput(input.saleAmount, '销售金额')
 
   const binding = await resolveBraceletBinding(input.braceletCode, input.braceletId, operator)
   const braceletId = binding.braceletId
@@ -68,16 +70,16 @@ export async function createSale(
   }
 
   const cost = await calculateSaleCost(braceletId)
-  const grossProfit = input.saleAmount - cost.totalCost
+  const grossProfit = saleAmount - cost.totalCost
   const initialProfit = calculateProfit({
-    saleAmount: input.saleAmount,
+    saleAmount,
     totalCostSnapshot: cost.totalCost,
     grossProfit,
     refunds: [],
     expenses: [],
   })
   const deposit = input.depositAmount ?? 0
-  const finalPayment = input.finalPaymentAmount ?? input.saleAmount
+  const finalPayment = input.finalPaymentAmount ?? saleAmount
   const unpaid = input.unpaidAmount ?? 0
 
   const sale = await prisma.sale.create({
@@ -90,7 +92,7 @@ export async function createSale(
       customerRemark: input.customerRemark || input.remark,
       braceletId,
       braceletCode: code,
-      saleAmount: input.saleAmount,
+      saleAmount,
       depositAmount: deposit,
       finalPaymentAmount: finalPayment,
       unpaidAmount: unpaid,
@@ -244,6 +246,8 @@ export async function refundSale(
     throw new Error('这笔销售已有退款记录，不能重复扣减利润')
   }
 
+  const refundAmount = parseMoneyInput(input.refundAmount, '退款金额')
+
   const refund = await prisma.$transaction(async (tx) => {
     const currentSale = await tx.sale.findUnique({ where: { id: saleId } })
     if (!currentSale) throw new Error('销售记录不存在')
@@ -264,7 +268,7 @@ export async function refundSale(
         saleId,
         braceletId: currentSale.braceletId,
         braceletCode: currentSale.braceletCode,
-        refundAmount: input.refundAmount,
+        refundAmount,
         refundReason: input.refundReason,
         refundedAt: input.refundedAt ? new Date(input.refundedAt) : new Date(),
         createdBy: operator!.userId,
@@ -305,15 +309,17 @@ export async function createCostAdjustment(
   const bracelet = await prisma.bracelet.findUnique({ where: { id: input.braceletId } })
   if (!bracelet) throw new Error('镯子不存在')
 
+  const adjustmentAmount = parseMoneyInput(input.amount, '调整金额', { allowNegative: true })
+
   const cost = await calculateSaleCost(input.braceletId)
   const beforeTotal = cost.totalCost
-  const afterTotal = beforeTotal + input.amount
+  const afterTotal = beforeTotal + adjustmentAmount
 
   const record = await prisma.costAdjustment.create({
     data: {
       braceletId: input.braceletId,
       braceletCode: input.braceletCode,
-      amount: input.amount,
+      amount: adjustmentAmount,
       reason: input.reason,
       beforeTotalCost: beforeTotal,
       afterTotalCost: afterTotal,

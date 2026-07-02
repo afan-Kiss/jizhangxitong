@@ -7,7 +7,9 @@ import {
   type ExpenseBusinessType,
 } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
-import { generateNo, toNumber, startOfDay, endOfDay, startOfWeek, startOfMonth, parseDateInput } from '../lib/utils'
+import { generateNo, startOfDay, endOfDay, startOfWeek, startOfMonth, parseDateInput } from '../lib/utils'
+import { parseMoneyInput, sumMoney, toMoneyNumber } from '../lib/money'
+import { normalizePaySource } from '../lib/pay-source'
 import { AuthRequest } from '../middleware/auth'
 import { writeOperationLog } from './operation-log.service'
 import { getEntityOperationLogs, resolveUserBrief, resolveUsersBrief } from './audit.service'
@@ -35,6 +37,7 @@ export interface ExpenseFilter {
   excludeTrial?: boolean
   needsAttachment?: boolean
   createdBy?: number
+  remarkContains?: string
   page?: number
   pageSize?: number
 }
@@ -66,6 +69,7 @@ function buildWhere(filter: ExpenseFilter) {
   if (filter.onlyWithBracelet) where.braceletId = { not: null }
   if (filter.needsAttachment) where.needsAttachment = true
   if (filter.createdBy) where.createdBy = filter.createdBy
+  if (filter.remarkContains) where.remark = { contains: filter.remarkContains }
   where.isTrialRun = false
   return where
 }
@@ -236,12 +240,10 @@ export async function createExpense(
   },
   operator: AuthRequest['user'],
 ) {
-  if (!input.amount || input.amount <= 0) throw new Error('金额必须大于 0')
+  if (!input.amount && input.amount !== 0) throw new Error('金额必须大于 0')
+  const amount = parseMoneyInput(input.amount, '金额')
 
-  const paySource = (input.paySource || DEFAULT_PAY_SOURCE).trim()
-  if (paySource === '员工垫付' || paySource === '专属经费') {
-    throw new Error('请使用项目专用资金记支出')
-  }
+  const paySource = normalizePaySource(input.paySource)
 
   const businessType = (input.businessType || EXPENSE_BUSINESS_TYPES.normal) as ExpenseBusinessType
   const expenseType = input.expenseType || defaultExpenseTypeForBusiness(businessType)
@@ -300,7 +302,7 @@ export async function createExpense(
       expenseType,
       businessType,
       paySource,
-      amount: input.amount,
+      amount,
       occurredAt: parseDateInput(input.occurredAt),
       expenseSummary: input.expenseSummary,
       remark: input.remark,
@@ -477,9 +479,11 @@ export async function updateExpense(
     if (input[key] !== undefined) data[key] = input[key]
   }
   if (input.occurredAt) data.occurredAt = parseDateInput(input.occurredAt)
-  if (input.amount !== undefined && input.amount <= 0) throw new Error('金额得填一下')
-  if (input.paySource === '员工垫付' || input.paySource === '专属经费') {
-    throw new Error('请使用项目专用资金记支出')
+  if (input.amount !== undefined) {
+    data.amount = parseMoneyInput(input.amount, '金额')
+  }
+  if (input.paySource !== undefined) {
+    data.paySource = normalizePaySource(input.paySource)
   }
   if (input.payeeAccount !== undefined) {
     data.payeeAccountMasked = maskPayeeAccount(input.payeeAccount)
@@ -663,8 +667,8 @@ export async function getExpenseSummary(
       start = startOfMonth(now)
       break
     case 'custom':
-      start = startDate ? startOfDay(new Date(startDate)) : startOfMonth(now)
-      end = endDate ? endOfDay(new Date(endDate)) : endOfDay(now)
+      start = startDate ? startOfDay(parseDateInput(startDate)) : startOfMonth(now)
+      end = endDate ? endOfDay(parseDateInput(endDate)) : endOfDay(now)
       break
     default:
       start = startOfDay(now)
@@ -673,14 +677,15 @@ export async function getExpenseSummary(
   const baseWhere = { isVoided: false, isTrialRun: false, occurredAt: { gte: start, lte: end } }
 
   const expenses = await prisma.expense.findMany({ where: baseWhere })
-  const totalAmount = expenses.reduce((s, e) => s + toNumber(e.amount), 0)
+  const totalAmount = sumMoney(expenses.map((e) => e.amount))
 
   const byType: Record<string, number> = {}
   const byPaySource: Record<string, number> = {}
 
   for (const e of expenses) {
-    byType[e.expenseType] = (byType[e.expenseType] || 0) + toNumber(e.amount)
-    byPaySource[e.paySource] = (byPaySource[e.paySource] || 0) + toNumber(e.amount)
+    const amt = toMoneyNumber(e.amount)
+    byType[e.expenseType] = sumMoney([byType[e.expenseType] || 0, amt])
+    byPaySource[e.paySource] = sumMoney([byPaySource[e.paySource] || 0, amt])
   }
 
   const needsAttachment = await prisma.expense.count({

@@ -32,7 +32,7 @@ async function main() {
       amount: 2.5,
       expenseType: '包装耗材',
       businessType: 'normal',
-      paySource: '专属经费',
+      paySource: '项目专用资金',
       occurredAt: today,
       remark: `${TAG}-void`,
     }),

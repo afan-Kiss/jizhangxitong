@@ -1,6 +1,6 @@
 import { EXPENSE_BUSINESS_LABELS } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
-import { toNumber } from '../lib/utils'
+import { sumMoney, toMoneyNumber, moneyAdd } from '../lib/money'
 import { resolveDateRange, rangeLabel } from '../lib/date-range'
 import { resolveUsersBrief } from './audit.service'
 import { getExpenseSummary } from './expense.service'
@@ -113,29 +113,42 @@ async function drillExpenses(
   const byBusinessType: Record<string, number> = {}
   const byPaySource: Record<string, number> = {}
   for (const e of expenses) {
+    const amt = toMoneyNumber(e.amount)
     const label = e.expenseType
       || EXPENSE_BUSINESS_LABELS[e.businessType as keyof typeof EXPENSE_BUSINESS_LABELS]
       || '其他'
-    byBusinessType[label] = (byBusinessType[label] || 0) + toNumber(e.amount)
-    byPaySource[e.paySource] = (byPaySource[e.paySource] || 0) + toNumber(e.amount)
+    byBusinessType[label] = moneyAdd(byBusinessType[label] || 0, amt)
+    byPaySource[e.paySource] = moneyAdd(byPaySource[e.paySource] || 0, amt)
   }
 
   const rows = expenses
     .map((e) => ({
       id: e.id,
       occurredAt: e.occurredAt,
-      amount: toNumber(e.amount),
+      amount: toMoneyNumber(e.amount),
       expenseType: e.expenseType,
       paySource: e.paySource,
       externalOrderNo: e.externalOrderNo,
+      expenseNo: e.expenseNo,
+      braceletCode: e.braceletCode,
+      remark: e.remark,
       createdByName: userMap.get(e.createdBy)?.displayName || userMap.get(e.createdBy)?.username || '未知',
       attachmentCount: e._count.attachments,
       needsAttachment: e.needsAttachment,
       detailPath: `/expense/${e.id}`,
     }))
-    .filter((r) => matchSearch(q, r.externalOrderNo, r.createdByName, r.expenseType, r.paySource))
+    .filter((r) => matchSearch(
+      q,
+      r.externalOrderNo,
+      r.createdByName,
+      r.expenseType,
+      r.paySource,
+      r.expenseNo,
+      r.braceletCode,
+      r.remark,
+    ))
 
-  const totalAmount = rows.reduce((s, r) => s + r.amount, 0)
+  const totalAmount = sumMoney(rows.map((r) => r.amount))
   const paged = paginate(rows, page, pageSize)
 
   const titles: Record<string, string> = {

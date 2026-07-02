@@ -10,7 +10,7 @@ import {
   countsTowardBraceletCost,
 } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
-import { toNumber } from '../lib/utils'
+import { toMoneyNumber, moneyAdd, moneySub, sumMoney } from '../lib/money'
 import { getSettingNumber } from '../services/settings.service'
 
 export { EFFECTIVE_SALES_RULE_HINT, isConfirmedRefund }
@@ -72,9 +72,11 @@ export const PROFIT_DEDUCT_EXPENSE_INCLUDE = {
 export const COMPENSATION_EXPENSE_INCLUDE = PROFIT_DEDUCT_EXPENSE_INCLUDE
 
 function confirmedRefundSum(refunds?: SaleProfitInput['refunds']): number {
-  return (refunds || [])
-    .filter((r) => isConfirmedRefund(r.status))
-    .reduce((s, r) => s + toNumber(r.refundAmount as string | number), 0)
+  return sumMoney(
+    (refunds || [])
+      .filter((r) => isConfirmedRefund(r.status))
+      .map((r) => r.refundAmount as string | number),
+  )
 }
 
 function resolveCompensationDeduction(sale: SaleProfitInput): {
@@ -86,8 +88,8 @@ function resolveCompensationDeduction(sale: SaleProfitInput): {
     let total = 0
     for (const e of sale.expenses) {
       if (e.isVoided || !isProfitDeductingExpense(e)) continue
-      const amt = toNumber(e.amount as string | number)
-      total += amt
+      const amt = toMoneyNumber(e.amount as string | number)
+      total = moneyAdd(total, amt)
       items.push({
         type: e.businessType || e.expenseType || 'compensation',
         amount: amt,
@@ -96,7 +98,7 @@ function resolveCompensationDeduction(sale: SaleProfitInput): {
     }
     return { total, items }
   }
-  const fallback = toNumber(sale.compensationAmount as string | number)
+  const fallback = toMoneyNumber(sale.compensationAmount as string | number)
   return {
     total: fallback,
     items: fallback > 0 ? [{ type: 'compensation', amount: fallback, refId: 'snapshot' }] : [],
@@ -105,14 +107,14 @@ function resolveCompensationDeduction(sale: SaleProfitInput): {
 
 /** 单笔销售/货品利润 — 唯一计算入口 */
 export function calculateProfit(sale: SaleProfitInput): FinanceResult {
-  const income = toNumber(sale.saleAmount as string | number)
-  const cost = toNumber(sale.totalCostSnapshot as string | number)
+  const income = toMoneyNumber(sale.saleAmount as string | number)
+  const cost = toMoneyNumber(sale.totalCostSnapshot as string | number)
   const gross = sale.grossProfit != null
-    ? toNumber(sale.grossProfit as string | number)
-    : income - cost
+    ? toMoneyNumber(sale.grossProfit as string | number)
+    : moneySub(income, cost)
   const refund = confirmedRefundSum(sale.refunds)
   const { total: compensation, items: compItems } = resolveCompensationDeduction(sale)
-  const netProfit = gross - refund - compensation
+  const netProfit = moneySub(moneySub(gross, refund), compensation)
 
   const breakdown: LedgerBreakdownItem[] = [
     { type: 'income', amount: income, refId: String(sale.id ?? 'sale') },
@@ -122,7 +124,7 @@ export function calculateProfit(sale: SaleProfitInput): FinanceResult {
     if (!isConfirmedRefund(r.status)) continue
     breakdown.push({
       type: 'refund',
-      amount: toNumber(r.refundAmount as string | number),
+      amount: toMoneyNumber(r.refundAmount as string | number),
       refId: String(r.id ?? 'refund'),
     })
   }
@@ -138,7 +140,7 @@ export function saleProfitRow(sale: SaleProfitInput & { status: string }) {
   return {
     saleAmount: fin.income,
     cost: fin.cost,
-    grossProfit: fin.income - fin.cost,
+    grossProfit: moneySub(fin.income, fin.cost),
     refundAmount: fin.refund,
     compensationAmount: fin.compensation,
     customerPaymentDeduction: fin.compensation,
@@ -166,7 +168,7 @@ export function calculateExpenseImpact(expense: ExpenseImpactInput) {
   let category: 'compensation' | 'cost' | 'expense' = 'expense'
   if (affectsProfit) category = 'compensation'
   else if (affectsCost) category = 'cost'
-  const amount = toNumber(expense.amount as string | number)
+  const amount = toMoneyNumber(expense.amount as string | number)
   return { affectsProfit, affectsCost, category, amount }
 }
 
@@ -183,9 +185,9 @@ export function calculateEffectiveSales(sales: EffectiveSaleInput[]) {
   let count = 0
   for (const s of sales) {
     if (!isEffectiveSale(s.status, s.afterSaleStatus)) continue
-    const income = toNumber(s.saleAmount as string | number)
+    const income = toMoneyNumber(s.saleAmount as string | number)
     const refund = confirmedRefundSum(s.refunds)
-    amount += income - refund
+    amount = moneyAdd(amount, moneySub(income, refund))
     count += 1
   }
   return { effectiveSaleAmount: amount, effectiveOrderCount: count }
@@ -202,13 +204,13 @@ export async function calculateSaleCost(braceletId: number) {
   const expenses = await prisma.expense.findMany({
     where: { braceletId, isVoided: false },
   })
-  const expenseCost = expenses
-    .filter((e) => countsTowardBraceletCost(e))
-    .reduce((s, e) => s + toNumber(e.amount), 0)
+  const expenseCost = sumMoney(
+    expenses.filter((e) => countsTowardBraceletCost(e)).map((e) => e.amount),
+  )
 
-  const inboundCost = toNumber(bracelet.inboundCost)
+  const inboundCost = toMoneyNumber(bracelet.inboundCost)
   const adjustments = await prisma.costAdjustment.findMany({ where: { braceletId } })
-  const costAdjustment = adjustments.reduce((s, a) => s + toNumber(a.amount), 0)
+  const costAdjustment = sumMoney(adjustments.map((a) => a.amount))
 
   const hasExpenseType = (types: string[]) =>
     expenses.some((e) => types.includes(e.expenseType))
@@ -223,15 +225,21 @@ export async function calculateSaleCost(braceletId: number) {
     ? 0
     : await getSettingNumber('default_sf_express_fee', 18)
 
-  const braceletCostTotal = inboundCost + expenseCost
-  if (Math.abs(toNumber(bracelet.costTotal) - braceletCostTotal) > 0.001) {
+  const braceletCostTotal = moneyAdd(inboundCost, expenseCost)
+  if (Math.abs(toMoneyNumber(bracelet.costTotal) - braceletCostTotal) > 0.001) {
     await prisma.bracelet.update({
       where: { id: braceletId },
       data: { costTotal: braceletCostTotal },
     })
   }
 
-  const totalCost = braceletCostTotal + costAdjustment + certificateFee + packageFee + expressFee
+  const totalCost = moneyAdd(
+    braceletCostTotal,
+    costAdjustment,
+    certificateFee,
+    packageFee,
+    expressFee,
+  )
 
   return {
     inboundCost,
@@ -335,7 +343,7 @@ async function syncSaleLedgerCore(saleId: number, db: LedgerDb = prisma) {
       saleId,
       braceletId: sale.braceletId,
       category: 'refund',
-      amount: toNumber(r.refundAmount),
+      amount: toMoneyNumber(r.refundAmount),
       occurredAt: r.refundedAt,
     }, db)
   }
@@ -350,7 +358,7 @@ async function syncSaleLedgerCore(saleId: number, db: LedgerDb = prisma) {
       braceletId: e.braceletId,
       expenseId: e.id,
       category: 'compensation',
-      amount: toNumber(e.amount),
+      amount: toMoneyNumber(e.amount),
       occurredAt: e.occurredAt,
       metadata: { expenseType: e.expenseType, businessType: e.businessType },
     }, db)
@@ -363,19 +371,20 @@ async function syncSaleLedgerCore(saleId: number, db: LedgerDb = prisma) {
 }
 
 export async function syncSaleLedger(saleId: number) {
-  await syncSaleLedgerCore(saleId)
+  await prisma.$transaction(async (tx) => {
+    await syncSaleLedgerCore(saleId, tx)
+  }, { timeout: 30000 })
 }
 
-/** 同步单笔支出分录 */
-export async function syncExpenseLedger(expenseId: number) {
-  const expense = await prisma.expense.findUnique({ where: { id: expenseId } })
+async function syncExpenseLedgerCore(expenseId: number, db: LedgerDb = prisma) {
+  const expense = await db.expense.findUnique({ where: { id: expenseId } })
   if (!expense) return
 
   if (expense.isVoided) {
-    await prisma.financeLedger.deleteMany({
+    await db.financeLedger.deleteMany({
       where: { refType: 'expense', refId: String(expenseId) },
     })
-    if (expense.saleId) await syncSaleLedger(expense.saleId)
+    if (expense.saleId) await syncSaleLedgerCore(expense.saleId, db)
     return
   }
 
@@ -392,16 +401,23 @@ export async function syncExpenseLedger(expenseId: number) {
       amount: impact.amount,
       occurredAt: expense.occurredAt,
       metadata: { expenseType: expense.expenseType, businessType: expense.businessType },
-    })
+    }, db)
   } else if (!impact.affectsProfit) {
-    await prisma.financeLedger.deleteMany({
+    await db.financeLedger.deleteMany({
       where: { refType: 'expense', refId: String(expenseId) },
     })
   }
 
   if (expense.saleId) {
-    await syncSaleLedger(expense.saleId)
+    await syncSaleLedgerCore(expense.saleId, db)
   }
+}
+
+/** 同步单笔支出分录 */
+export async function syncExpenseLedger(expenseId: number) {
+  await prisma.$transaction(async (tx) => {
+    await syncExpenseLedgerCore(expenseId, tx)
+  }, { timeout: 30000 })
 }
 
 /** 同步退款分录 */
@@ -529,24 +545,24 @@ export async function aggregateProfitFromLedger(saleId: number): Promise<Finance
   const breakdown: LedgerBreakdownItem[] = []
 
   for (const row of rows) {
-    const amt = toNumber(row.amount)
+    const amt = toMoneyNumber(row.amount)
     breakdown.push({ type: row.category, amount: amt, refId: row.refId })
     switch (row.category) {
-      case 'income': income += amt; break
-      case 'cost': cost += amt; break
-      case 'refund': refund += amt; break
-      case 'compensation': compensation += amt; break
+      case 'income': income = moneyAdd(income, amt); break
+      case 'cost': cost = moneyAdd(cost, amt); break
+      case 'refund': refund = moneyAdd(refund, amt); break
+      case 'compensation': compensation = moneyAdd(compensation, amt); break
       default: break
     }
   }
 
-  const gross = income - cost
+  const gross = moneySub(income, cost)
   return {
     income,
     cost,
     refund,
     compensation,
-    netProfit: gross - refund - compensation,
+    netProfit: moneySub(moneySub(gross, refund), compensation),
     breakdown,
   }
 }

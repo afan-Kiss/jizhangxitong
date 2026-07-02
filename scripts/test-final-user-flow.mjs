@@ -191,8 +191,9 @@ async function testApiFlow(token) {
       remark: `${TAG}-staff`,
     }),
   })
-  if (staffComp.res.ok) pass('M. 专属经费客户补偿可记账')
-  else fail('M. 专属经费客户补偿可记账', staffComp.text)
+  if (staffComp.res.ok && staffComp.json.data?.paySource === '项目专用资金') {
+    pass('M. 专属经费映射为项目专用资金记客户补偿')
+  } else fail('M. 专属经费映射为项目专用资金记客户补偿', staffComp.text)
 
   console.log('\n--- N-O. 千帆 ---')
   if (comp.json.data?.externalOrderNo === orderNo) pass('N. 支出详情含小红书订单号')
