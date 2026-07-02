@@ -1,21 +1,35 @@
 # Start local Worker and wait until remote reports online=true
 param(
   [string]$ProjectRoot = (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent),
-  [int]$WaitSeconds = 30,
+  [int]$WaitSeconds = 45,
   [string]$StatusUrl = 'http://8.137.126.18/account/api/local-worker/status'
 )
 
-$ErrorActionPreference = 'Stop'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$WORKER_WINDOW_TITLE = '项目资金支出记录系统 - 本地Worker'
+$WORKER_DISPLAY_NAME = '项目资金支出记录系统-本地Worker'
 
-function Stop-DuplicateWorkers {
-  Get-CimInstance Win32_Process -Filter "name='node.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -match '@jade-account/worker|apps/worker|apps\\worker' } |
-    ForEach-Object {
-      Write-Host "Stopping duplicate Worker PID=$($_.ProcessId)"
-      Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-    }
-  Start-Sleep -Seconds 1
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot '_common.ps1')
+Initialize-ConsoleUtf8
+
+function Stop-AllAccountingWorkers {
+  $killScript = Join-Path $PSScriptRoot 'kill-all-workers.ps1'
+  if (Test-Path $killScript) {
+    & $killScript
+    return
+  }
+}
+
+function Sync-WorkerTokenFromRemote {
+  param([string]$Root)
+  $syncScript = Join-Path (Join-Path (Join-Path $Root 'deploy') 'aliyun') 'sync-worker-env.py'
+  if (-not (Test-Path $syncScript)) { return }
+  try {
+    & python $syncScript
+    if ($LASTEXITCODE -eq 0) { Write-Host 'Synced WORKER_WS_TOKEN from remote server' }
+  } catch {
+    Write-Host "WARN: token sync skipped ($($_.Exception.Message))"
+  }
 }
 
 function Ensure-WorkerEnv {
@@ -31,6 +45,7 @@ function Ensure-WorkerEnv {
       throw 'Missing apps/worker/.env'
     }
   }
+  Sync-WorkerTokenFromRemote -Root $Root
   $content = Get-Content $envPath -Raw -Encoding UTF8
   $changed = $false
   if ($content -notmatch 'SERVER_WS_URL=ws://8\.137\.126\.18/account/ws/worker') {
@@ -41,57 +56,42 @@ function Ensure-WorkerEnv {
     }
     $changed = $true
   }
-  if ($content -notmatch 'SCANNER_API_URL=http://127\.0\.0\.1:7789') {
-    if ($content -match 'SCANNER_API_URL=') {
-      $content = $content -replace 'SCANNER_API_URL=.*', 'SCANNER_API_URL=http://127.0.0.1:7789'
+  $expectedWorkerName = "WORKER_NAME=$WORKER_DISPLAY_NAME"
+  if ($content -notmatch [regex]::Escape($expectedWorkerName)) {
+    if ($content -match 'WORKER_NAME=') {
+      $content = $content -replace 'WORKER_NAME=.*', $expectedWorkerName
     } else {
-      $content += "`nSCANNER_API_URL=http://127.0.0.1:7789`n"
+      $content += "`n$expectedWorkerName`n"
     }
+    $changed = $true
+  }
+  if ($content -match '(?m)^SCANNER_API_URL=') {
+    $content = ($content -split "`n" | Where-Object { $_ -notmatch '^SCANNER_API_URL=' }) -join "`n"
     $changed = $true
   }
   if ($changed) {
     Set-Content -Path $envPath -Value $content.TrimEnd() -Encoding UTF8
-    Write-Host 'Updated SERVER_WS_URL / SCANNER_API_URL in worker env file'
+    Write-Host 'Updated worker env (SERVER_WS_URL / WORKER_NAME / etc.)'
   }
-}
-
-function Get-AdminPassword {
-  param([string]$Root)
-  $secret = Join-Path (Join-Path $Root 'secrets') 'initial-admin-password.txt'
-  if (Test-Path $secret) {
-    $text = Get-Content $secret -Raw -Encoding UTF8
-    if ($text -match '密码:\s*(.+)') { return $Matches[1].Trim() }
-    if ($text -match ':\s*(.+)$') { return $Matches[1].Trim() }
-  }
-  return 'admin123'
 }
 
 function Wait-WorkerOnline {
   param(
-    [string]$StatusUrl,
-    [string]$Password,
+    [string]$Root,
     [int]$MaxSeconds
   )
-  $loginUrl = $StatusUrl -replace '/api/local-worker/status', '/api/auth/login'
-  $loginBody = @{ username = 'admin'; password = $Password } | ConvertTo-Json
-  $token = $null
-  for ($i = 0; $i -lt 10; $i++) {
-    try {
-      $login = Invoke-RestMethod -Uri $loginUrl -Method Post -Body $loginBody -ContentType 'application/json; charset=utf-8'
-      if ($login.data.token) { $token = $login.data.token; break }
-    } catch { Start-Sleep -Seconds 1 }
+  Push-Location $Root
+  try {
+    $env:WAIT_SECONDS = "$MaxSeconds"
+    $out = node scripts/check-worker-remote-online.mjs 2>&1
+    if ($LASTEXITCODE -eq 0) {
+      return ($out | ConvertFrom-Json)
+    }
+    return $null
+  } finally {
+    Pop-Location
+    Remove-Item Env:WAIT_SECONDS -ErrorAction SilentlyContinue
   }
-  if (-not $token) { throw 'Cannot login to remote server for worker status' }
-
-  $headers = @{ Authorization = "Bearer $token" }
-  for ($i = 0; $i -lt $MaxSeconds; $i++) {
-    try {
-      $st = Invoke-RestMethod -Uri $StatusUrl -Headers $headers
-      if ($st.data.online -eq $true) { return $st.data }
-      Start-Sleep -Seconds 1
-    } catch { Start-Sleep -Seconds 1 }
-  }
-  return $null
 }
 
 function Show-RecentWorkerLogs {
@@ -106,21 +106,34 @@ function Show-RecentWorkerLogs {
 }
 
 Write-Host "ProjectRoot: $ProjectRoot"
-Stop-DuplicateWorkers
+Stop-AllAccountingWorkers
+
+$lockDir = Join-Path $env:USERPROFILE '.jade-accounting'
+if (Test-Path $lockDir) {
+  Get-ChildItem $lockDir -Filter 'worker-*.lock' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+}
+
 Ensure-WorkerEnv -Root $ProjectRoot
 
 $logDir = Join-Path (Join-Path (Join-Path $ProjectRoot 'apps') 'worker') 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-$outLog = Join-Path $logDir 'worker-start.log'
-$errLog = Join-Path $logDir 'worker-start.err.log'
 
-Write-Host 'Starting Worker...'
-Start-Process -FilePath 'cmd.exe' -ArgumentList '/c','npm run dev:worker' -WorkingDirectory $ProjectRoot `
-  -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+Write-Host 'Building Worker...'
+Push-Location $ProjectRoot
+try {
+  npm run build -w @jade-account/shared
+  if ($LASTEXITCODE -ne 0) { throw 'shared build failed' }
+  npm run build -w @jade-account/worker
+  if ($LASTEXITCODE -ne 0) { throw 'Worker build failed' }
+} finally { Pop-Location }
+
+Write-Host 'Starting Worker (visible window)...'
+$workerDir = Join-Path (Join-Path $ProjectRoot 'apps') 'worker'
+$innerCmd = "chcp 65001>nul & title $WORKER_WINDOW_TITLE & echo. & echo [$WORKER_WINDOW_TITLE] & echo 用途：连接云端「项目资金支出记录系统」，处理本地图片上传。 & echo 同一系统只允许运行一个 Worker 窗口，请勿重复打开。 & echo. & node dist/index.js"
+Start-Process -FilePath 'cmd.exe' -ArgumentList '/k', $innerCmd -WorkingDirectory $workerDir
 
 Write-Host "Waiting for online=true (max ${WaitSeconds}s)..."
-$password = Get-AdminPassword -Root $ProjectRoot
-$status = Wait-WorkerOnline -StatusUrl $StatusUrl -Password $password -MaxSeconds $WaitSeconds
+$status = Wait-WorkerOnline -Root $ProjectRoot -MaxSeconds $WaitSeconds
 
 Write-Host ''
 Write-Host '--- npm run worker:status (optional) ---'
@@ -134,12 +147,12 @@ try {
 
 if ($status) {
   Write-Host ''
-  Write-Host 'OK: Local worker connected. Scanner and images are available.'
+  Write-Host 'OK: Local worker connected. Image upload is available.'
   Write-Host "workerId=$($status.workerId) lastSeenAt=$($status.lastSeenAt)"
   exit 0
 }
 
 Show-RecentWorkerLogs -Root $ProjectRoot
 Write-Host ''
-Write-Host 'FAIL: Worker not online within timeout. Check apps/worker env and network.'
+Write-Host 'FAIL: Worker not online within timeout. Check apps/worker/.env and network.'
 exit 1

@@ -28,6 +28,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process powershell
 
 Write-Host 'Administrator detected. Installing tasks...'
 & "$PSScriptRoot\install-worker-autostart.ps1"
-& "$PSScriptRoot\install-scanner-autostart.ps1"
 & "$PSScriptRoot\status-local-services.ps1"
 Write-Host 'Done.'

@@ -31,9 +31,10 @@ export const useAuthStore = defineStore('auth', {
     workerStatus: {
       online: false,
       reason: 'WORKER_NOT_CONNECTED',
-      message: '公司电脑开着，但本地助手没有连上。请在公司电脑运行「一键修复本地Worker连接」。',
+      message: '公司电脑本地 Worker 未连接，图片暂无法上传。你仍可以先手动记账。',
     } as WorkerStatusData,
     sessionReady: false,
+    workerPollTimer: null as ReturnType<typeof setInterval> | null,
   }),
   actions: {
     async login(username: string, password: string) {
@@ -60,6 +61,7 @@ export const useAuthStore = defineStore('auth', {
         err.userMessage = '登录状态校验失败，请重新登录'
         throw err
       }
+      this.startWorkerStatusPoll()
     },
     async fetchMe() {
       if (!this.token) return
@@ -79,10 +81,25 @@ export const useAuthStore = defineStore('auth', {
       }
       try {
         await this.fetchMe()
+        this.startWorkerStatusPoll()
       } catch {
         this.logout()
       } finally {
         this.sessionReady = true
+      }
+    },
+    startWorkerStatusPoll() {
+      this.stopWorkerStatusPoll()
+      if (!this.token) return
+      void this.fetchWorkerStatus()
+      this.workerPollTimer = setInterval(() => {
+        if (this.token) void this.fetchWorkerStatus()
+      }, 30_000)
+    },
+    stopWorkerStatusPoll() {
+      if (this.workerPollTimer) {
+        clearInterval(this.workerPollTimer)
+        this.workerPollTimer = null
       }
     },
     async fetchWorkerStatus() {
@@ -90,7 +107,7 @@ export const useAuthStore = defineStore('auth', {
         const res = await api.get('/worker/status')
         const data = res.data.data as WorkerStatusData
         this.workerStatus = data
-        this.workerOnline = Boolean(data.uploadChannelReady && data.socketOpen)
+        this.workerOnline = Boolean(data.online ?? (data.uploadChannelReady && data.socketOpen))
       } catch {
         this.workerOnline = false
         this.workerStatus = {
@@ -99,7 +116,7 @@ export const useAuthStore = defineStore('auth', {
           scanChannelReady: false,
           socketOpen: false,
           reason: 'WORKER_NOT_CONNECTED',
-          message: '公司电脑本地助手未连接，图片上传和扫码枪暂不可用。你仍可以先手动记账。',
+          message: '公司电脑本地 Worker 未连接，图片暂无法上传。你仍可以先手动记账。',
         }
       }
     },
@@ -108,13 +125,14 @@ export const useAuthStore = defineStore('auth', {
         const res = await api.post('/worker/probe-upload', { timeoutMs: 3000 })
         return res.data.data as { ok: boolean; message?: string }
       } catch {
-        return { ok: false, message: '公司电脑本地助手没连上，先重启本地助手；这笔账可以先不传图保存。' }
+        return { ok: false, message: '公司电脑本地 Worker 没连上，先重启「和田玉镯子记账系统 - 本地Worker」；这笔账可以先不传图保存。' }
       }
     },
     hasPermission(code: string) {
       return this.permissions.includes(code)
     },
     logout() {
+      this.stopWorkerStatusPoll()
       this.token = ''
       this.user = null
       this.permissions = []

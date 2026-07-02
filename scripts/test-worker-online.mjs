@@ -10,11 +10,9 @@ import { fileURLToPath } from 'url'
 import WebSocket from 'ws'
 import {
   ROOT,
-  SCANNER,
   fetchJson,
   sleep,
-  getAdminPassword,
-  ensureScannerRunning,
+  getAdminCredentials,
 } from './lib/services.mjs'
 import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
 
@@ -27,11 +25,11 @@ const results = []
 let failed = 0
 
 async function remoteLogin() {
-  const password = await getAdminPassword()
+  const { username, password } = await getAdminCredentials()
   const { json, res } = await fetchJson(`${REMOTE}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password }),
+    body: JSON.stringify({ username, password }),
   })
   if (!res.ok || !json.data?.token) throw new Error(`登录失败: ${JSON.stringify(json)}`)
   return json.data.token
@@ -186,17 +184,7 @@ async function main() {
     fail('远程 online=true', e.message)
   }
 
-  // 6. 扫码枪 health
-  try {
-    await ensureScannerRunning((msg) => console.log(msg))
-    const h = await fetchJson(`${SCANNER}/api/health`)
-    if (h.res.ok) pass('扫码枪 API health', SCANNER)
-    else fail('扫码枪 API health', `HTTP ${h.res.status}`)
-  } catch (e) {
-    fail('扫码枪 API health', e.message)
-  }
-
-  // 7-8. 图片保存与读取（通过 Worker RPC 需 online；本地直接测 file-store 逻辑）
+  // 6. 图片保存与读取（通过 Worker RPC 需 online；本地直接测 file-store 逻辑）
   try {
     const { writeFile, readFile, mkdir } = await import('fs/promises')
     const base = env.FILE_BASE_DIR || path.join(ROOT, 'apps/worker/test-files')

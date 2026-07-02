@@ -63,12 +63,7 @@ async function loadAll() {
 }
 
 function syncExpandedGroups() {
-  const withSelection = permissionGroups.value
-    .filter((g) => g.items.some((p) => roleForm.value.permissionIds.includes(p.id)))
-    .map((g) => g.key)
-  expandedGroups.value = new Set(
-    withSelection.length ? withSelection : permissionGroups.value[0] ? [permissionGroups.value[0].key] : [],
-  )
+  expandedGroups.value = new Set()
 }
 
 function selectRole(id: number) {

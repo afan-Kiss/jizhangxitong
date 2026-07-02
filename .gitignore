@@ -17,3 +17,15 @@ apps/web/tsconfig.tsbuildinfo
 **/tsconfig.tsbuildinfo
 deploy/aliyun/**/__pycache__/
 deploy/aliyun/out/
+deploy/aliyun/_*
+deploy/aliyun/explore-*.py
+deploy/aliyun/fetch-*.py
+deploy/aliyun/probe-*.py
+deploy/aliyun/grep-*.py
+deploy/aliyun/find-*.py
+deploy/aliyun/read-*.py
+deploy/aliyun/quick-probe*.py
+deploy/aliyun/test-resolve*.py
+deploy/aliyun/verify-control*.py
+deploy/aliyun/hotfix-*.py
+deploy/aliyun/post-cookie*.py

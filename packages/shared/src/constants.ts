@@ -95,3 +95,8 @@ export const FILE_TYPE_LABELS: Record<string, string> = {
   bracelet_photo: '凭证图片',
   other: '其他凭证',
 }
+
+/** 当前系统对外显示名称（Worker 窗口标题、设置页等统一使用） */
+export const SYSTEM_DISPLAY_NAME = '项目资金支出记录系统'
+export const WORKER_WINDOW_TITLE = `${SYSTEM_DISPLAY_NAME} - 本地Worker`
+export const WORKER_DISPLAY_NAME = `${SYSTEM_DISPLAY_NAME}-本地Worker`

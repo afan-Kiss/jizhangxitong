@@ -29,7 +29,8 @@ const statusLabels: Record<string, string> = {
 const imageUrls = ref<Record<number, string>>({})
 const thumbUrls = ref<Record<number, string>>({})
 const previewOpen = ref(false)
-const previewSrc = ref<string | null>(null)
+const previewImages = ref<string[]>([])
+const previewStartIndex = ref(0)
 const previewAlt = ref('凭证图片')
 const supplementFiles = ref<Array<{ fileId: number; fileType: string; name: string }>>([])
 const supplementing = ref(false)
@@ -84,22 +85,34 @@ onMounted(loadExpense)
 async function openAttachmentPreview(att: { fileId: number; fileType?: string }) {
   const token = ++previewRequestSeq.value
   previewAlt.value = att.fileType || '凭证图片'
-  try {
-    const url = imageUrls.value[att.fileId] || await fileViewUrl(att.fileId)
-    if (token !== previewRequestSeq.value) return
-    if (url) imageUrls.value[att.fileId] = url
-    previewSrc.value = url
-    previewOpen.value = true
-  } catch {
-    if (token !== previewRequestSeq.value) return
-    const fallback = thumbUrls.value[att.fileId] || null
-    if (fallback) {
-      previewSrc.value = fallback
-      previewOpen.value = true
-    } else {
-      showToast('这张凭证暂时打不开')
+  const attachments = expense.value?.attachments || []
+  const urls: string[] = []
+  let startIndex = 0
+
+  for (let i = 0; i < attachments.length; i++) {
+    const a = attachments[i]
+    let url = imageUrls.value[a.fileId]
+    if (!url) {
+      try {
+        url = await fileViewUrl(a.fileId)
+        imageUrls.value[a.fileId] = url
+      } catch {
+        url = thumbUrls.value[a.fileId] || ''
+      }
     }
+    if (a.fileId === att.fileId) startIndex = urls.length
+    if (url) urls.push(url)
   }
+
+  if (token !== previewRequestSeq.value) return
+  if (!urls.length) {
+    showToast('这张凭证暂时打不开')
+    return
+  }
+
+  previewImages.value = urls
+  previewStartIndex.value = Math.min(startIndex, urls.length - 1)
+  previewOpen.value = true
 }
 
 async function voidExpense() {
@@ -316,7 +329,8 @@ function toggleSupplement() {
 
   <ImagePreviewModal
     :open="previewOpen"
-    :src="previewSrc"
+    :images="previewImages"
+    :start-index="previewStartIndex"
     :alt="previewAlt"
     @close="previewOpen = false"
   />

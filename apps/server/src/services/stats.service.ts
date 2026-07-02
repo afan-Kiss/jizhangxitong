@@ -1,5 +1,5 @@
 import { getExpenseSummary } from './expense.service'
-import { startOfDay, endOfDay, startOfMonth } from '../lib/utils'
+import { startOfDay, endOfDay, startOfMonth, localDateString } from '../lib/utils'
 
 export async function getHomeDashboard() {
   const [expenseToday, expenseMonth] = await Promise.all([
@@ -37,8 +37,8 @@ export async function getMonthlyReport(year: number, month: number) {
   const end = endOfDay(new Date(year, month, 0))
   const summary = await getExpenseSummary(
     'custom',
-    start.toISOString().slice(0, 10),
-    end.toISOString().slice(0, 10),
+    localDateString(start),
+    localDateString(end),
   )
 
   return {

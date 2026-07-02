@@ -1,6 +1,14 @@
 # Shared helpers for Windows scripts
 param()
 
+function Initialize-ConsoleUtf8 {
+  try { chcp 65001 | Out-Null } catch { }
+  $utf8 = [System.Text.Encoding]::UTF8
+  [Console]::InputEncoding = $utf8
+  [Console]::OutputEncoding = $utf8
+  $global:OutputEncoding = $utf8
+}
+
 function Get-ProjectRoot {
   return (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent)
 }

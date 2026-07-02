@@ -6,7 +6,7 @@ import path from 'path'
 import { execSync, spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
 import {
-  ROOT, SERVER, SCANNER, fetchJson, getAdminPassword, login,
+  ROOT, SERVER, fetchJson, getAdminPassword, login,
 } from './lib/services.mjs'
 import { readEnvFile, getEnvValue, isWeakJwtSecret, isWeakWorkerToken } from './lib/env-utils.mjs'
 
@@ -57,16 +57,7 @@ async function main() {
     add('warn', '本地 Worker', `无法验证: ${e.message}`)
   }
 
-  // 3. Scanner
-  try {
-    const s = await fetchJson(`${SCANNER}/api/health`)
-    add(s.res.ok ? 'ok' : 'warn', '扫码枪接口',
-      s.res.ok ? '扫码枪接口正常，可以同步镯子' : '扫码枪 API 不可用')
-  } catch {
-    add('warn', '扫码枪接口', '7789 端口不可访问，镯子同步会失败')
-  }
-
-  // 4. File dir
+  // 3. 本地图片目录
   try {
     await fs.access('D:/jewelry-account-files')
     add('ok', '本地图片目录', 'D:/jewelry-account-files 存在')

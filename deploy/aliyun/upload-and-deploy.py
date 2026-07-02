@@ -289,12 +289,15 @@ def main() -> None:
 set -e
 SSL_BACKUP=/tmp/jade-ssl-backup-$$
 DEPLOY_BACKUP="{backup_path}"
+SECRETS_BACKUP=/tmp/jade-secrets-backup-$$
 {shell_preserve_production_data(DEPLOY_DIR)}
 if [ -d {DEPLOY_DIR}/ssl ]; then cp -a {DEPLOY_DIR}/ssl "$SSL_BACKUP"; fi
+if [ -d {DEPLOY_DIR}/secrets ]; then cp -a {DEPLOY_DIR}/secrets "$SECRETS_BACKUP"; fi
 rm -rf {DEPLOY_DIR}
 mkdir -p {DEPLOY_DIR}
 unzip -q /tmp/jade-upload/jade-accounting.zip -d {DEPLOY_DIR}
 if [ -d "$SSL_BACKUP" ]; then mkdir -p {DEPLOY_DIR}/ssl && cp -a "$SSL_BACKUP/." {DEPLOY_DIR}/ssl/; rm -rf "$SSL_BACKUP"; fi
+if [ -d "$SECRETS_BACKUP" ]; then mkdir -p {DEPLOY_DIR}/secrets && cp -a "$SECRETS_BACKUP/." {DEPLOY_DIR}/secrets/; rm -rf "$SECRETS_BACKUP"; echo "[deploy] 已恢复 secrets/（千帆 Cookie）"; fi
 mkdir -p {DEPLOY_DIR}/logs {DEPLOY_DIR}/exports {DEPLOY_DIR}/web
 {shell_restore_preserved_data(DEPLOY_DIR)}
 PROD_DB="{DEPLOY_DIR}/apps/server/prisma/data/accounting.db"

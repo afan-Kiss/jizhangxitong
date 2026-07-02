@@ -47,7 +47,7 @@ def main() -> None:
 
     worker_env = ROOT / "apps/worker/.env"
     lines = worker_env.read_text(encoding="utf-8").splitlines() if worker_env.exists() else []
-    overrides = {"SERVER_WS_URL": WS_URL, "WORKER_WS_TOKEN": token}
+    overrides = {"SERVER_WS_URL": WS_URL, "WORKER_WS_TOKEN": token, "WORKER_NAME": "和田玉镯子记账系统-本地Worker"}
     out, seen = [], set()
     key_re = re.compile(r"^([A-Z0-9_]+)=")
     for ln in lines:

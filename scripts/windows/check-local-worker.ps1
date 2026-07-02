@@ -5,7 +5,8 @@ param(
 )
 
 $ErrorActionPreference = 'Continue'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+. (Join-Path $PSScriptRoot '_common.ps1')
+Initialize-ConsoleUtf8
 
 Write-Host '=== Local Worker diagnostics ==='
 Write-Host "ProjectRoot: $ProjectRoot"
@@ -35,14 +36,16 @@ try {
 } finally { Pop-Location }
 
 try {
-  $secret = Join-Path (Join-Path $ProjectRoot 'secrets') 'initial-admin-password.txt'
+  $username = 'fanfan'
   $pwd = 'admin123'
+  $secret = Join-Path (Join-Path $ProjectRoot 'secrets') 'initial-admin-password.txt'
   if (Test-Path $secret) {
     $text = Get-Content $secret -Raw -Encoding UTF8
-    if ($text -match ':\s*(.+)$') { $pwd = $Matches[1].Trim() }
+    if ($text -match '用户名:\s*(.+)') { $username = $Matches[1].Trim() }
+    if ($text -match '密码:\s*(.+)') { $pwd = $Matches[1].Trim() }
   }
   $loginUrl = $StatusUrl -replace '/api/local-worker/status', '/api/auth/login'
-  $loginBody = @{ username = 'admin'; password = $pwd } | ConvertTo-Json
+  $loginBody = @{ username = $username; password = $pwd } | ConvertTo-Json
   $login = Invoke-RestMethod -Uri $loginUrl -Method Post -Body $loginBody -ContentType 'application/json; charset=utf-8'
   $headers = @{ Authorization = "Bearer $($login.data.token)" }
   $st = Invoke-RestMethod -Uri $StatusUrl -Headers $headers

@@ -467,8 +467,16 @@ export async function updateExpense(
   if (before.isVoided) throw new Error('这条记录现在不能改')
 
   const oldBraceletId = before.braceletId
-  const data: Record<string, unknown> = { ...input }
-  delete data.payeeAccount
+  const allowedKeys = [
+    'amount', 'expenseType', 'businessType', 'paySource', 'occurredAt',
+    'braceletCode', 'braceletId', 'saleId', 'externalOrderNo', 'logisticsNo',
+    'expenseSummary', 'remark', 'reimbursementPerson', 'reimbursementStatus',
+    'customerPaymentStatus', 'paidAt', 'payeeName', 'payeeAccount', 'linkNote', 'needsAttachment',
+  ] as const
+  const data: Record<string, unknown> = {}
+  for (const key of allowedKeys) {
+    if (input[key] !== undefined) data[key] = input[key]
+  }
   if (input.occurredAt) data.occurredAt = parseDateInput(input.occurredAt)
   if (input.amount !== undefined && input.amount <= 0) throw new Error('金额得填一下')
   if (input.paySource === '员工垫付' || input.paySource === '专属经费') {
@@ -589,6 +597,10 @@ export async function addAttachments(
   items: Array<{ fileId: number; fileType: string }>,
   operator?: AuthRequest['user'],
 ) {
+  const expense = await prisma.expense.findUnique({ where: { id: expenseId } })
+  if (!expense) throw new Error('支出不存在')
+  if (expense.isVoided) throw new Error('这条记录已作废，不能修改')
+
   const maxOrder = await prisma.expenseAttachment.aggregate({
     where: { expenseId },
     _max: { sortOrder: true },

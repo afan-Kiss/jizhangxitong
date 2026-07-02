@@ -1,0 +1,41 @@
+---
+description: 每次代码改动后提交 GitHub 并部署阿里云
+alwaysApply: true
+---
+
+# 改动记忆点：GitHub + 阿里云部署
+
+完成用户请求的代码改动后，**默认执行**以下流程（除非用户明确说不要部署/不要提交）：
+
+## 1. 提交记忆点（Git）
+
+- 只提交与任务相关的文件；**不要**提交 `secrets/`、`.env`、`deploy/aliyun/_*` 等临时/敏感文件
+- 提交信息用完整句子，说明「为什么」：`fix:` / `feat:` / `refactor:` 前缀
+- 若本地落后远程，先 `git pull --rebase origin main`，解决冲突后再 push
+
+## 2. 推送到 GitHub
+
+```bash
+git push origin main
+```
+
+## 3. 部署到阿里云
+
+```bash
+npm run deploy:aliyun
+```
+
+- 部署凭证在 `secrets/deploy.env`（已 gitignore）
+- 生产地址：http://8.137.126.18/account/
+- 部署脚本会：构建 → 上传 → 恢复千帆 Cookie → 同步 Worker token → 重启本地 Worker → 远程验收
+
+## 4. Windows 脚本编码
+
+- PowerShell 脚本通过 `scripts/windows/run-utf8.ps1` 或 `_common.ps1` 的 `Initialize-ConsoleUtf8` 输出中文
+- Node 调用 PowerShell 使用 `scripts/lib/powershell-utf8.mjs` 的 `execPowerShellUtf8`
+
+## 5. 部署后告知用户
+
+- 本次 Git 提交 hash
+- 部署是否成功、远程 APP_VERSION
+- 本地 Worker 是否 online（若离线提示运行「一键修复本地Worker连接.bat」）

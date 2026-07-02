@@ -1,8 +1,8 @@
 import WebSocket from 'ws'
-import { RPC_METHODS, RpcMessage } from '@jade-account/shared'
+import { RPC_METHODS, RpcMessage, WORKER_DISPLAY_NAME, WORKER_WINDOW_TITLE } from '@jade-account/shared'
 import { ensureBaseDirs, fileExists, readFileByPath, saveUpload, deleteLocalFile, assertPathAllowed } from './file-store'
-import { getBraceletByCode, readImageByPath, SCANNER_NOT_FOUND_MSG, searchBraceletsFromScanner, checkScannerHealth } from './scanner-client'
 import { workerLog, nextBackoffMs } from './logger'
+import { acquireWorkerLock, releaseWorkerLock } from './single-instance'
 import {
   loadWorkerEnv,
   getWorkerEnvPath,
@@ -20,14 +20,28 @@ assertWorkerEnvForBoot()
 const SERVER_WS_URL = getServerWsUrl()
 const WORKER_WS_TOKEN = getWorkerWsToken()
 const WORKER_ID = process.env.WORKER_ID || 'local-worker-1'
-const WORKER_NAME = process.env.WORKER_NAME || '本地记账Worker'
-const SCANNER_API_URL = process.env.SCANNER_API_URL || 'http://127.0.0.1:7789'
+const WORKER_NAME = process.env.WORKER_NAME || WORKER_DISPLAY_NAME
 const FILE_BASE_DIR = process.env.FILE_BASE_DIR || ''
 const VERSION = '1.0.0'
+
+acquireWorkerLock(SERVER_WS_URL, WORKER_ID)
+
+const SCANNER_DISABLED = { success: false as const, error: '扫码枪功能已下线，本系统仅用于图片上传', code: 'SCANNER_DISABLED' }
 
 let reconnectAttempt = 0
 let wsInstance: WebSocket | null = null
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+let intentionalClose = false
+let shuttingDown = false
+
+function exitWorker(code: number, message: string) {
+  if (shuttingDown) return
+  shuttingDown = true
+  void workerLog(message).finally(() => {
+    releaseWorkerLock()
+    process.exit(code)
+  })
+}
 
 function wsUrlWithToken() {
   const url = new URL(SERVER_WS_URL)
@@ -38,46 +52,11 @@ function wsUrlWithToken() {
 async function handleRpc(msg: RpcMessage) {
   try {
     switch (msg.method) {
-      case RPC_METHODS.SCANNER_GET_BRACELET: {
-        const code = String(msg.params.braceletCode || '')
-        const baseUrl = String(msg.params.scannerApiBaseUrl || SCANNER_API_URL)
-        const timeoutMs = Number(msg.params.timeoutMs || 8000)
-        try {
-          const data = await getBraceletByCode(code, baseUrl, timeoutMs)
-          if (!data) {
-            await workerLog(`扫码枪未找到镯子: ${code}`)
-            return { success: false, error: SCANNER_NOT_FOUND_MSG, code: 'SCANNER_NOT_FOUND' }
-          }
-          await workerLog(`扫码枪查询成功: ${code}`)
-          return { success: true, data }
-        } catch (err) {
-          const code = (err as Error & { code?: string }).code
-          await workerLog(`扫码枪查询失败: ${code || ''} ${(err as Error).message}`)
-          return { success: false, error: (err as Error).message, code: code || 'SCANNER_API_UNAVAILABLE' }
-        }
-      }
-      case RPC_METHODS.SCANNER_SEARCH_BRACELETS: {
-        const keyword = String(msg.params.keyword || '')
-        const baseUrl = String(msg.params.scannerApiBaseUrl || SCANNER_API_URL)
-        const timeoutMs = Number(msg.params.timeoutMs || 8000)
-        try {
-          const data = await searchBraceletsFromScanner(keyword, baseUrl, timeoutMs)
-          await workerLog(`扫码枪搜索 "${keyword}" → ${data.length} 条`)
-          return { success: true, data }
-        } catch (err) {
-          return { success: false, error: (err as Error).message, code: (err as Error & { code?: string }).code }
-        }
-      }
-      case RPC_METHODS.SCANNER_READ_IMAGE: {
-        const imagePath = String(msg.params.imagePath || '')
-        if (!imagePath) return { success: false, error: '图片路径为空', code: 'FILE_NOT_FOUND' }
-        try {
-          const { buffer, mimeType } = await readImageByPath(imagePath)
-          return { success: true, data: { buffer: buffer.toString('base64'), mimeType } }
-        } catch (err) {
-          return { success: false, error: (err as Error).message, code: (err as Error & { code?: string }).code || 'FILE_NOT_FOUND' }
-        }
-      }
+      case RPC_METHODS.SCANNER_GET_BRACELET:
+      case RPC_METHODS.SCANNER_SEARCH_BRACELETS:
+      case RPC_METHODS.SCANNER_READ_IMAGE:
+      case RPC_METHODS.WORKER_SCAN_PROBE:
+        return SCANNER_DISABLED
       case RPC_METHODS.FILE_SAVE_UPLOAD: {
         try {
           const result = await saveUpload({
@@ -95,10 +74,6 @@ async function handleRpc(msg: RpcMessage) {
       }
       case RPC_METHODS.WORKER_UPLOAD_PROBE: {
         return { success: true, data: { ok: true, fileBaseWritable: !!FILE_BASE_DIR } }
-      }
-      case RPC_METHODS.WORKER_SCAN_PROBE: {
-        const ok = await checkScannerHealth(SCANNER_API_URL, Number(msg.params.timeoutMs || 3000))
-        return { success: true, data: { ok } }
       }
       case RPC_METHODS.FILE_DELETE_LOCAL: {
         const localPath = String(msg.params.localPath || '')
@@ -169,6 +144,7 @@ async function handleRpc(msg: RpcMessage) {
 }
 
 function scheduleReconnect() {
+  if (shuttingDown) return
   const delay = nextBackoffMs(reconnectAttempt)
   reconnectAttempt++
   workerLog(`已断开，${delay / 1000} 秒后准备重连（第 ${reconnectAttempt} 次）`)
@@ -176,8 +152,12 @@ function scheduleReconnect() {
 }
 
 function connect() {
+  if (shuttingDown) return
   if (wsInstance) {
+    intentionalClose = true
     try { wsInstance.removeAllListeners(); wsInstance.close() } catch { /* */ }
+    wsInstance = null
+    intentionalClose = false
   }
   const ws = new WebSocket(wsUrlWithToken())
   wsInstance = ws
@@ -194,14 +174,12 @@ function connect() {
       localBaseInfo: {
         fileBase: FILE_BASE_DIR,
         serverWsUrl: SERVER_WS_URL,
-        scannerApiUrl: SCANNER_API_URL,
       },
     }))
     if (heartbeatTimer) clearInterval(heartbeatTimer)
-    heartbeatTimer = setInterval(async () => {
+    heartbeatTimer = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
-        const scannerAvailable = await checkScannerHealth(SCANNER_API_URL)
-        ws.send(JSON.stringify({ type: 'heartbeat', workerId: WORKER_ID, scannerAvailable }))
+        ws.send(JSON.stringify({ type: 'heartbeat', workerId: WORKER_ID }))
       }
     }, 30000)
   })
@@ -219,9 +197,31 @@ function connect() {
     }
   })
 
-  ws.on('close', () => {
+  ws.on('close', (code, reason) => {
     if (heartbeatTimer) clearInterval(heartbeatTimer)
-    scheduleReconnect()
+    heartbeatTimer = null
+    wsInstance = null
+    if (intentionalClose || shuttingDown) return
+    const reasonText = String(reason || '')
+    void workerLog(`连接关闭 code=${code ?? 'none'} reason=${reasonText || '(empty)'}`).then(() => {
+      if (code === 4002 || reasonText.includes('replaced by new connection')) {
+        exitWorker(
+          0,
+          '已有另一个 Worker 窗口连上云端，本窗口自动退出。请只保留标题为「项目资金支出记录系统 - 本地Worker」的一个窗口。',
+        )
+        return
+      }
+      if (code === 4001) {
+        exitWorker(1, 'Worker Token 无效，请运行 sync-worker-env 或一键修复后再启动。')
+        return
+      }
+      if (code === 4003) {
+        exitWorker(0, '连接已被服务端关闭（重复 Worker），本窗口退出。')
+        return
+      }
+      scheduleReconnect()
+    })
+    return
   })
 
   ws.on('error', (err) => {
@@ -231,19 +231,17 @@ function connect() {
 
 async function main() {
   await ensureBaseDirs()
-  await workerLog('======== Worker 启动 ========')
+  await workerLog(`======== ${WORKER_WINDOW_TITLE} 启动 ========`)
   await workerLog(`cwd: ${process.cwd()}`)
   await workerLog(`workerDir: ${WORKER_DIR}`)
   await workerLog(`envFile: ${getWorkerEnvPath() || '(none)'}`)
   await workerLog(`SERVER_WS_URL: ${SERVER_WS_URL}`)
   await workerLog(`WORKER_ID: ${WORKER_ID}`)
   await workerLog(`FILE_BASE_DIR: ${FILE_BASE_DIR || '(default)'}`)
-  await workerLog(`SCANNER_API_URL: ${SCANNER_API_URL}`)
   await workerLog(`WORKER_WS_TOKEN: ${maskToken(WORKER_WS_TOKEN)}`)
   if (/localhost|127\.0\.0\.1/i.test(SERVER_WS_URL) && SERVER_WS_URL !== PRODUCTION_WS) {
     await workerLog('警告: SERVER_WS_URL 指向 localhost，不会连接阿里云')
   }
-  await workerLog(`本地 Worker 启动: ${WORKER_NAME}`)
   connect()
 }
 

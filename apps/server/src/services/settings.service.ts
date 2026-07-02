@@ -41,6 +41,7 @@ export async function getQianfanOrderUrlTemplate(): Promise<string> {
 }
 
 export async function isQianfanOrderLinkEnabled(): Promise<boolean> {
+  if (process.env.CONTROL_SERVICE_TOKEN?.trim()) return true
   const tpl = await getQianfanOrderUrlTemplate()
   return !!tpl && tpl.includes('{orderNo}')
 }

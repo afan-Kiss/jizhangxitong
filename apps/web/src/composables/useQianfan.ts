@@ -1,56 +1,55 @@
 import { ref } from 'vue'
 import { showToast } from 'vant'
-import { buildQianfanOrderUrl } from '@jade-account/shared'
+import api, { withBase } from '../api'
+import { copyTextToClipboard } from '../utils/clipboard'
 
-const qianfanTemplate = ref('')
 const qianfanEnabled = ref(false)
 
-export async function loadQianfanConfig(api: { get: (url: string) => Promise<{ data: any }> }) {
+export async function loadQianfanConfig(apiClient: { get: (url: string) => Promise<{ data: any }> }) {
   try {
     const [health, settings] = await Promise.all([
-      api.get('/health'),
-      api.get('/settings'),
+      apiClient.get('/health'),
+      apiClient.get('/settings'),
     ])
     qianfanEnabled.value = !!(
       health.data.qianfanOrderLinkEnabled
       || settings.data.data?.qianfanOrderLinkEnabled
     )
-    const tpl = settings.data.data?.settings?.qianfan_order_detail_url_template
-    if (tpl?.includes('{orderNo}')) {
-      qianfanTemplate.value = tpl
-      qianfanEnabled.value = true
-    }
   } catch {
     qianfanEnabled.value = false
   }
 }
 
-export function orderDetailUrl(orderNo?: string | null, _shopKey?: string | null): string | null {
-  if (!orderNo?.trim()) return null
-  if (qianfanTemplate.value) {
-    return buildQianfanOrderUrl(qianfanTemplate.value, orderNo)
+export async function copyOrderNo(orderNo?: string | null) {
+  const value = orderNo?.trim()
+  if (!value) return
+  const ok = await copyTextToClipboard(value)
+  if (ok) showToast('已复制订单号')
+  else showToast('复制失败，请长按订单号手动复制')
+}
+
+export async function openQianfan(orderNo?: string | null, shopKey?: string | null) {
+  const value = orderNo?.trim()
+  if (!value) return
+  try {
+    const res = await api.post('/qianfan/order-detail-ticket', {
+      orderNo: value,
+      shopKey: shopKey?.trim() || undefined,
+    }, { skipGlobalToast: true })
+    const openUrl = res.data.data?.openUrl
+    if (!openUrl) {
+      showToast('暂时无法打开千帆订单详情')
+      return
+    }
+    window.open(withBase(openUrl), '_blank', 'noopener,noreferrer')
+  } catch (err: unknown) {
+    const msg = (err as { userMessage?: string })?.userMessage
+      || (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      || '打开千帆失败，可先复制订单号'
+    showToast(msg)
   }
-  return buildQianfanOrderUrl(
-    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_QIANFAN_ORDER_DETAIL_URL_TEMPLATE) || '',
-    orderNo,
-  )
-}
-
-export function copyOrderNo(orderNo?: string | null) {
-  if (!orderNo?.trim()) return
-  navigator.clipboard?.writeText(orderNo.trim()).then(() => {
-    showToast('已复制订单号')
-  }).catch(() => {
-    showToast(orderNo.trim())
-  })
-}
-
-export function openQianfan(orderNo?: string | null, shopKey?: string | null) {
-  const url = orderDetailUrl(orderNo, shopKey)
-  if (url) window.open(url, '_blank', 'noopener')
-  else copyOrderNo(orderNo)
 }
 
 export function useQianfan() {
-  return { qianfanEnabled, qianfanTemplate, loadQianfanConfig, orderDetailUrl, copyOrderNo, openQianfan }
+  return { qianfanEnabled, loadQianfanConfig, copyOrderNo, openQianfan }
 }

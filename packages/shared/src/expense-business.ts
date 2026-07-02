@@ -15,7 +15,7 @@ export type ExpenseBusinessType = typeof EXPENSE_BUSINESS_TYPES[keyof typeof EXP
 
 /** @deprecated 纯支出系统不再展示业务大类 */
 export const EXPENSE_BUSINESS_LABELS: Record<ExpenseBusinessType, string> = {
-  normal: '普通支出',
+  normal: '好评返现',
   item_cost: '货品成本',
   customer_refund: '客户返款/退差价',
   customer_compensation: '客户补偿/安抚打款',

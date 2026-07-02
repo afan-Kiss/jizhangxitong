@@ -21,25 +21,22 @@ const props = defineProps<{
 const status = computed(() => props.status || {})
 const displayMessage = computed(() => {
   if (status.value.message) return status.value.message
-  if (status.value.uploadChannelReady && status.value.scanChannelReady) {
-    return '公司电脑已连接，扫码枪和图片可正常使用。'
-  }
-  if (status.value.uploadChannelReady && !status.value.scanChannelReady) {
-    return '图片上传可用，扫码枪未连接；可手动输入编号。'
+  if (status.value.uploadChannelReady) {
+    return '公司电脑已连接，图片可正常上传。'
   }
   if (status.value.socketOpen && !status.value.uploadChannelReady) {
-    return '公司电脑已连接，但图片上传通道超时，请重启本地助手。'
+    return '公司电脑已连接，但图片上传通道异常，请重启本地 Worker 窗口。'
   }
-  return '公司电脑本地助手未连接，图片上传和扫码枪暂不可用。你仍可以先手动记账。'
+  return '公司电脑本地 Worker 未连接，图片暂无法上传。你仍可以先手动记账。'
 })
 
 const pillType = computed(() => {
-  if (status.value.uploadChannelReady && status.value.scanChannelReady) return 'success'
-  if (status.value.uploadChannelReady || status.value.socketOpen) return 'warning'
+  if (status.value.uploadChannelReady) return 'success'
+  if (status.value.socketOpen) return 'warning'
   return 'warning'
 })
 
-const fullyReady = computed(() => Boolean(status.value.uploadChannelReady && status.value.scanChannelReady))
+const fullyReady = computed(() => Boolean(status.value.uploadChannelReady))
 </script>
 
 <template>
@@ -48,12 +45,12 @@ const fullyReady = computed(() => Boolean(status.value.uploadChannelReady && sta
     :class="{ 'worker-status--offline': !fullyReady, 'worker-status--compact': compact }"
     data-testid="worker-status"
   >
-    <div class="worker-status__title muted">公司电脑本地助手状态</div>
+    <div class="worker-status__title muted">项目资金支出记录系统 · 本地 Worker</div>
     <StatusPill :type="pillType" dot>
       {{ displayMessage }}
     </StatusPill>
     <p v-if="!fullyReady && !compact" class="worker-status__hint muted">
-      普通记账、统计仍可使用；需要扫码枪或本地图片时会受影响。
+      普通记账、统计仍可使用；需要上传报销截图时，请在公司电脑打开「一键启动本地Worker.bat」。
     </p>
   </div>
 </template>

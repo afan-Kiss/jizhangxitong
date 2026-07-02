@@ -18,6 +18,14 @@ export function getShopByKey(key: string): XhsShopDef | undefined {
   return XHS_SHOPS.find((s) => s.key === key)
 }
 
+export function resolveShopInput(input?: string | null): XhsShopDef | undefined {
+  const raw = String(input || '').trim()
+  if (!raw) return undefined
+  const byKey = getShopByKey(raw)
+  if (byKey) return byKey
+  return XHS_SHOPS.find((s) => s.name === raw || s.cookieShopName === raw)
+}
+
 export const ORDER_API_URL = 'https://ark.xiaohongshu.com/api/edith/fulfillment/order/page'
 export const ORDER_REFERER = 'https://ark.xiaohongshu.com/app-order/order/query'
 export const DEFAULT_PAGE_SIZE = 10

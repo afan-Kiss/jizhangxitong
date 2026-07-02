@@ -71,17 +71,24 @@ export async function getWorkerStatusDetail(options?: { probeUpload?: boolean; p
   if (options?.probeUpload) {
     await probeUploadChannel(3000)
   }
-  if (options?.probeScan) {
-    await probeScanChannel(3000)
-  }
 
-  const scanChannelReady = hubDetail.scannerAvailable === true
-    || Boolean(lastScanProbeOk && lastScanProbeAt && serverNow.getTime() - lastScanProbeAt.getTime() < 120_000)
-
-  const uploadChannelReady = Boolean(
-    socketOpen && lastUploadProbeOk
+  const heartbeatFresh = Boolean(
+    hubDetail.lastHeartbeatAt
+    && serverNow.getTime() - hubDetail.lastHeartbeatAt.getTime() < 90_000,
+  )
+  const probeFresh = Boolean(
+    lastUploadProbeOk
     && lastUploadProbeAt
     && serverNow.getTime() - lastUploadProbeAt.getTime() < 120_000,
+  )
+  const probeFailedRecently = Boolean(
+    lastUploadProbeAt
+    && !lastUploadProbeOk
+    && serverNow.getTime() - lastUploadProbeAt.getTime() < 60_000,
+  )
+  // WebSocket 心跳正常即视为上传通道可用；仅近期 probe 明确失败时才降级
+  const uploadChannelReady = Boolean(
+    socketOpen && !probeFailedRecently && (probeFresh || heartbeatFresh),
   )
 
   let reason: WorkerOfflineReason = 'OK'
@@ -93,14 +100,11 @@ export async function getWorkerStatusDetail(options?: { probeUpload?: boolean; p
     else reason = 'WORKER_NOT_CONNECTED'
   } else if (!uploadChannelReady && lastUploadProbeAt) {
     reason = lastUploadProbeOk ? 'OK' : (lastUploadProbeAt ? 'UPLOAD_CHANNEL_TIMEOUT' : 'UPLOAD_CHANNEL_FAILED')
-  } else if (!scanChannelReady && socketOpen && uploadChannelReady) {
-    reason = 'SCANNER_API_UNAVAILABLE'
   }
 
   const message = buildStatusMessage({
     socketOpen,
     uploadChannelReady,
-    scanChannelReady,
     localWorkerEnabled: scannerSettings.localWorkerEnabled,
     reason,
   })
@@ -112,7 +116,7 @@ export async function getWorkerStatusDetail(options?: { probeUpload?: boolean; p
     workerOnline,
     socketOpen,
     uploadChannelReady,
-    scanChannelReady,
+    scanChannelReady: false,
     reason,
     message,
     workerId: socketOpen ? hubDetail.workerId : null,
@@ -122,21 +126,20 @@ export async function getWorkerStatusDetail(options?: { probeUpload?: boolean; p
     connectedAt: hubDetail.connectedAt?.toISOString() || null,
     lastUploadProbeAt: lastUploadProbeAt?.toISOString() || null,
     lastUploadProbeOk,
-    lastScanProbeAt: lastScanProbeAt?.toISOString() || null,
+    lastScanProbeAt: null,
     serverNow: serverNow.toISOString(),
     secondsSinceLastSeen: hubDetail.lastHeartbeatAt
       ? Math.floor((serverNow.getTime() - hubDetail.lastHeartbeatAt.getTime()) / 1000)
       : null,
     localWorkerEnabled: scannerSettings.localWorkerEnabled,
-    scannerApiBaseUrl: scannerSettings.scannerApiBaseUrl,
-    scannerAvailable: hubDetail.scannerAvailable,
+    scannerApiBaseUrl: null,
+    scannerAvailable: null,
   }
 }
 
 function buildStatusMessage(input: {
   socketOpen: boolean
   uploadChannelReady: boolean
-  scanChannelReady: boolean
   localWorkerEnabled: boolean
   reason: WorkerOfflineReason
 }) {
@@ -144,25 +147,21 @@ function buildStatusMessage(input: {
     return '后台已关闭本地助手，请在设置中启用。'
   }
   if (!input.socketOpen) {
-    return '公司电脑本地助手未连接，图片上传和扫码枪暂不可用。你仍可以先手动记账。'
+    return '公司电脑本地 Worker 未连接，图片暂无法上传。你仍可以先手动记账。'
   }
   if (!input.uploadChannelReady) {
     if (input.reason === 'UPLOAD_CHANNEL_TIMEOUT') {
-      return '公司电脑已连接，但图片上传通道超时，请重启本地助手。'
+      return '公司电脑已连接，但图片上传通道超时，请重启「项目资金支出记录系统 - 本地Worker」窗口。'
     }
-    return '公司电脑已连接，但图片上传通道不可用，请重启本地助手。'
+    return '公司电脑已连接，但图片上传通道不可用，请重启本地 Worker。'
   }
-  if (!input.scanChannelReady) {
-    return '图片上传可用，扫码枪未连接；可手动输入编号。'
-  }
-  return '公司电脑已连接，扫码枪和图片可正常使用。'
+  return '公司电脑已连接，图片可正常上传。'
 }
 
 export function workerReasonMessage(reason: WorkerOfflineReason, online: boolean): string {
   return buildStatusMessage({
     socketOpen: online,
     uploadChannelReady: online,
-    scanChannelReady: reason !== 'SCANNER_API_UNAVAILABLE',
     localWorkerEnabled: reason !== 'LOCAL_WORKER_DISABLED',
     reason,
   })

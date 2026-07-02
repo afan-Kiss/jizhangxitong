@@ -4,6 +4,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot '_common.ps1')
+Initialize-ConsoleUtf8
 $startScript = Join-Path $PSScriptRoot 'start-local-worker.ps1'
 & $startScript -ProjectRoot $ProjectRoot -WaitSeconds 30
 exit $LASTEXITCODE

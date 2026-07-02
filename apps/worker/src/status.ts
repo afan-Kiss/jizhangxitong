@@ -1,8 +1,8 @@
-import { checkScannerHealth } from './scanner-client'
 import { checkWritable, getFileBaseDir } from './file-store'
 import { workerLog } from './logger'
 import fs from 'fs/promises'
 import path from 'path'
+import { WORKER_DISPLAY_NAME } from '@jade-account/shared'
 import {
   loadWorkerEnv,
   getWorkerEnvPath,
@@ -15,7 +15,6 @@ import {
 loadWorkerEnv()
 
 const SERVER_WS_URL = getServerWsUrl()
-const SCANNER_API_URL = process.env.SCANNER_API_URL || 'http://127.0.0.1:7789'
 const LOG_DIR = process.env.WORKER_LOG_DIR || path.join(WORKER_DIR, 'logs')
 
 async function readLastLogLines(maxLines = 15) {
@@ -33,7 +32,6 @@ async function readLastLogLines(maxLines = 15) {
 async function main() {
   const fileBase = getFileBaseDir()
   const writable = await checkWritable()
-  const scannerOk = await checkScannerHealth(SCANNER_API_URL)
   const recentLogs = await readLastLogLines()
 
   const status = {
@@ -41,14 +39,12 @@ async function main() {
     workerDir: WORKER_DIR,
     envFile: getWorkerEnvPath(),
     workerId: process.env.WORKER_ID || 'local-worker-1',
-    workerName: process.env.WORKER_NAME || '本地记账Worker',
+    workerName: process.env.WORKER_NAME || WORKER_DISPLAY_NAME,
     serverWsUrl: SERVER_WS_URL,
     workerWsTokenSet: Boolean(getWorkerWsToken()),
     workerWsTokenPreview: maskToken(getWorkerWsToken()),
     fileBaseDir: fileBase,
     fileBaseWritable: writable,
-    scannerApiUrl: SCANNER_API_URL,
-    scannerAvailable: scannerOk,
     logDir: LOG_DIR,
     recentLogs,
     hint: 'Worker 进程是否在线请查看 recentLogs 中是否有「已连接服务端」',

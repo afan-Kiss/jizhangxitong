@@ -10,10 +10,13 @@ import { loadDeployEnv, RECOMMENDED_URL } from './lib/deploy-env.mjs'
 import { fetchJson, login, sleep } from './lib/services.mjs'
 import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
 import { verifyDeployVersion } from './verify-deploy-version.mjs'
+import { execPowerShellUtf8 } from './lib/powershell-utf8.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(__dirname, '..')
 const DEPLOY_PY = path.join(ROOT, 'deploy/aliyun/upload-and-deploy.py')
+const QIANFAN_COOKIE_PY = path.join(ROOT, 'deploy/aliyun/update-qianfan-cookies-deploy.py')
+const SYNC_WORKER_PY = path.join(ROOT, 'deploy/aliyun/sync-worker-env.py')
 
 const deployReport = {
   core: [],
@@ -48,9 +51,8 @@ async function restartWorker() {
   console.log('\n>>> 重启本地 Worker...')
   const ps1 = path.join(ROOT, 'scripts/windows/restart-local-worker.ps1')
   try {
-    execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${ps1}"`, {
+    execPowerShellUtf8(ps1, {
       cwd: ROOT,
-      stdio: 'inherit',
       timeout: 120000,
     })
   } catch (e) {
@@ -102,18 +104,6 @@ async function verifyWorkerRemote(baseUrl) {
   }
 }
 
-async function check7789() {
-  const scanner = process.env.SCANNER_API_URL || 'http://127.0.0.1:7789'
-  try {
-    const h = await fetch(`${scanner}/api/health`, { signal: AbortSignal.timeout(10000) })
-    deployReport.external.push({ name: '7789 health', ok: h.ok, detail: scanner })
-    return h.ok
-  } catch (e) {
-    deployReport.external.push({ name: '7789 health', ok: false, detail: e.message })
-    return false
-  }
-}
-
 function printDeploySummary(gitHash, workerReport) {
   console.log('\n========================================')
   console.log('部署验收分级报告')
@@ -127,7 +117,7 @@ function printDeploySummary(gitHash, workerReport) {
     console.log('  ✓ 全部通过')
   }
   console.log('\n【外部依赖验收】')
-  console.log('  Worker online、7789、Excel 图片上传')
+  console.log('  Worker online、Excel 图片上传')
   for (const x of deployReport.external) {
     const icon = x.ok ? '✓' : (x.warnOnly ? '⚠' : '✗')
     console.log(`  ${icon} ${x.name}${x.detail ? ` — ${x.detail}` : ''}`)
@@ -161,6 +151,22 @@ async function main() {
     timeout: 900000,
   })
 
+  try {
+    run(`python "${QIANFAN_COOKIE_PY}"`, { timeout: 180000 })
+    deployReport.core.push({ name: '千帆 Cookie 服务恢复', ok: true })
+  } catch {
+    deployReport.external.push({ name: '千帆 Cookie 服务恢复', ok: false, warnOnly: true })
+    console.warn('\nWARN — 千帆 Cookie 未自动恢复，请手动运行 deploy/aliyun/update-qianfan-cookies-deploy.py')
+  }
+
+  try {
+    run(`python "${SYNC_WORKER_PY}"`, { timeout: 60000 })
+    deployReport.external.push({ name: 'Worker token 同步', ok: true })
+  } catch {
+    deployReport.external.push({ name: 'Worker token 同步', ok: false, warnOnly: true })
+    console.warn('\nWARN — Worker token 未从远程同步，请手动运行 deploy/aliyun/sync-worker-env.py')
+  }
+
   await restartWorker()
   await sleep(5000)
 
@@ -178,7 +184,6 @@ async function main() {
   console.log(`\nOK — 远程版本与 HEAD 一致: ${gitHash}\n`)
 
   const workerReport = await verifyWorkerRemote(remoteUrl)
-  await check7789()
 
   const testEnv = { ...process.env, ACCEPTANCE_SERVER: remoteUrl }
 

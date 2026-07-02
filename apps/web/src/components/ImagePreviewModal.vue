@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps<{
   open: boolean
-  src: string | null
+  src?: string | null
+  images?: string[]
+  startIndex?: number
   alt?: string
 }>()
 
@@ -15,6 +17,16 @@ const dragging = ref(false)
 const dragMoved = ref(false)
 const viewportRef = ref<HTMLElement | null>(null)
 const dragState = ref<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
+const currentIndex = ref(0)
+
+const imageList = computed(() => {
+  if (props.images?.length) return props.images
+  if (props.src) return [props.src]
+  return []
+})
+
+const currentSrc = computed(() => imageList.value[currentIndex.value] || null)
+const hasMultiple = computed(() => imageList.value.length > 1)
 
 function resetView() {
   scale.value = 1
@@ -25,10 +37,24 @@ function zoomBy(delta: number) {
   scale.value = Math.min(5, Math.max(0.25, Number((scale.value + delta).toFixed(2))))
 }
 
+function goPrev() {
+  if (!hasMultiple.value) return
+  currentIndex.value = (currentIndex.value - 1 + imageList.value.length) % imageList.value.length
+  resetView()
+}
+
+function goNext() {
+  if (!hasMultiple.value) return
+  currentIndex.value = (currentIndex.value + 1) % imageList.value.length
+  resetView()
+}
+
 function onWheel(e: WheelEvent) {
   e.preventDefault()
   e.stopPropagation()
-  zoomBy(e.deltaY < 0 ? 0.12 : -0.12)
+  if (!hasMultiple.value) return
+  if (e.deltaY < 0) goPrev()
+  else if (e.deltaY > 0) goNext()
 }
 
 function onMouseDown(e: MouseEvent) {
@@ -79,13 +105,20 @@ function onBackdropClick() {
 }
 
 function onKeyDown(e: KeyboardEvent) {
+  if (!props.open) return
   if (e.key === 'Escape') emit('close')
+  else if (e.key === 'ArrowLeft') goPrev()
+  else if (e.key === 'ArrowRight') goNext()
 }
 
 watch(
-  () => [props.open, props.src] as const,
-  ([open]) => {
-    if (open) resetView()
+  () => [props.open, props.startIndex] as const,
+  ([open, startIndex]) => {
+    if (open) {
+      const max = Math.max(0, imageList.value.length - 1)
+      currentIndex.value = Math.min(Math.max(0, startIndex ?? 0), max)
+      resetView()
+    }
   },
 )
 
@@ -102,29 +135,26 @@ onMounted(() => {
 
 let wheelEl: HTMLElement | null = null
 
+function bindWheel(el: HTMLElement | null) {
+  if (wheelEl) wheelEl.removeEventListener('wheel', onWheel)
+  wheelEl = el
+  if (wheelEl) wheelEl.addEventListener('wheel', onWheel, { passive: false })
+}
+
 watch(
   () => props.open,
   (open) => {
-    if (wheelEl) {
-      wheelEl.removeEventListener('wheel', onWheel)
-      wheelEl = null
-    }
-    if (open && viewportRef.value) {
-      wheelEl = viewportRef.value
-      wheelEl.addEventListener('wheel', onWheel, { passive: false })
-    }
+    if (!open) bindWheel(null)
+    else if (viewportRef.value) bindWheel(viewportRef.value)
   },
 )
 
 watch(viewportRef, (el) => {
-  if (!props.open || !el) return
-  if (wheelEl) wheelEl.removeEventListener('wheel', onWheel)
-  wheelEl = el
-  wheelEl.addEventListener('wheel', onWheel, { passive: false })
+  if (props.open && el) bindWheel(el)
 })
 
 onUnmounted(() => {
-  if (wheelEl) wheelEl.removeEventListener('wheel', onWheel)
+  bindWheel(null)
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('mouseup', onMouseUp)
   window.removeEventListener('keydown', onKeyDown)
@@ -135,7 +165,7 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <div
-      v-if="open && src"
+      v-if="open && currentSrc"
       class="image-preview-modal"
       role="dialog"
       aria-modal="true"
@@ -143,11 +173,59 @@ onUnmounted(() => {
       data-testid="image-preview-modal"
     >
       <div class="image-preview-modal__toolbar">
-        <span class="image-preview-modal__hint">滚轮缩放 · 拖动图片 · 点击空白处关闭</span>
+        <span class="image-preview-modal__hint">
+          <template v-if="hasMultiple">滚轮切换图片 · </template>
+          拖动查看 · 点击空白处关闭
+        </span>
         <div class="image-preview-modal__controls">
-          <button type="button" aria-label="缩小" @click="zoomBy(-0.2)">−</button>
+          <button
+            v-if="hasMultiple"
+            type="button"
+            class="image-preview-modal__nav"
+            aria-label="上一张"
+            data-testid="image-preview-prev"
+            @click="goPrev"
+          >‹</button>
+          <span v-if="hasMultiple" class="image-preview-modal__counter" data-testid="image-preview-counter">
+            {{ currentIndex + 1 }} / {{ imageList.length }}
+          </span>
+          <button
+            v-if="hasMultiple"
+            type="button"
+            class="image-preview-modal__nav"
+            aria-label="下一张"
+            data-testid="image-preview-next"
+            @click="goNext"
+          >›</button>
+          <span v-if="hasMultiple" class="image-preview-modal__divider" />
+          <button
+            type="button"
+            class="image-preview-modal__zoom"
+            aria-label="缩小"
+            data-testid="image-preview-zoom-out"
+            @click="zoomBy(-0.2)"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="2" />
+              <line x1="15" y1="15" x2="21" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <line x1="7.5" y1="10" x2="12.5" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </button>
           <span class="image-preview-modal__scale">{{ Math.round(scale * 100) }}%</span>
-          <button type="button" aria-label="放大" @click="zoomBy(0.2)">+</button>
+          <button
+            type="button"
+            class="image-preview-modal__zoom"
+            aria-label="放大"
+            data-testid="image-preview-zoom-in"
+            @click="zoomBy(0.2)"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="2" />
+              <line x1="15" y1="15" x2="21" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <line x1="7.5" y1="10" x2="12.5" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <line x1="10" y1="7.5" x2="10" y2="12.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </button>
           <button type="button" class="image-preview-modal__reset" @click="resetView">重置</button>
           <button type="button" class="image-preview-modal__close" aria-label="关闭" @click="emit('close')">×</button>
         </div>
@@ -159,14 +237,15 @@ onUnmounted(() => {
         @click="onBackdropClick"
       >
         <img
-          :src="src"
+          :key="currentSrc"
+          :src="currentSrc"
           :alt="alt || '图片预览'"
           draggable="false"
           class="image-preview-modal__image"
           :style="{
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
             transformOrigin: 'center center',
-            cursor: dragging ? 'grabbing' : scale > 1 ? 'grab' : 'zoom-in',
+            cursor: dragging ? 'grabbing' : 'grab',
           }"
           @click.stop
           @mousedown="onMouseDown"
@@ -216,9 +295,31 @@ onUnmounted(() => {
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .image-preview-modal__controls button:hover {
   background: rgba(255, 255, 255, 0.18);
+}
+.image-preview-modal__nav {
+  font-size: 22px !important;
+  padding: 0 6px !important;
+}
+.image-preview-modal__counter {
+  min-width: 3rem;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.image-preview-modal__divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 2px;
+}
+.image-preview-modal__zoom {
+  padding: 0 !important;
 }
 .image-preview-modal__scale {
   min-width: 3rem;
@@ -243,7 +344,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  cursor: zoom-out;
+  cursor: default;
 }
 .image-preview-modal__viewport--dragging {
   cursor: grabbing;

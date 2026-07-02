@@ -193,12 +193,12 @@ class WorkerHub {
   private async assertWorkerReady() {
     const scannerSettings = await getScannerSettings()
     if (!scannerSettings.localWorkerEnabled) {
-      const err = new Error('本地 Worker 未启用，无法连接扫码枪系统')
+      const err = new Error('本地 Worker 未启用，无法上传图片')
       ;(err as Error & { code: string }).code = ERROR_CODES.LOCAL_WORKER_OFFLINE
       throw err
     }
     if (!this.isOnline()) {
-      const err = new Error('本地电脑未连接，暂时无法读取本地扫码枪或图片')
+      const err = new Error('本地电脑未连接，暂时无法读取图片')
       ;(err as Error & { code: string }).code = ERROR_CODES.LOCAL_WORKER_OFFLINE
       throw err
     }
@@ -213,7 +213,7 @@ class WorkerHub {
     await this.assertWorkerReady()
     const scannerSettings = await getScannerSettings()
     if (!this.workerSocket || this.workerSocket.readyState !== WebSocket.OPEN) {
-      const err = new Error('本地电脑未连接，暂时无法读取本地扫码枪或图片')
+      const err = new Error('本地电脑未连接，暂时无法读取图片')
       ;(err as Error & { code: string }).code = ERROR_CODES.LOCAL_WORKER_OFFLINE
       throw err
     }
@@ -243,7 +243,7 @@ class WorkerHub {
       } catch {
         this.pending.delete(id)
         clearTimeout(timer)
-        const err = new Error('本地电脑未连接，暂时无法读取本地扫码枪或图片')
+        const err = new Error('本地电脑未连接，暂时无法读取图片')
         ;(err as Error & { code: string }).code = ERROR_CODES.LOCAL_WORKER_OFFLINE
         reject(err)
       }

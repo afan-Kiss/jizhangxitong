@@ -139,7 +139,7 @@ async function main() {
   }
 
   await ensureServerRunning((s, m, ok) => log('startup', m, ok !== false))
-  await ensureScannerRunning((s, m, ok) => log('startup', m, ok !== false, ACCEPTANCE_TIER.EXTERNAL))
+  log('startup', '扫码枪模块已下线，跳过 7789', true, ACCEPTANCE_TIER.EXTERNAL)
   const token = await ensureWorkerRunning((s, m, ok) => {
     const tier = /Worker/.test(m) ? ACCEPTANCE_TIER.EXTERNAL : ACCEPTANCE_TIER.CORE
     log('startup', m, ok !== false, tier)
@@ -157,21 +157,11 @@ async function main() {
   const me = await fetchJson(`${SERVER}/api/auth/me`, { headers: authHeaders(token) })
   log('api', `权限数: ${me.json.data?.permissions?.length || 0}`, me.res.ok)
 
-  const scanner = await checkScanner()
   const workerInfo = await resolveWorkerOnline(token)
   log('worker', `online=${workerInfo.online} (${workerInfo.base})`, workerInfo.online)
-
-  let testCode = scanner.testCode || 'F0007584'
-  let braceletId = null
   const workerOnline = workerInfo.online
 
-  if (workerOnline && scanner.online) {
-    const sync1 = await fetchJson(`${SERVER}/api/bracelets/${encodeURIComponent(testCode)}`, { headers: authHeaders(token) })
-    braceletId = sync1.json.data?.id
-    log('braceletSync', `同步 ${testCode} id=${braceletId}`, sync1.res.ok && !!braceletId)
-  } else {
-    log('braceletSync', `跳过（Worker=${workerOnline} 扫码枪=${scanner.online}）`, false)
-  }
+  log('braceletSync', '跳过（扫码模块已下线）', true, ACCEPTANCE_TIER.EXTERNAL)
 
   const expCreate = await fetchJson(`${SERVER}/api/expenses`, {
     method: 'POST',
