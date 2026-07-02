@@ -18,7 +18,11 @@ export const REIMBURSEMENT_STATUS_LABELS: Record<string, string> = {
   not_required: '不报账',
 }
 
-/** 旧数据兼容：not_required → none；未知值 → pending */
+/**
+ * 存储口径：not_required / none 表示「不报账」；
+ * pending / submitted 进入待报账池；reimbursed 为已报账。
+ * 新建支出默认 not_required（见 createExpense），与 schema 默认值一致。
+ */
 export function normalizeReimbursementStatus(raw?: string | null): ReimbursementStatus {
   if (!raw || raw === 'not_required') return 'none'
   if ((REIMBURSEMENT_STATUSES as readonly string[]).includes(raw)) {

@@ -84,6 +84,7 @@ function listParams() {
   const f = activeKpi.value
   if (f === 'missing-attachment') params.needsAttachment = 1
   if (f === 'pending-reimbursement') params.reimbursementStatus = 'pending_report'
+  if (f === 'reimbursed') params.reimbursementStatus = 'reimbursed'
   if (f === 'linked') params.linkedOnly = 1
   return params
 }
@@ -246,7 +247,7 @@ onMounted(() => {
       </header>
 
       <div class="rc-date" data-testid="expense-stats-date-range">
-        <DateRangePicker v-model="dateRange" @change="onRangeChange" />
+        <DateRangePicker v-model="dateRange" theme="light" @change="onRangeChange" />
       </div>
 
       <p v-if="loadError" class="rc-error">{{ loadError }}</p>
@@ -284,7 +285,12 @@ onMounted(() => {
           <div class="rc-kpi__label">待报账金额</div>
           <div class="rc-kpi__value">¥{{ Number(summary.pendingReimbursementAmount || 0).toFixed(2) }}</div>
         </button>
-        <button type="button" class="rc-kpi" @click="setKpiFilter('pending-reimbursement')">
+        <button
+          type="button"
+          class="rc-kpi"
+          :class="{ 'rc-kpi--active': activeKpi === 'reimbursed' }"
+          @click="setKpiFilter('reimbursed')"
+        >
           <div class="rc-kpi__label">已报账金额</div>
           <div class="rc-kpi__value">¥{{ Number(summary.reimbursedAmount || 0).toFixed(2) }}</div>
         </button>
@@ -298,6 +304,9 @@ onMounted(() => {
           <div class="rc-kpi__value">{{ summary.linkedCount ?? 0 }} 笔</div>
         </button>
       </section>
+      <p v-if="summary" class="rc-kpi-note">
+        待报账 / 已报账金额仅统计状态为「待报账」「已提交」「已报账」的支出；新建支出默认为「不报账」，需手动标记后才会进入报账池。
+      </p>
 
       <section v-if="summary" class="rc-summary-grid">
         <div class="rc-card rc-card--wide">
@@ -435,7 +444,13 @@ onMounted(() => {
   color: #fff;
 }
 .rc-btn--plain { background: #f8f7f3; }
-.rc-date { margin-bottom: 16px; }
+.rc-date {
+  margin-bottom: 16px;
+  background: #fff;
+  border: 1px solid var(--rc-border);
+  border-radius: 12px;
+  padding: 12px;
+}
 .rc-error { color: #c44; }
 .rc-muted { color: var(--rc-muted); }
 .rc-kpis {
@@ -466,6 +481,12 @@ onMounted(() => {
 }
 .rc-kpi__label { font-size: 12px; color: var(--rc-muted); }
 .rc-kpi__value { font-size: 18px; font-weight: 700; margin-top: 6px; color: var(--rc-gold); }
+.rc-kpi-note {
+  margin: -8px 0 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--rc-muted);
+}
 .rc-summary-grid {
   display: grid;
   gap: 12px;
@@ -547,19 +568,5 @@ onMounted(() => {
 @media print {
   .rc-header__actions, .rc-date, .rc-detail__toolbar { display: none !important; }
   .report-center { background: #fff; }
-}
-</style>
-
-<style>
-/* 报账页内日期选择器浅色覆盖 */
-.report-center .date-range-picker {
-  background: #fff;
-  border: 1px solid #e9e1d0;
-  border-radius: 12px;
-  padding: 12px;
-}
-.report-center .date-range-picker button,
-.report-center .date-range-picker input {
-  color: #1f2933 !important;
 }
 </style>

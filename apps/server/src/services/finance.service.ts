@@ -19,7 +19,6 @@ import {
   getExpenseSummary,
   type ExpenseFilter,
 } from './expense.service'
-import { queryExpensesForExport } from './export.service'
 
 const SHARE_TTL_DAYS = 30
 const FILE_TOKEN_TTL_MS = SHARE_TTL_DAYS * 24 * 60 * 60 * 1000
@@ -236,14 +235,20 @@ export async function buildFinanceReportWorkbook(
   startDate: string,
   endDate: string,
   title: string,
+  options?: { baseUrl?: string },
 ) {
   const summary = await getExpenseSummary('custom', startDate, endDate)
-  const expenses = await queryExpensesForExport({
-    startDate,
-    endDate,
-    isVoided: false,
-    excludeTrial: true,
+  const expenses = await prisma.expense.findMany({
+    where: buildWhere({
+      startDate,
+      endDate,
+      isVoided: false,
+      excludeTrial: true,
+    }),
+    include: { attachments: { orderBy: { sortOrder: 'asc' } } },
+    orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
   })
+  const baseUrl = options?.baseUrl?.replace(/\/$/, '') || ''
 
   const workbook = new ExcelJS.Workbook()
   workbook.creator = '项目资金支出记录系统'
@@ -268,6 +273,7 @@ export async function buildFinanceReportWorkbook(
     { header: '付款来源', key: 'paySource', width: 14 },
     { header: '关联订单/货品', key: 'link', width: 24 },
     { header: '凭证数量', key: 'attCount', width: 10 },
+    { header: '凭证链接', key: 'voucherLinks', width: 48 },
     { header: '报账状态', key: 'status', width: 10 },
     { header: '备注', key: 'remark', width: 24 },
   ]
@@ -276,6 +282,14 @@ export async function buildFinanceReportWorkbook(
     const linkParts: string[] = []
     if (e.externalOrderNo) linkParts.push(e.externalOrderNo)
     if (e.braceletCode) linkParts.push(e.braceletCode)
+    const attCount = e.attachments.length
+    const voucherLinks: string[] = []
+    if (baseUrl && attCount) {
+      for (const att of e.attachments) {
+        const { token } = createFileAccessTokenWithTtl(e.createdBy, att.fileId, FILE_TOKEN_TTL_MS)
+        voucherLinks.push(`${baseUrl}${fileViewPath(att.fileId, token)}`)
+      }
+    }
     const row = detailSheet.addRow({
       date: localDateString(e.occurredAt),
       type: e.expenseType,
@@ -283,21 +297,14 @@ export async function buildFinanceReportWorkbook(
       operator: e.reimbursementPerson || '',
       paySource: e.paySource,
       link: linkParts.join(' / '),
-      attCount: 0,
+      attCount,
+      voucherLinks: voucherLinks.join('\n'),
       status: reimbursementStatusLabel(e.reimbursementStatus),
       remark: e.remark || '',
     })
     row.getCell('amount').numFmt = '0.00'
+    row.getCell('voucherLinks').alignment = { wrapText: true, vertical: 'top' }
   }
-  const attCounts = await prisma.expenseAttachment.groupBy({
-    by: ['expenseId'],
-    where: { expenseId: { in: expenses.map((e) => e.id) } },
-    _count: { id: true },
-  })
-  const attMap = new Map(attCounts.map((a) => [a.expenseId, a._count.id]))
-  expenses.forEach((e, i) => {
-    detailSheet.getRow(i + 2).getCell('attCount').value = attMap.get(e.id) || 0
-  })
   const totalDetail = detailSheet.addRow({
     date: '',
     type: '合计',
@@ -306,6 +313,7 @@ export async function buildFinanceReportWorkbook(
     paySource: '',
     link: '',
     attCount: '',
+    voucherLinks: '',
     status: '',
     remark: '',
   })
@@ -362,12 +370,15 @@ export async function buildFinanceReportWorkbook(
   return workbook
 }
 
-export async function exportFinanceExcel(params: {
-  startDate: string
-  endDate: string
-  title?: string
-  token?: string
-}) {
+export async function exportFinanceExcel(
+  params: {
+    startDate: string
+    endDate: string
+    title?: string
+    token?: string
+  },
+  req?: { headers?: { 'x-forwarded-proto'?: string; host?: string } },
+) {
   let startDate = params.startDate
   let endDate = params.endDate
   let title = params.title || '项目资金报账单'
@@ -388,7 +399,9 @@ export async function exportFinanceExcel(params: {
   const filePath = assertExportPath(path.join(config.exportDir, fileName))
   await fs.mkdir(config.exportDir, { recursive: true })
 
-  const workbook = await buildFinanceReportWorkbook(startDate, endDate, title)
+  const workbook = await buildFinanceReportWorkbook(startDate, endDate, title, {
+    baseUrl: publicBaseUrl(req),
+  })
   await workbook.xlsx.writeFile(filePath)
   const buffer = await fs.readFile(filePath)
   return { buffer, fileName }

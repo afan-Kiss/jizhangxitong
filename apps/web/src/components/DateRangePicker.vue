@@ -11,9 +11,14 @@ import {
   last30Days,
 } from '../utils/date-range'
 
-const props = defineProps<{
-  modelValue: DateRangeState
-}>()
+const props = withDefaults(
+  defineProps<{
+     modelValue: DateRangeState
+  /** dark：系统默认深色；light：报账中心等浅色页面 */
+  theme?: 'dark' | 'light'
+}>(),
+  { theme: 'dark' },
+)
 
 const emit = defineEmits<{
   'update:modelValue': [DateRangeState]
@@ -106,7 +111,11 @@ watch(showPicker, (open) => {
 </script>
 
 <template>
-  <div class="date-range-picker" data-testid="date-range-picker">
+  <div
+    class="date-range-picker"
+    :class="{ 'date-range-picker--light': theme === 'light' }"
+    data-testid="date-range-picker"
+  >
     <div class="date-range-picker__header">
       <span class="date-range-picker__title">经营时间范围</span>
       <span class="date-range-picker__current" data-testid="date-range-label">{{ currentLabel }}</span>
@@ -140,8 +149,12 @@ watch(showPicker, (open) => {
     <Teleport to="body">
       <div v-if="showPicker" class="date-range-picker__overlay" @click.self="closeCustom">
         <div
-          class="date-range-picker__modal glass-surface"
-          :class="{ 'date-range-picker__modal--drawer': !isDesktop }"
+          class="date-range-picker__modal"
+          :class="{
+            'date-range-picker__modal--drawer': !isDesktop,
+            'date-range-picker__modal--light': theme === 'light',
+            'glass-surface': theme !== 'light',
+          }"
           data-testid="date-range-modal"
         >
           <div class="date-range-picker__modal-head">
@@ -366,5 +379,68 @@ watch(showPicker, (open) => {
 .date-range-picker__btn--primary:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* 浅色主题（报账中心等） */
+.date-range-picker--light .date-range-picker__title {
+  color: #667085;
+}
+.date-range-picker--light .date-range-picker__current {
+  color: #b08d57;
+}
+.date-range-picker--light .date-range-picker__preset {
+  border-color: #e9e1d0;
+  background: #fff;
+  color: #1f2933;
+}
+.date-range-picker--light .date-range-picker__preset--active {
+  border-color: #b08d57;
+  background: #faf6ee;
+  box-shadow: 0 0 0 2px rgba(176, 141, 87, 0.12);
+}
+.date-range-picker--light .date-range-picker__toast {
+  color: #b08d57;
+}
+.date-range-picker--light .date-range-picker__overlay {
+  background: rgba(31, 41, 51, 0.35);
+}
+.date-range-picker__modal--light {
+  background: #fff;
+  border-color: #e9e1d0;
+  box-shadow: 0 12px 40px rgba(31, 41, 51, 0.12);
+}
+.date-range-picker__modal--light .date-range-picker__modal-head h3 {
+  color: #1f2933;
+}
+.date-range-picker__modal--light .date-range-picker__close {
+  color: #667085;
+}
+.date-range-picker__modal--light .date-range-picker__shortcuts button {
+  border-color: #e9e1d0;
+  background: #faf8f3;
+  color: #1f2933;
+}
+.date-range-picker__modal--light .date-range-picker__field span {
+  color: #667085;
+}
+.date-range-picker__modal--light .date-range-picker__input-wrap {
+  border-color: #e9e1d0;
+  background: #fff;
+}
+.date-range-picker__modal--light .date-range-picker__input-wrap input {
+  color: #1f2933;
+  color-scheme: light;
+}
+.date-range-picker__modal--light .date-range-picker__input-wrap input::-webkit-calendar-picker-indicator {
+  filter: none;
+}
+.date-range-picker__modal--light .date-range-picker__btn--ghost {
+  background: #f8f7f3;
+  color: #667085;
+  border-color: #e9e1d0;
+}
+.date-range-picker__modal--light .date-range-picker__btn--primary {
+  background: linear-gradient(135deg, #c7a45d, #b08d57);
+  color: #fff;
 }
 </style>

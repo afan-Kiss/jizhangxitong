@@ -29,7 +29,7 @@ financeRouter.get('/export', async (req, res) => {
       endDate: req.query.endDate as string,
       title: req.query.title as string,
       token: req.query.token as string,
-    })
+    }, req)
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

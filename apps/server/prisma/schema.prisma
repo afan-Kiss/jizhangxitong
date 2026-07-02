@@ -102,7 +102,7 @@ model Expense {
   expenseSummary       String?
   remark               String?
   reimbursementPerson  String?
-  reimbursementStatus  String              @default("pending")
+  reimbursementStatus  String              @default("not_required")
   needsAttachment      Boolean             @default(false)
   isVoided             Boolean             @default(false)
   isTrialRun           Boolean             @default(false)

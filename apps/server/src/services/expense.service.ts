@@ -66,6 +66,16 @@ function normalizeOperator(name?: string | null): string {
   return v
 }
 
+function appendAndWhere(where: Record<string, unknown>, condition: Record<string, unknown>) {
+  const existing = where.AND as Record<string, unknown>[] | undefined
+  where.AND = existing ? [...existing, condition] : [condition]
+}
+
+/** 将 OR 条件组追加到 AND 链，避免多个筛选互相覆盖 where.OR */
+function mergeOrCondition(where: Record<string, unknown>, orItems: Record<string, unknown>[]) {
+  appendAndWhere(where, { OR: orItems })
+}
+
 function buildWhere(filter: ExpenseFilter) {
   const where: Record<string, unknown> = {}
   if (filter.isVoided !== undefined) where.isVoided = filter.isVoided
@@ -91,10 +101,10 @@ function buildWhere(filter: ExpenseFilter) {
     where.attachments = { none: {} }
   }
   if (filter.linkedOnly) {
-    where.OR = [
+    mergeOrCondition(where, [
       { externalOrderNo: { not: null } },
       { braceletId: { not: null } },
-    ]
+    ])
   }
   if (filter.reimbursementStatus) {
     const rs = filter.reimbursementStatus
@@ -108,17 +118,17 @@ function buildWhere(filter: ExpenseFilter) {
   }
   if (filter.operator) {
     if (filter.operator === '未标记') {
-      where.OR = [
+      mergeOrCondition(where, [
         { reimbursementPerson: null },
         { reimbursementPerson: '' },
-      ]
+      ])
     } else {
       where.reimbursementPerson = filter.operator
     }
   }
   if (filter.search?.trim()) {
     const q = filter.search.trim()
-    const searchOr = [
+    mergeOrCondition(where, [
       { expenseType: { contains: q } },
       { reimbursementPerson: { contains: q } },
       { paySource: { contains: q } },
@@ -126,13 +136,7 @@ function buildWhere(filter: ExpenseFilter) {
       { externalOrderNo: { contains: q } },
       { braceletCode: { contains: q } },
       { expenseNo: { contains: q } },
-    ]
-    if (where.OR) {
-      where.AND = [{ OR: where.OR as unknown[] }, { OR: searchOr }]
-      delete where.OR
-    } else {
-      where.OR = searchOr
-    }
+    ])
   }
   if (filter.createdBy) where.createdBy = filter.createdBy
   if (filter.remarkContains) where.remark = { contains: filter.remarkContains }
@@ -807,4 +811,4 @@ export async function getExpenseSummary(
   }
 }
 
-export { buildWhere }
+export { buildWhere, appendAndWhere, mergeOrCondition }
