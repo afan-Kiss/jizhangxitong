@@ -10,7 +10,7 @@ export async function downloadFinanceExcel(params: {
     startDate: params.startDate,
     endDate: params.endDate,
     format: 'xlsx',
-    title: params.title || '项目资金报账单',
+    title: params.title || '项目资金支出对账表',
   })
   if (params.token) q.set('token', params.token)
   const url = withBase(`/api/finance/export?${q.toString()}`)
@@ -25,7 +25,7 @@ export async function downloadFinanceExcel(params: {
   const blob = await res.blob()
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
-  a.download = `项目资金报账_${params.startDate}_${params.endDate}.xlsx`
+  a.download = `项目资金对账_${params.startDate}_${params.endDate}.xlsx`
   a.click()
   URL.revokeObjectURL(a.href)
 }

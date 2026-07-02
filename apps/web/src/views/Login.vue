@@ -69,10 +69,10 @@ async function onRegister() {
       <div class="login-brand">
         <div class="login-brand__mark">◆</div>
         <h1 class="login-brand__title">项目资金支出记录</h1>
-        <p class="login-brand__tagline">记录、统计、关联订单、生成报账单</p>
+        <p class="login-brand__tagline">记录、统计、关联订单、生成对账表</p>
         <ul class="login-brand__features">
           <li>珠宝公司内部轻量财务工具</li>
-          <li>支出凭证上传与报账中心</li>
+          <li>支出凭证上传与资金对账中心</li>
           <li>一键生成财务外链与 Excel</li>
         </ul>
       </div>

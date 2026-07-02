@@ -18,13 +18,16 @@ const emit = defineEmits<{
   shared: [string]
 }>()
 
-const title = ref('项目资金报账单')
+const title = ref('项目资金支出对账表')
 const includeDetails = ref(true)
 const includeCategorySummary = ref(true)
 const includeHandlerSummary = ref(true)
 const includePaymentSourceSummary = ref(true)
 const includeVoucherLinks = ref(true)
 const includeRemarks = ref(true)
+const includeOrderLogistics = ref(true)
+const expiresInDays = ref(7)
+const shareExpiresAt = ref('')
 const loading = ref(false)
 const step = ref<'form' | 'result'>('form')
 const resultUrl = ref('')
@@ -83,8 +86,11 @@ async function createShare() {
       includePaymentSourceSummary: includePaymentSourceSummary.value,
       includeVoucherLinks: includeVoucherLinks.value,
       includeRemarks: includeRemarks.value,
+      includeOrderLogistics: includeOrderLogistics.value,
+      expiresInDays: expiresInDays.value,
     })
     const url = res.data.data.shareUrl as string
+    shareExpiresAt.value = res.data.data.expiresAt as string || ''
     emit('shared', url)
     await showResult(url)
     showToast('财务外链已生成')
@@ -121,8 +127,8 @@ function exportExcel() {
   <div v-if="open" class="frm-overlay" data-testid="finance-report-modal" @click.self="close">
     <div class="frm-panel">
       <template v-if="step === 'form'">
-        <h2 class="frm-title">生成财务报账单</h2>
-        <label class="frm-label">报账标题</label>
+        <h2 class="frm-title">生成财务对账表</h2>
+        <label class="frm-label">对账标题</label>
         <input v-model="title" class="frm-input" type="text" />
 
         <p class="frm-hint">时间范围：{{ startDate }} 至 {{ endDate }}</p>
@@ -137,7 +143,15 @@ function exportExcel() {
           <label><input v-model="includePaymentSourceSummary" type="checkbox" /> 付款来源汇总</label>
           <label><input v-model="includeVoucherLinks" type="checkbox" /> 凭证图片链接</label>
           <label><input v-model="includeRemarks" type="checkbox" /> 备注说明</label>
+          <label><input v-model="includeOrderLogistics" type="checkbox" /> 订单号 / 物流单号</label>
         </div>
+
+        <label class="frm-label">链接有效期</label>
+        <select v-model.number="expiresInDays" class="frm-input">
+          <option :value="1">1 天</option>
+          <option :value="7">7 天（默认）</option>
+          <option :value="30">30 天</option>
+        </select>
 
         <div class="frm-actions">
           <button type="button" class="frm-btn frm-btn--gold" :disabled="loading" data-testid="btn-create-share" @click="createShare">
@@ -149,8 +163,11 @@ function exportExcel() {
       </template>
 
       <template v-else>
-        <h2 class="frm-title">财务外链已生成</h2>
-        <p class="frm-hint">财务同事扫码或打开链接即可查看报账单（30 天内有效）</p>
+        <h2 class="frm-title">财务查看链接已生成</h2>
+        <p class="frm-hint">
+          财务同事扫码或打开链接即可查看对账数据
+          <template v-if="shareExpiresAt">（有效期至 {{ new Date(shareExpiresAt).toLocaleString() }}）</template>
+        </p>
 
         <div class="frm-qr-wrap" data-testid="finance-share-qr">
           <img v-if="qrDataUrl" :src="qrDataUrl" alt="财务外链二维码" class="frm-qr" />

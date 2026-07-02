@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma'
-import { DEFAULT_SETTINGS } from '@jade-account/shared'
+import { DEFAULT_SETTINGS, parseExpenseOperators, EXPENSE_OPERATORS_SETTING_KEY } from '@jade-account/shared'
 import { config } from '../lib/config'
 
 export async function getSettings() {
@@ -40,6 +40,10 @@ export async function getQianfanOrderUrlTemplate(): Promise<string> {
   return config.qianfanOrderDetailUrlTemplate?.trim() || ''
 }
 
+export async function getExpenseOperators(): Promise<string[]> {
+  const settings = await getSettings()
+  return parseExpenseOperators(settings[EXPENSE_OPERATORS_SETTING_KEY])
+}
 export async function isQianfanOrderLinkEnabled(): Promise<boolean> {
   if (process.env.CONTROL_SERVICE_TOKEN?.trim()) return true
   const tpl = await getQianfanOrderUrlTemplate()

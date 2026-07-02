@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reimbursementStatusLabel } from '@jade-account/shared'
+import { displayExpensePurpose } from '@jade-account/shared'
 
 defineProps<{
   items: any[]
@@ -16,6 +16,7 @@ const emit = defineEmits<{
 function linkText(item: any) {
   const parts: string[] = []
   if (item.externalOrderNo) parts.push(item.externalOrderNo)
+  if (item.logisticsNo) parts.push(item.logisticsNo)
   if (item.braceletCode) parts.push(item.braceletCode)
   return parts.join(' / ') || '—'
 }
@@ -37,6 +38,7 @@ function voucherText(item: any) {
             </button>
           </th>
           <th>支出分类</th>
+          <th>支出用途</th>
           <th>
             <button type="button" class="ert-sort" @click="emit('sort', 'amount')">
               金额 {{ sortKey === 'amount' ? (sortDir === 'desc' ? '↓' : '↑') : '' }}
@@ -44,9 +46,8 @@ function voucherText(item: any) {
           </th>
           <th>经手人</th>
           <th>付款来源</th>
-          <th>关联订单/货品</th>
+          <th>订单/物流/货品</th>
           <th>凭证</th>
-          <th>报账状态</th>
           <th>备注</th>
           <th>操作</th>
         </tr>
@@ -55,6 +56,7 @@ function voucherText(item: any) {
         <tr v-for="item in items" :key="item.id">
           <td>{{ String(item.occurredAt || '').slice(0, 10) }}</td>
           <td>{{ item.expenseType }}</td>
+          <td>{{ displayExpensePurpose(item) }}</td>
           <td class="ert-amount">¥{{ Number(item.amount).toFixed(2) }}</td>
           <td>{{ item.operatorName || item.reimbursementPerson || '未标记' }}</td>
           <td>{{ item.paySource }}</td>
@@ -68,7 +70,6 @@ function voucherText(item: any) {
             >{{ voucherText(item) }}</button>
             <span v-else class="ert-muted">无凭证</span>
           </td>
-          <td>{{ reimbursementStatusLabel(item.reimbursementStatus) }}</td>
           <td class="ert-remark">{{ item.remark || '—' }}</td>
           <td>
             <button type="button" class="ert-link" @click="emit('view', item.id)">查看</button>

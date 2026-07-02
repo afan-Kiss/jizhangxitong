@@ -35,7 +35,6 @@ const lastShareUrl = ref('')
 const listPage = ref(1)
 const loadingMore = ref(false)
 const searchQ = ref(String(route.query.q || ''))
-const filterStatus = ref(String(route.query.reimbursementStatus || ''))
 const filterType = ref(String(route.query.expenseType || ''))
 const filterOperator = ref(String(route.query.operator || ''))
 const filterPaySource = ref(String(route.query.paySource || ''))
@@ -45,6 +44,11 @@ const previewOpen = ref(false)
 const previewImages = ref<string[]>([])
 
 const activeKpi = computed(() => String(route.query.filter || ''))
+
+const voucherRateText = computed(() => {
+  const rate = Number(summary.value?.voucherCompleteRate ?? 0)
+  return `${Math.round(rate * 100)}%`
+})
 
 const sortedItems = computed(() => {
   const list = [...items.value]
@@ -65,7 +69,6 @@ const hasMore = computed(() => items.value.length < total.value)
 function syncRouteQuery(extra: Record<string, string | undefined> = {}) {
   const q: Record<string, string> = { ...toRangeQuery(dateRange.value) }
   if (searchQ.value.trim()) q.q = searchQ.value.trim()
-  if (filterStatus.value) q.reimbursementStatus = filterStatus.value
   if (filterType.value) q.expenseType = filterType.value
   if (filterOperator.value) q.operator = filterOperator.value
   if (filterPaySource.value) q.paySource = filterPaySource.value
@@ -94,14 +97,9 @@ function listParams() {
 
   const f = activeKpi.value
   if (f === 'missing-attachment') params.needsAttachment = 1
-  else if (f === 'pending-reimbursement') params.reimbursementStatus = 'pending_report'
-  else if (f === 'reimbursed') params.reimbursementStatus = 'reimbursed'
+  else if (f === 'with-voucher') params.hasAttachment = 1
+  else if (f === 'unlinked-order-logistics') params.unlinkedOrderLogistics = 1
   else if (f === 'linked') params.linkedOnly = 1
-  else if (filterStatus.value === 'pending' || filterStatus.value === 'pending_report') {
-    params.reimbursementStatus = 'pending_report'
-  } else if (filterStatus.value) {
-    params.reimbursementStatus = filterStatus.value
-  }
   return params
 }
 
@@ -136,15 +134,6 @@ function onRangeChange() {
 
 function setKpiFilter(filter: string) {
   syncRouteQuery({ filter: filter || '' })
-  load()
-}
-
-function onFilterStatusChange() {
-  if (filterStatus.value && ['pending-reimbursement', 'reimbursed'].includes(activeKpi.value)) {
-    syncRouteQuery({ filter: '' })
-  } else {
-    syncRouteQuery()
-  }
   load()
 }
 
@@ -183,7 +172,7 @@ function toggleSort(key: 'occurredAt' | 'amount') {
 
 function exportExcel() {
   const { startDate, endDate } = dateRange.value
-  downloadFinanceExcel({ startDate, endDate, title: '项目资金报账单' }).catch(() => showToast('导出失败'))
+  downloadFinanceExcel({ startDate, endDate, title: '项目资金支出对账表' }).catch(() => showToast('导出失败'))
 }
 
 async function copyShareLink() {
@@ -233,7 +222,6 @@ watch(
   () => {
     dateRange.value = parseRouteRange(route.query as Record<string, string>)
     searchQ.value = String(route.query.q || '')
-    filterStatus.value = String(route.query.reimbursementStatus || '')
     filterType.value = String(route.query.expenseType || '')
     filterOperator.value = String(route.query.operator || '')
     filterPaySource.value = String(route.query.paySource || '')
@@ -252,13 +240,13 @@ onMounted(() => {
     <div class="report-center" data-testid="expense-stats-page">
       <header class="rc-header">
         <div class="rc-header__text">
-          <h1 class="rc-title">项目资金报账中心</h1>
-          <p class="rc-subtitle">记录、统计、生成报账表、发给财务</p>
+          <h1 class="rc-title">项目资金对账中心</h1>
+          <p class="rc-subtitle">记录、统计、生成对账表、发给财务</p>
           <p class="rc-range">{{ rangeLabel(dateRange) }}</p>
         </div>
         <div class="rc-header__actions">
           <button type="button" class="rc-btn rc-btn--gold" data-testid="btn-finance-report" @click="modalOpen = true">
-            生成报账表
+            生成对账表
           </button>
           <button type="button" class="rc-btn" @click="exportExcel">导出 Excel</button>
           <button type="button" class="rc-btn" @click="copyShareLink">复制财务外链</button>
@@ -299,20 +287,20 @@ onMounted(() => {
         <button
           type="button"
           class="rc-kpi"
-          :class="{ 'rc-kpi--active': activeKpi === 'pending-reimbursement' }"
-          @click="setKpiFilter('pending-reimbursement')"
+          :class="{ 'rc-kpi--active': activeKpi === 'with-voucher' }"
+          @click="setKpiFilter('with-voucher')"
         >
-          <div class="rc-kpi__label">待报账金额</div>
-          <div class="rc-kpi__value">¥{{ Number(summary.pendingReimbursementAmount || 0).toFixed(2) }}</div>
+          <div class="rc-kpi__label">有凭证笔数</div>
+          <div class="rc-kpi__value">{{ summary.withVoucherCount ?? 0 }} 笔 · {{ voucherRateText }}</div>
         </button>
         <button
           type="button"
           class="rc-kpi"
-          :class="{ 'rc-kpi--active': activeKpi === 'reimbursed' }"
-          @click="setKpiFilter('reimbursed')"
+          :class="{ 'rc-kpi--active': activeKpi === 'unlinked-order-logistics' }"
+          @click="setKpiFilter('unlinked-order-logistics')"
         >
-          <div class="rc-kpi__label">已报账金额</div>
-          <div class="rc-kpi__value">¥{{ Number(summary.reimbursedAmount || 0).toFixed(2) }}</div>
+          <div class="rc-kpi__label">未关联订单/物流</div>
+          <div class="rc-kpi__value">{{ summary.unlinkedOrderLogisticsCount ?? 0 }} 笔</div>
         </button>
         <button
           type="button"
@@ -324,9 +312,6 @@ onMounted(() => {
           <div class="rc-kpi__value">{{ summary.linkedCount ?? 0 }} 笔</div>
         </button>
       </section>
-      <p v-if="summary" class="rc-kpi-note">
-        待报账 / 已报账金额仅统计状态为「待报账」「已提交」「已报账」的支出；新建支出默认为「不报账」，需手动标记后才会进入报账池。
-      </p>
 
       <section v-if="summary" class="rc-summary-grid">
         <div class="rc-card rc-card--wide">
@@ -375,17 +360,9 @@ onMounted(() => {
             v-model="searchQ"
             class="rc-search"
             type="search"
-            placeholder="搜索分类、经手人、备注、订单号…"
+            placeholder="搜索分类、用途、经手人、备注、订单号…"
             @keyup.enter="syncRouteQuery(); load()"
           />
-          <select v-model="filterStatus" class="rc-select" @change="onFilterStatusChange">
-            <option value="">全部报账状态</option>
-            <option value="pending_report">待报账</option>
-            <option value="submitted">已提交</option>
-            <option value="reimbursed">已报账</option>
-            <option value="rejected">已打回</option>
-            <option value="none">不报账</option>
-          </select>
         </div>
 
         <ExpenseReportTable

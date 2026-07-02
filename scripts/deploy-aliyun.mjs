@@ -10,6 +10,7 @@ import { loadDeployEnv, RECOMMENDED_URL } from './lib/deploy-env.mjs'
 import { fetchJson, login, sleep } from './lib/services.mjs'
 import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
 import { verifyDeployVersion } from './verify-deploy-version.mjs'
+import { allowWriteAcceptanceTests } from './lib/acceptance-env.mjs'
 import { execPowerShellUtf8 } from './lib/powershell-utf8.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -109,7 +110,7 @@ function printDeploySummary(gitHash, workerReport) {
   console.log('部署验收分级报告')
   console.log('========================================')
   console.log('\n【核心业务验收】')
-  console.log('  /account/、/api/health、APP_VERSION、扫码工作台、记账/销售利润口径')
+  console.log('  /account/、/api/health、APP_VERSION、记支出/资金对账中心')
   const coreFail = deployReport.core.filter((x) => !x.ok)
   if (coreFail.length) {
     coreFail.forEach((x) => console.log(`  ✗ ${x.name}`))
@@ -212,17 +213,22 @@ async function main() {
 
   const testEnv = { ...process.env, ACCEPTANCE_SERVER: remoteUrl }
 
-  runTiered('remote-acceptance（含 Excel/Worker 上传）', `node scripts/remote-acceptance.mjs`, 'external', {
-    env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl, ACCEPTANCE_MODE: 'full' },
+  runTiered('remote-acceptance（只读/外部依赖）', `node scripts/remote-acceptance.mjs`, 'external', {
+    env: { ...process.env, ACCEPTANCE_SERVER: remoteUrl },
     timeout: TIMEOUTS.remoteAcceptance + 30000,
   })
 
-  try {
-    run('node scripts/acceptance-cleanup.mjs', { env: testEnv, timeout: TIMEOUTS.acceptanceCleanup + 60000 })
-    deployReport.core.push({ name: 'acceptance:cleanup', ok: true })
-  } catch (e) {
-    deployReport.core.push({ name: 'acceptance:cleanup', ok: false })
-    console.warn('\nWARN — acceptance:cleanup 未通过，请手动检查测试数据')
+  if (allowWriteAcceptanceTests(remoteUrl)) {
+    try {
+      run('node scripts/acceptance-cleanup.mjs', { env: testEnv, timeout: TIMEOUTS.acceptanceCleanup + 60000 })
+      deployReport.core.push({ name: 'acceptance:cleanup', ok: true })
+    } catch (e) {
+      deployReport.core.push({ name: 'acceptance:cleanup', ok: false })
+      console.warn('\nWARN — acceptance:cleanup 未通过，请手动检查测试数据')
+    }
+  } else {
+    console.log('\nSKIP — 生产部署跳过 acceptance:cleanup（未写入测试数据）')
+    deployReport.core.push({ name: 'acceptance:cleanup', ok: true, skipped: true })
   }
 
   const coreTests = [
@@ -230,6 +236,7 @@ async function main() {
     ['test:responsive', `node scripts/test-responsive.mjs`, TIMEOUTS.responsive + 180000],
     ['test:login', `node scripts/test-login.mjs`, TIMEOUTS.login + 30000],
     ['test:subpath', `node scripts/test-subpath-refresh.mjs`, TIMEOUTS.subpath + 30000],
+    ['test:reconciliation-readonly', `node scripts/test-reconciliation-readonly.mjs`, TIMEOUTS.acceptanceBasic + 60000],
     ['test:fund-expense', `node scripts/test-fund-expense.mjs`, TIMEOUTS.acceptanceBasic + 60000],
     ['test:project-expense-only', `node scripts/test-project-expense-only.mjs`, TIMEOUTS.acceptanceFull + 120000],
     ['test:accounting-flow', `node scripts/test-accounting-flow.mjs`, TIMEOUTS.acceptanceFull + 60000],

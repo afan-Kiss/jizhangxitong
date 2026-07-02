@@ -62,6 +62,7 @@ expenseRouter.get('/', requirePermission('expense:view'), async (req: AuthReques
     needsAttachment: req.query.needsAttachment === '1' || req.query.needsAttachment === 'true',
     hasAttachment: hasAtt === '1' || hasAtt === 'true' ? true : hasAtt === '0' || hasAtt === 'false' ? false : undefined,
     linkedOnly: req.query.linkedOnly === '1' || req.query.linkedOnly === 'true',
+    unlinkedOrderLogistics: req.query.unlinkedOrderLogistics === '1' || req.query.unlinkedOrderLogistics === 'true',
     isVoided: req.query.isVoided === '1' || req.query.isVoided === 'true'
       ? true
       : req.query.isVoided === '0' || req.query.isVoided === 'false'

@@ -10,7 +10,7 @@ export type NavItem = {
 export const mobileTabs: NavItem[] = [
   { path: '/', label: '首页', icon: 'home-o' },
   { path: '/expense/create', label: '记支出', icon: 'balance-list-o' },
-  { path: '/expense/stats', label: '报账中心', icon: 'chart-trending-o' },
+  { path: '/expense/stats', label: '资金对账中心', icon: 'chart-trending-o' },
   { path: '/settings', label: '我的', icon: 'user-o' },
 ]
 
@@ -18,7 +18,7 @@ export const mobileTabs: NavItem[] = [
 export const desktopNav: NavItem[] = [
   { path: '/', label: '首页', icon: 'home-o' },
   { path: '/expense/create', label: '记支出', icon: 'balance-list-o' },
-  { path: '/expense/stats', label: '报账中心', icon: 'chart-trending-o' },
+  { path: '/expense/stats', label: '资金对账中心', icon: 'chart-trending-o' },
   { path: '/settings', label: '我的', icon: 'user-o' },
 ]
 

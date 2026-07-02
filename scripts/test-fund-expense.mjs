@@ -3,6 +3,7 @@
 import {
   SERVER, login, fetchJson, authHeaders, ensureServerRunning,
 } from './lib/services.mjs'
+import { allowWriteAcceptanceTests, skipWriteAcceptanceMessage } from './lib/acceptance-env.mjs'
 import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
 
 const BASE = SERVER.replace(/\/$/, '')
@@ -22,7 +23,16 @@ async function api(token, url, opts = {}) {
 
 async function main() {
   console.log('\n=== test:fund-expense ===\n')
-  await ensureServerRunning((m) => console.log(m))
+  if (!allowWriteAcceptanceTests()) {
+    console.log(`SKIP — ${skipWriteAcceptanceMessage()}`)
+    await ensureServerRunning((m) => console.log(m))
+    const token = await login(BASE)
+    const today = new Date().toISOString().slice(0, 10)
+    const summary = await api(token, `/api/expenses/summary?period=custom&startDate=${today}&endDate=${today}`)
+    if (summary.res.ok) pass('只读：summary 接口可用')
+    else fail('只读：summary 接口', summary.text?.slice(0, 120))
+    process.exit(failed ? 1 : 0)
+  }
   const token = await login(BASE)
   const today = new Date().toISOString().slice(0, 10)
 

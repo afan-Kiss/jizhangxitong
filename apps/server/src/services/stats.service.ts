@@ -12,7 +12,8 @@ export async function getHomeDashboard() {
     todayExpenseCount: expenseToday.totalCount,
     monthExpenseAmount: expenseMonth.totalAmount,
     missingAttachmentCount: expenseToday.needsAttachmentCount,
-    pendingReimbursementAmount: expenseMonth.pendingReimbursementAmount,
+    withVoucherCount: expenseMonth.withVoucherCount,
+    voucherCompleteRate: expenseMonth.voucherCompleteRate,
     labels: {
       expense: '今日支出',
       month: '本月支出',

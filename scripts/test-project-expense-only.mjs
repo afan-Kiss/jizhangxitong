@@ -5,11 +5,11 @@ import {
   SERVER, login, fetchJson, authHeaders, ensureServerRunning, localDateString, getAdminPassword,
 } from './lib/services.mjs'
 import { launchBrowser, gotoStable, gotoLoginStable } from './lib/playwright-utils.mjs'
-import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
+import { allowWriteAcceptanceTests, skipWriteAcceptanceMessage } from './lib/acceptance-env.mjs'
 
 const BASE = (process.env.ACCEPTANCE_SERVER || SERVER).replace(/\/$/, '')
 const FORBIDDEN = ['销售', '毛利', '利润', '有效成交', '库存', '报销', '员工垫付', '扫码工作台']
-const REQUIRED_HOME = ['今日项目资金概览', '今日支出', '待补凭证', '记一笔支出']
+const REQUIRED_HOME = ['今日项目资金概览', '今日支出', '待补凭证', '记一笔支出', '资金对账']
 
 let failed = 0
 function pass(n) { console.log(`✓ ${n}`) }
@@ -55,6 +55,11 @@ async function testLegacyRoutes(page) {
 }
 
 async function testExpenseFlow(token) {
+  if (!allowWriteAcceptanceTests(BASE)) {
+    console.log(`\n--- 记支出流程 ---\nSKIP — ${skipWriteAcceptanceMessage()}`)
+    pass('生产环境跳过写入型记支出测试')
+    return
+  }
   console.log('\n--- 记支出流程 ---')
   const today = localDateString()
   const create = await api(token, '/api/expenses', {

@@ -12,7 +12,7 @@ import ActionButton from '../components/ActionButton.vue'
 import OrderLink from '../components/OrderLink.vue'
 import ImageUploader from '../components/ImageUploader.vue'
 import ImagePreviewModal from '../components/ImagePreviewModal.vue'
-import { EXPENSE_OPERATORS } from '@jade-account/shared'
+import { displayExpensePurpose } from '@jade-account/shared'
 import { resolveApiErrorMessage } from '../utils/api-errors'
 
 const route = useRoute()
@@ -40,6 +40,7 @@ const logsExpanded = ref(false)
 const showSupplementUploader = ref(false)
 const previewRequestSeq = ref(0)
 const editForm = ref({ occurredAt: '', operatorName: '' })
+const operatorOptions = ref<string[]>(['范帅', '逸凡'])
 const savingBasic = ref(false)
 
 const canEditBasic = computed(() => auth.hasPermission('expense:update') && !expense.value?.isVoided)
@@ -49,6 +50,7 @@ const attachmentCount = computed(() => expense.value?.attachments?.length || 0)
 const logCount = computed(() => expense.value?.operationLogs?.length || 0)
 
 const expenseTypeLabel = computed(() => expense.value?.expenseType || '支出')
+const expensePurposeLabel = computed(() => displayExpensePurpose(expense.value || {}))
 
 async function loadAttachmentUrls(attachments: Array<{ fileId: number }>) {
   for (const att of attachments) {
@@ -103,7 +105,13 @@ async function loadExpense() {
   loadError.value = ''
   try {
     await loadQianfanConfig(api)
-    const res = await api.get(`/expenses/${route.params.id}`)
+    const [settingsRes, res] = await Promise.all([
+      api.get('/settings'),
+      api.get(`/expenses/${route.params.id}`),
+    ])
+    operatorOptions.value = settingsRes.data.data?.expenseOperators?.length
+      ? settingsRes.data.data.expenseOperators
+      : ['范帅', '逸凡']
     if (!res.data.data) {
       loadError.value = '支出详情没加载出来'
       expense.value = null
@@ -300,6 +308,10 @@ function toggleSupplement() {
             <span>{{ expenseTypeLabel }}</span>
           </div>
           <div class="expense-detail__row">
+            <span class="muted">支出用途</span>
+            <span>{{ expensePurposeLabel }}</span>
+          </div>
+          <div class="expense-detail__row">
             <span class="muted">付款来源</span>
             <span data-testid="expense-pay-source">{{ expense.paySource || '项目专用资金' }}</span>
           </div>
@@ -309,7 +321,7 @@ function toggleSupplement() {
               <label class="expense-detail__edit-label">经手人</label>
               <div class="expense-detail__operator-grid">
                 <button
-                  v-for="name in EXPENSE_OPERATORS"
+                  v-for="name in operatorOptions"
                   :key="name"
                   type="button"
                   class="expense-detail__operator-btn"

@@ -63,13 +63,13 @@ const hasData = () => (homeStats.value?.todayExpenseCount ?? 0) > 0 || recentExp
     <header class="home-hero">
       <div>
         <h1 class="home-hero__title">今日项目资金概览</h1>
-        <p class="home-hero__sub">记录每一笔支出，自动生成统计与报账单</p>
+        <p class="home-hero__sub">记录每一笔支出，自动生成统计与对账表</p>
       </div>
       <div class="home-hero__actions">
         <button type="button" class="ui-btn ui-btn--gold" data-testid="home-expense-btn" @click="router.push('/expense/create')">
           记一笔支出
         </button>
-        <button type="button" class="ui-btn" @click="router.push('/expense/stats')">进入报账中心</button>
+        <button type="button" class="ui-btn" @click="router.push('/expense/stats')">进入资金对账中心</button>
       </div>
     </header>
 
@@ -82,7 +82,7 @@ const hasData = () => (homeStats.value?.todayExpenseCount ?? 0) > 0 || recentExp
           title="欢迎回来"
           description="今天还没有支出，记第一笔后这里会自动生成统计。"
           action-label="去记支出"
-          secondary-label="查看报账中心"
+          secondary-label="查看资金对账中心"
           @action="router.push('/expense/create')"
           @secondary="router.push('/expense/stats')"
         />
@@ -101,9 +101,9 @@ const hasData = () => (homeStats.value?.todayExpenseCount ?? 0) > 0 || recentExp
           <span class="home-kpi__label">待补凭证</span>
           <span class="home-kpi__value">{{ homeStats.missingAttachmentCount ?? 0 }} 笔</span>
         </button>
-        <button type="button" class="home-kpi" @click="goExpenseStats({ filter: 'pending-reimbursement' }, 'this_month')">
-          <span class="home-kpi__label">待报账金额</span>
-          <span class="home-kpi__value money">¥{{ Number(homeStats.pendingReimbursementAmount || 0).toFixed(2) }}</span>
+        <button type="button" class="home-kpi" data-testid="kpi-with-voucher" @click="goExpenseStats({ filter: 'with-voucher' }, 'this_month')">
+          <span class="home-kpi__label">有凭证笔数</span>
+          <span class="home-kpi__value">{{ homeStats.withVoucherCount ?? 0 }} 笔</span>
         </button>
       </section>
 
@@ -120,7 +120,7 @@ const hasData = () => (homeStats.value?.todayExpenseCount ?? 0) > 0 || recentExp
           </button>
           <button type="button" class="home-quick__btn" @click="router.push('/expense/stats')">
             <van-icon name="chart-trending-o" size="22" />
-            <span>报账中心</span>
+            <span>资金对账中心</span>
           </button>
         </div>
       </section>

@@ -4,9 +4,9 @@ import {
   defaultExpenseTypeForBusiness,
   buildQianfanOrderUrl,
   DEFAULT_PAY_SOURCE,
-  EXPENSE_OPERATORS,
   isPendingReimbursement,
   isReimbursedStatus,
+  resolveExpensePurpose,
   type ExpenseBusinessType,
 } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
@@ -20,7 +20,7 @@ import { clampPage, clampPageSize } from '../lib/pagination'
 import { resolveBraceletBinding } from '../lib/bracelet-bind'
 import { sanitizeFile } from '../lib/serialize'
 import { refreshBraceletCostTotal } from './goods.service'
-import { getQianfanOrderUrlTemplate, isQianfanOrderLinkEnabled } from './settings.service'
+import { getQianfanOrderUrlTemplate, isQianfanOrderLinkEnabled, getExpenseOperators } from './settings.service'
 import { getSale } from './sale.service'
 import { calculateExpenseImpact, syncExpenseLedger } from '../finance/core-ledger'
 
@@ -41,6 +41,7 @@ export interface ExpenseFilter {
   needsAttachment?: boolean
   hasAttachment?: boolean
   linkedOnly?: boolean
+  unlinkedOrderLogistics?: boolean
   reimbursementStatus?: string
   operator?: string
   search?: string
@@ -57,11 +58,12 @@ function maskPayeeAccount(account?: string): string | null {
   return `${a.slice(0, 2)}****${a.slice(-2)}`
 }
 
-function normalizeOperator(name?: string | null): string {
+async function normalizeOperator(name?: string | null): Promise<string> {
+  const allowed = await getExpenseOperators()
   const v = (name || '').trim()
-  if (!v) throw new Error('请选择经手人（范帅或逸凡）')
-  if (!(EXPENSE_OPERATORS as readonly string[]).includes(v)) {
-    throw new Error('经手人只能是范帅或逸凡')
+  if (!v) throw new Error(`请选择经手人（${allowed.join('、')}）`)
+  if (!allowed.includes(v)) {
+    throw new Error(`经手人必须是：${allowed.join('、')}`)
   }
   return v
 }
@@ -103,8 +105,17 @@ function buildWhere(filter: ExpenseFilter) {
   if (filter.linkedOnly) {
     mergeOrCondition(where, [
       { externalOrderNo: { not: null } },
+      { logisticsNo: { not: null } },
       { braceletId: { not: null } },
     ])
+  }
+  if (filter.unlinkedOrderLogistics) {
+    appendAndWhere(where, {
+      AND: [
+        { OR: [{ externalOrderNo: null }, { externalOrderNo: '' }] },
+        { OR: [{ logisticsNo: null }, { logisticsNo: '' }] },
+      ],
+    })
   }
   if (filter.reimbursementStatus) {
     const rs = filter.reimbursementStatus
@@ -136,6 +147,7 @@ function buildWhere(filter: ExpenseFilter) {
       { externalOrderNo: { contains: q } },
       { braceletCode: { contains: q } },
       { expenseNo: { contains: q } },
+      { expenseSummary: { contains: q } },
     ])
   }
   if (filter.createdBy) where.createdBy = filter.createdBy
@@ -365,9 +377,14 @@ export async function createExpense(
   const amount = parseMoneyInput(input.amount, '金额')
 
   const paySource = normalizePaySource(input.paySource)
-  const operatorName = normalizeOperator(input.operatorName ?? input.reimbursementPerson)
+  const operatorName = await normalizeOperator(input.operatorName ?? input.reimbursementPerson)
 
-  const businessType = (input.businessType || EXPENSE_BUSINESS_TYPES.normal) as ExpenseBusinessType
+  const purposeInput = input.expenseSummary?.trim()
+  const purposeResolved = purposeInput
+    ? resolveExpensePurpose(purposeInput)
+    : resolveExpensePurpose('普通支出')
+  const businessType = (input.businessType || purposeResolved.businessType) as ExpenseBusinessType
+  const expenseSummary = input.expenseSummary?.trim() || purposeResolved.expenseSummary
   const expenseType = input.expenseType || defaultExpenseTypeForBusiness(businessType)
 
   const saleBinding = await resolveSaleBinding({
@@ -426,7 +443,7 @@ export async function createExpense(
       paySource,
       amount,
       occurredAt,
-      expenseSummary: input.expenseSummary,
+      expenseSummary,
       remark: input.remark,
       reimbursementPerson: operatorName,
       reimbursementStatus: 'not_required',
@@ -621,7 +638,7 @@ export async function updateExpense(
     data.paySource = normalizePaySource(input.paySource)
   }
   if (input.operatorName !== undefined || input.reimbursementPerson !== undefined) {
-    data.reimbursementPerson = normalizeOperator(input.operatorName ?? input.reimbursementPerson)
+    data.reimbursementPerson = await normalizeOperator(input.operatorName ?? input.reimbursementPerson)
   }
   if (input.payeeAccount !== undefined) {
     data.payeeAccountMasked = maskPayeeAccount(input.payeeAccount)
@@ -848,6 +865,11 @@ export async function getExpenseSummary(
   }
 
   const needsAttachmentCount = expenses.filter((e) => e.needsAttachment).length
+  const totalCount = expenses.length
+  const withVoucherCount = await prisma.expense.count({
+    where: { ...baseWhere, attachments: { some: {} } },
+  })
+  const voucherCompleteRate = totalCount > 0 ? withVoucherCount / totalCount : 1
   const pendingReimbursementAmount = sumMoney(
     expenses.filter((e) => isPendingReimbursement(e.reimbursementStatus)).map((e) => e.amount),
   )
@@ -855,7 +877,10 @@ export async function getExpenseSummary(
     expenses.filter((e) => isReimbursedStatus(e.reimbursementStatus)).map((e) => e.amount),
   )
   const linkedCount = expenses.filter(
-    (e) => !!e.externalOrderNo?.trim() || e.braceletId != null,
+    (e) => !!e.externalOrderNo?.trim() || !!e.logisticsNo?.trim() || e.braceletId != null,
+  ).length
+  const unlinkedOrderLogisticsCount = expenses.filter(
+    (e) => !e.externalOrderNo?.trim() && !e.logisticsNo?.trim(),
   ).length
 
   const byTypeCount: Record<string, number> = {}
@@ -863,7 +888,6 @@ export async function getExpenseSummary(
     byTypeCount[e.expenseType] = (byTypeCount[e.expenseType] || 0) + 1
   }
 
-  const totalCount = expenses.length
   const myCount = userId ? expenses.filter((e) => e.createdBy === userId).length : undefined
   const linkedOrderCount = expenses.filter((e) => !!e.externalOrderNo?.trim()).length
   const unlinkedOrderCount = expenses.filter((e) => !e.externalOrderNo?.trim()).length
@@ -880,7 +904,10 @@ export async function getExpenseSummary(
     linkedOrderCount,
     unlinkedOrderCount,
     linkedCount,
+    unlinkedOrderLogisticsCount,
     needsAttachmentCount,
+    withVoucherCount,
+    voucherCompleteRate,
     pendingReimbursementAmount,
     reimbursedAmount,
   }

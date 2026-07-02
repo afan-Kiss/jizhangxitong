@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { authMiddleware, requirePermission, AuthRequest } from '../middleware/auth'
-import { getConfigOptions, getSettings, updateSetting, isQianfanOrderLinkEnabled } from '../services/settings.service'
+import { getConfigOptions, getSettings, updateSetting, isQianfanOrderLinkEnabled, getExpenseOperators } from '../services/settings.service'
 import { writeOperationLog } from '../services/operation-log.service'
 import { formatOperationLogEntry } from '../services/audit.service'
 import { prisma } from '../lib/prisma'
@@ -14,12 +14,14 @@ settingsRouter.get('/', async (_req, res) => {
   const settings = await getSettings()
   const expenseTypes = await getConfigOptions('expense_type')
   const paySources = await getConfigOptions('pay_source')
+  const expenseOperators = await getExpenseOperators()
   res.json({
     success: true,
     data: {
       settings,
       expenseTypes,
       paySources,
+      expenseOperators,
       qianfanOrderLinkEnabled: await isQianfanOrderLinkEnabled(),
     },
   })

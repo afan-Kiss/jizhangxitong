@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import fs from 'fs/promises'
 import path from 'path'
 import ExcelJS from 'exceljs'
-import { EXPENSE_BUSINESS_LABELS } from '@jade-account/shared'
+import { displayExpensePurpose } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
 import { config } from '../lib/config'
 import { generateNo, localDateString } from '../lib/utils'
@@ -15,6 +15,7 @@ const EXPORT_COLUMNS = [
   { header: '日期', key: 'occurredAt', width: 12 },
   { header: '支出编号', key: 'expenseNo', width: 22 },
   { header: '支出类型', key: 'expenseType', width: 14 },
+  { header: '支出用途', key: 'expensePurpose', width: 12 },
   { header: '业务类型', key: 'businessTypeLabel', width: 14 },
   { header: '金额', key: 'amount', width: 12 },
   { header: '付款来源', key: 'paySource', width: 14 },
@@ -73,9 +74,8 @@ async function buildExpenseWorkbook(
       occurredAt: localDateString(expense.occurredAt),
       expenseNo: expense.expenseNo,
       expenseType: expense.expenseType,
-      businessTypeLabel: EXPENSE_BUSINESS_LABELS[expense.businessType as keyof typeof EXPENSE_BUSINESS_LABELS]
-        || expense.businessType
-        || '',
+      expensePurpose: displayExpensePurpose(expense),
+      businessTypeLabel: expense.businessType || '',
       amount,
       paySource: expense.paySource,
       externalOrderNo: expense.externalOrderNo || '',
@@ -96,6 +96,7 @@ async function buildExpenseWorkbook(
     occurredAt: '',
     expenseNo: '',
     expenseType: '',
+    expensePurpose: '',
     businessTypeLabel: '合计',
     amount: sumMoney(expenses.map((e) => e.amount)),
     paySource: '',

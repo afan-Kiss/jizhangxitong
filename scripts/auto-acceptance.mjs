@@ -12,8 +12,9 @@ import {
   writeMarkdownReport, sleep,
   getWorkerCheckBaseUrl, fetchWorkerStatus,
   uploadImageWithRetry, ACCEPTANCE_TIER, recordAcceptanceResult,
-  resetAcceptanceFailures, getAcceptanceFailures, isLocalServer,
+  resetAcceptanceFailures, getAcceptanceFailures,   isLocalServer,
 } from './lib/services.mjs'
+import { allowWriteAcceptanceTests, skipWriteAcceptanceMessage } from './lib/acceptance-env.mjs'
 import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
 
 const MODE = process.argv[2] === 'full' || process.env.ACCEPTANCE_MODE === 'full' ? 'full' : 'basic'
@@ -163,28 +164,35 @@ async function main() {
 
   log('braceletSync', '跳过（扫码模块已下线）', true, ACCEPTANCE_TIER.EXTERNAL)
 
-  const expCreate = await fetchJson(`${SERVER}/api/expenses`, {
-    method: 'POST',
-    headers: authHeaders(token),
-    body: JSON.stringify({
-      amount: 1.23,
-      expenseType: '办公杂费',
-      businessType: 'normal',
-      paySource: '项目专用资金',
-      operatorName: '范帅',
-      occurredAt: new Date().toISOString().slice(0, 10),
-      remark: 'test_auto_check 自动联调测试，可删除',
-      needsAttachment: true,
-    }),
-  })
-  const expenseId = expCreate.res.ok ? expCreate.json.data?.id : null
-  log('expense', `创建 id=${expenseId}`, !!expenseId, ACCEPTANCE_TIER.CORE)
-  if (!expenseId) {
-    log('expense', `创建失败: ${expCreate.text?.slice(0, 120) || expCreate.res.status}`, false, ACCEPTANCE_TIER.CORE)
+  let expenseId = null
+  if (allowWriteAcceptanceTests()) {
+    const expCreate = await fetchJson(`${SERVER}/api/expenses`, {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({
+        amount: 1.23,
+        expenseType: '办公杂费',
+        businessType: 'normal',
+        paySource: '项目专用资金',
+        operatorName: '范帅',
+        occurredAt: new Date().toISOString().slice(0, 10),
+        remark: 'test_auto_check 自动联调测试，可删除',
+        needsAttachment: true,
+      }),
+    })
+    expenseId = expCreate.res.ok ? expCreate.json.data?.id : null
+    log('expense', `创建 id=${expenseId}`, !!expenseId, ACCEPTANCE_TIER.CORE)
+    if (!expenseId) {
+      log('expense', `创建失败: ${expCreate.text?.slice(0, 120) || expCreate.res.status}`, false, ACCEPTANCE_TIER.CORE)
+    }
+  } else {
+    log('expense', skipWriteAcceptanceMessage(), true, ACCEPTANCE_TIER.CORE)
+    const sum = await fetchJson(`${SERVER}/api/expenses/summary?period=today`, { headers: authHeaders(token) })
+    log('expense', `只读 summary totalCount=${sum.json.data?.totalCount ?? '?'}`, sum.res.ok, ACCEPTANCE_TIER.CORE)
   }
 
   let fileId = null
-  if (workerOnline && expenseId) {
+  if (allowWriteAcceptanceTests() && workerOnline && expenseId) {
     const up = await uploadImage(token, 'payment_screenshot', 'acceptance-test.png')
     if (up.success) {
       fileId = up.data.id
@@ -205,31 +213,39 @@ async function main() {
   }
 
   let saleId = null
-  const saleCreate = await fetchJson(`${SERVER}/api/sales`, {
-    method: 'POST',
-    headers: authHeaders(token),
-    body: JSON.stringify({
-      platform: '其他',
-      customerName: '自动验收',
-      saleAmount: 9999,
-      soldAt: new Date().toISOString().slice(0, 10),
-      customerRemark: 'test_auto_check',
-    }),
-  })
-  if (saleCreate.res.status === 410) {
-    log('sale', '销售模块已下线（410）', true, ACCEPTANCE_TIER.EXTERNAL)
-  } else if (saleCreate.res.ok) {
-    saleId = saleCreate.json.data?.id
-    log('sale', `销售 id=${saleId}`, !!saleId, ACCEPTANCE_TIER.EXTERNAL)
+  if (allowWriteAcceptanceTests()) {
+    const saleCreate = await fetchJson(`${SERVER}/api/sales`, {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({
+        platform: '其他',
+        customerName: '自动验收',
+        saleAmount: 9999,
+        soldAt: new Date().toISOString().slice(0, 10),
+        customerRemark: 'test_auto_check',
+      }),
+    })
+    if (saleCreate.res.status === 410) {
+      log('sale', '销售模块已下线（410）', true, ACCEPTANCE_TIER.EXTERNAL)
+    } else if (saleCreate.res.ok) {
+      saleId = saleCreate.json.data?.id
+      log('sale', `销售 id=${saleId}`, !!saleId, ACCEPTANCE_TIER.EXTERNAL)
+    } else {
+      log('sale', `销售接口 ${saleCreate.res.status}`, false, ACCEPTANCE_TIER.EXTERNAL)
+    }
   } else {
-    log('sale', `销售接口 ${saleCreate.res.status}`, false, ACCEPTANCE_TIER.EXTERNAL)
+    log('sale', '生产环境跳过写入型销售测试', true, ACCEPTANCE_TIER.EXTERNAL)
   }
 
   if (MODE === 'full') {
     await testFullExtras(token)
   }
 
-  report.data.remaining.push(`测试数据 expenseId=${expenseId} saleId=${saleId} fileId=${fileId} — 运行 npm run acceptance:cleanup 清理`)
+  report.data.remaining.push(
+    allowWriteAcceptanceTests()
+      ? `测试数据 expenseId=${expenseId} saleId=${saleId} fileId=${fileId} — 运行 npm run acceptance:cleanup 清理`
+      : '生产只读验收：未写入测试支出',
+  )
 
   const failures = getAcceptanceFailures()
   report.data.remaining.push(`--- 分级汇总: 核心失败 ${failures.core.length} 项; 外部依赖失败 ${failures.external.length} 项 ---`)

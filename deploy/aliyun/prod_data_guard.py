@@ -61,7 +61,7 @@ def assert_restore_backup_allowed(backup_db_path: str) -> None:
 
 
 def shell_preserve_production_data(deploy_dir: str) -> str:
-    """部署前保全生产库（prisma/data 与旧版 data/ 双路径），并写入不可被清理脚本删掉的备份目录。"""
+    """部署前保全生产库：只认 canonical prisma/data；双库不一致则中断部署。"""
     prisma_dir = f"{deploy_dir}/{PRODUCTION_DATA_REL}"
     legacy_db = f"{deploy_dir}/{LEGACY_DB_REL}"
     safe_backup_dir = f"{deploy_dir}/{SAFE_DB_BACKUP_DIR_REL}"
@@ -73,66 +73,84 @@ PRISMA_DB="{prisma_dir}/accounting.db"
 LEGACY_DB="{legacy_db}"
 mkdir -p "$SAFE_DB_DIR"
 
-pick_best_db() {{
-  local best=""
-  local best_count=0
-  for candidate in "$@"; do
-    [ -f "$candidate" ] || continue
-    local cnt
-    cnt=$(sqlite3 "$candidate" "SELECT count(*) FROM Expense WHERE isVoided=0;" 2>/dev/null || echo 0)
-    if [ "$cnt" -gt "$best_count" ]; then
-      best_count=$cnt
-      best="$candidate"
-    elif [ "$cnt" -eq "$best_count" ] && [ -n "$candidate" ]; then
-      local sz bs
-      sz=$(stat -c%s "$candidate" 2>/dev/null || echo 0)
-      if [ -n "$best" ]; then
-        bs=$(stat -c%s "$best" 2>/dev/null || echo 0)
-      else
-        bs=0
-      fi
-      if [ "$sz" -gt "$bs" ]; then best="$candidate"; fi
-    fi
-  done
-  echo "$best"
+db_summary() {{
+  local db="$1"
+  [ -f "$db" ] || {{ echo "MISSING"; return; }}
+  local size total active max_id max_occ max_created
+  size=$(stat -c%s "$db" 2>/dev/null || echo 0)
+  total=$(sqlite3 "$db" "SELECT count(*) FROM Expense;" 2>/dev/null || echo 0)
+  active=$(sqlite3 "$db" "SELECT count(*) FROM Expense WHERE isVoided=0;" 2>/dev/null || echo 0)
+  max_id=$(sqlite3 "$db" "SELECT coalesce(max(id),0) FROM Expense;" 2>/dev/null || echo 0)
+  max_occ=$(sqlite3 "$db" "SELECT coalesce(max(occurredAt),'') FROM Expense;" 2>/dev/null || echo '')
+  max_created=$(sqlite3 "$db" "SELECT coalesce(max(createdAt),'') FROM Expense;" 2>/dev/null || echo '')
+  echo "size=$size total=$total active=$active maxId=$max_id maxOccurredAt=$max_occ maxCreatedAt=$max_created"
 }}
 
-if [ -f "$PRISMA_DB" ] || [ -f "$LEGACY_DB" ]; then
-  BEST_DB=$(pick_best_db "$PRISMA_DB" "$LEGACY_DB")
-  if [ -n "$BEST_DB" ]; then
-    cp -a "$BEST_DB" "$SAFE_DB_DIR/accounting-$DEPLOY_TS.db"
-    echo "[deploy][DATA] 已写入安全备份: $SAFE_DB_DIR/accounting-$DEPLOY_TS.db"
-    ls -t "$SAFE_DB_DIR"/accounting-*.db 2>/dev/null | tail -n +11 | xargs -r rm -f
+print_db_summary() {{
+  local label="$1"
+  local db="$2"
+  echo "[deploy][DATA] $label: $(db_summary "$db")"
+}}
+
+HAS_PRISMA=0
+HAS_LEGACY=0
+[ -f "$PRISMA_DB" ] && HAS_PRISMA=1
+[ -f "$LEGACY_DB" ] && HAS_LEGACY=1
+
+if [ "$HAS_PRISMA" = 1 ]; then
+  print_db_summary "canonical(prisma/data)" "$PRISMA_DB"
+fi
+if [ "$HAS_LEGACY" = 1 ]; then
+  print_db_summary "legacy(apps/server/data)" "$LEGACY_DB"
+fi
+
+if [ "$HAS_PRISMA" = 1 ] && [ "$HAS_LEGACY" = 1 ]; then
+  S1=$(db_summary "$PRISMA_DB")
+  S2=$(db_summary "$LEGACY_DB")
+  if [ "$S1" != "$S2" ]; then
+    echo "[deploy][FATAL] 检测到双库摘要不一致，禁止自动猜测主库。请人工确认后再部署。" >&2
+    echo "[deploy][FATAL] canonical: $S1" >&2
+    echo "[deploy][FATAL] legacy:    $S2" >&2
+    exit 1
   fi
+fi
+
+CANONICAL_SOURCE=""
+if [ "$HAS_PRISMA" = 1 ]; then
+  CANONICAL_SOURCE="$PRISMA_DB"
+elif [ "$HAS_LEGACY" = 1 ]; then
+  CANONICAL_SOURCE="$LEGACY_DB"
+  echo "[deploy][DATA] 仅发现 legacy 库，将在恢复阶段迁移到 prisma/data"
+fi
+
+if [ -n "$CANONICAL_SOURCE" ]; then
+  cp -a "$CANONICAL_SOURCE" "$SAFE_DB_DIR/accounting-$DEPLOY_TS.db"
+  echo "[deploy][DATA] 已写入安全备份: $SAFE_DB_DIR/accounting-$DEPLOY_TS.db"
+  ls -t "$SAFE_DB_DIR"/accounting-*.db 2>/dev/null | tail -n +11 | xargs -r rm -f
 fi
 
 if ! mkdir -p "$DATA_PRESERVE"; then
   echo "[deploy][FATAL] 创建保全目录失败" >&2
   exit 1
 fi
-if [ -f "$PRISMA_DB" ]; then
-  mkdir -p "$DATA_PRESERVE/prisma-data"
-  cp -a {prisma_dir}/. "$DATA_PRESERVE/prisma-data/"
-  echo "[deploy][DATA] 已保全 prisma/data ($(stat -c%s "$PRISMA_DB" 2>/dev/null || echo 0) bytes)"
-fi
-if [ -f "$LEGACY_DB" ]; then
-  mkdir -p "$DATA_PRESERVE/legacy-data"
-  cp -a {deploy_dir}/{LEGACY_DATA_REL}/. "$DATA_PRESERVE/legacy-data/"
-  echo "[deploy][DATA] 已保全 apps/server/data ($(stat -c%s "$LEGACY_DB" 2>/dev/null || echo 0) bytes)"
-fi
-BEST_DB=$(pick_best_db "$DATA_PRESERVE/prisma-data/accounting.db" "$DATA_PRESERVE/legacy-data/accounting.db")
-if [ -z "$BEST_DB" ]; then
-  echo "[deploy][DATA] 无历史 accounting.db，全新部署"
-else
+if [ -n "$CANONICAL_SOURCE" ]; then
   mkdir -p "$DATA_PRESERVE/canonical"
-  cp -a "$BEST_DB" "$DATA_PRESERVE/canonical/accounting.db"
-  echo "[deploy][DATA] 选定主库: $BEST_DB"
+  cp -a "$CANONICAL_SOURCE" "$DATA_PRESERVE/canonical/accounting.db"
+  CANONICAL_SIZE=$(stat -c%s "$DATA_PRESERVE/canonical/accounting.db" 2>/dev/null || echo 0)
+  if [ "$CANONICAL_SIZE" -le 0 ]; then
+    echo "[deploy][FATAL] 保全库大小为 0" >&2
+    exit 1
+  fi
+  echo "[deploy][DATA] 已保全 canonical accounting.db (${{CANONICAL_SIZE}} bytes)"
+else
+  echo "[deploy][DATA] 无历史 accounting.db，全新部署"
 fi
 """
 
 
 def shell_restore_preserved_data(deploy_dir: str) -> str:
     prisma_dir = f"{deploy_dir}/{PRODUCTION_DATA_REL}"
+    legacy_db = f"{deploy_dir}/{LEGACY_DB_REL}"
     return f"""
 rm -f /tmp/jade-upload/accounting.db
 if ! mkdir -p {prisma_dir}; then
@@ -154,9 +172,16 @@ if [ -f "$DATA_PRESERVE/canonical/accounting.db" ]; then
     exit 1
   fi
   rm -rf "$DATA_PRESERVE"
-  echo "[deploy][DATA] 已恢复线上 accounting.db 到 prisma/data (${{RESTORE_SIZE}} bytes)"
+  echo "[deploy][DATA] 已恢复 canonical accounting.db 到 prisma/data (${{RESTORE_SIZE}} bytes)"
+  if [ -f "{legacy_db}" ]; then
+    echo "[deploy][DATA] 提示: legacy 路径仍存在库文件，系统只使用 prisma/data/accounting.db"
+  fi
 else
   echo "[deploy][DATA] 无历史 accounting.db，保留空 prisma/data 目录"
+fi
+FINAL_SIZE=$(stat -c%s "{prisma_dir}/accounting.db" 2>/dev/null || echo 0)
+if [ "$FINAL_SIZE" -gt 0 ]; then
+  echo "[deploy][DATA] 部署后 canonical DB 确认: ${{FINAL_SIZE}} bytes"
 fi
 """
 

@@ -7,6 +7,8 @@ export const DEFAULT_SETTINGS = {
   local_worker_enabled: 'true',
   scanner_sync_timeout: '8',
   qianfan_order_detail_url_template: '',
+  /** 逗号分隔，可在系统设置中维护 */
+  expense_operators: '范帅,逸凡',
 } as const
 
 export const DEFAULT_PAY_SOURCE = '项目专用资金' as const
@@ -37,8 +39,19 @@ export const PAY_SOURCES = [
   '其他',
 ] as const
 
-/** 记支出时标记的实际经手人 */
-export const EXPENSE_OPERATORS = ['范帅', '逸凡'] as const
+/** 记支出时默认经手人（可被系统设置 expense_operators 覆盖） */
+export const DEFAULT_EXPENSE_OPERATORS = ['范帅', '逸凡'] as const
+
+/** @deprecated 请用 DEFAULT_EXPENSE_OPERATORS 或后端 settings.expenseOperators */
+export const EXPENSE_OPERATORS = DEFAULT_EXPENSE_OPERATORS
+
+export const EXPENSE_OPERATORS_SETTING_KEY = 'expense_operators'
+
+export function parseExpenseOperators(raw?: string | null): string[] {
+  if (!raw?.trim()) return [...DEFAULT_EXPENSE_OPERATORS]
+  const list = raw.split(/[,，、\n]/).map((s) => s.trim()).filter(Boolean)
+  return list.length ? [...new Set(list)] : [...DEFAULT_EXPENSE_OPERATORS]
+}
 
 export const FILE_TYPES = [
   'payment_screenshot',

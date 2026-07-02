@@ -15,7 +15,7 @@ function isActive(path: string) {
       <div class="desktop-sidebar__mark" aria-hidden="true">◆</div>
       <div>
         <div class="desktop-sidebar__title">项目资金支出</div>
-        <div class="desktop-sidebar__sub">记录 · 统计 · 报账</div>
+        <div class="desktop-sidebar__sub">记录 · 统计 · 对账</div>
       </div>
     </div>
     <nav class="desktop-sidebar__nav">

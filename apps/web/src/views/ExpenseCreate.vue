@@ -13,7 +13,7 @@ import ActionButton from '../components/ActionButton.vue'
 import XhsOrderPicker from '../components/XhsOrderPicker.vue'
 import type { XhsOrderItem } from '../types/xhs-order'
 import { resolveApiErrorMessage } from '../utils/api-errors'
-import { DEFAULT_PAY_SOURCE, PROJECT_EXPENSE_CATEGORIES, EXPENSE_OPERATORS } from '@jade-account/shared'
+import { DEFAULT_PAY_SOURCE, PROJECT_EXPENSE_CATEGORIES, EXPENSE_PURPOSE_OPTIONS, resolveExpensePurpose } from '@jade-account/shared'
 
 const STORAGE_KEY = 'jade-expense-prefs'
 
@@ -39,9 +39,10 @@ const uploaderSectionRef = ref<HTMLElement | null>(null)
 function defaultForm() {
   return {
     amount: '',
+    expensePurpose: '普通支出',
     expenseType: '',
     paySource: '',
-    operatorName: EXPENSE_OPERATORS[0] as string,
+    operatorName: '',
     externalOrderNo: '',
     logisticsNo: '',
     occurredAt: new Date().toISOString().slice(0, 10),
@@ -62,6 +63,13 @@ const categoryOptions = computed(() => {
   const merged = [...new Set([...PROJECT_EXPENSE_CATEGORIES, ...fromSettings])]
   return merged
 })
+
+const operatorOptions = computed(() => {
+  const fromSettings = settings.value.expenseOperators as string[] | undefined
+  return fromSettings?.length ? fromSettings : ['范帅', '逸凡']
+})
+
+const purposeOptions = EXPENSE_PURPOSE_OPTIONS.map((o) => o.label)
 
 const paySourceOptions = computed(() => {
   const list = settings.value.paySources || []
@@ -101,8 +109,10 @@ onMounted(async () => {
     } else {
       form.value.paySource = resolveDefaultPaySource()
     }
-    if (saved.operatorName && (EXPENSE_OPERATORS as readonly string[]).includes(saved.operatorName)) {
+    if (saved.operatorName && operatorOptions.value.includes(saved.operatorName)) {
       form.value.operatorName = saved.operatorName
+    } else if (operatorOptions.value[0]) {
+      form.value.operatorName = operatorOptions.value[0]
     }
   } catch {
     form.value.expenseType = categoryOptions.value[0] || '其他支出'
@@ -236,8 +246,10 @@ async function onSubmit() {
 
   loading.value = true
   try {
+    const purpose = resolveExpensePurpose(form.value.expensePurpose)
     const res = await api.post('/expenses', {
-      businessType: 'normal',
+      businessType: purpose.businessType,
+      expenseSummary: purpose.expenseSummary,
       amount,
       expenseType: form.value.expenseType,
       paySource: form.value.paySource,
@@ -267,7 +279,7 @@ async function onSubmit() {
     <div ref="pageRef" class="desktop-two-column expense-create" data-testid="expense-create-page">
       <header class="expense-create__hero">
         <h1>记一笔项目支出</h1>
-        <p>填写金额、分类与凭证，保存后自动进入统计与报账中心</p>
+        <p>填写金额、用途、分类与凭证，保存后可在资金对账中心查看统计</p>
       </header>
       <div class="desktop-two-column__main">
         <LuxuryCard gold padding="20px 16px">
@@ -287,6 +299,20 @@ async function onSubmit() {
               />
             </div>
             <div v-if="displayAmount && form.amount" class="amount-zone__hint muted">{{ displayAmount }}</div>
+          </div>
+        </LuxuryCard>
+
+        <LuxuryCard>
+          <div class="section-title">支出用途</div>
+          <div class="pill-row">
+            <button
+              v-for="t in purposeOptions"
+              :key="t"
+              class="pill"
+              :class="{ 'pill--active': form.expensePurpose === t }"
+              :data-testid="`expense-purpose-${t}`"
+              @click="form.expensePurpose = t"
+            >{{ t }}</button>
           </div>
         </LuxuryCard>
 
@@ -340,7 +366,7 @@ async function onSubmit() {
           <div class="section-title">经手人</div>
           <div class="pay-grid">
             <button
-              v-for="name in EXPENSE_OPERATORS"
+              v-for="name in operatorOptions"
               :key="name"
               type="button"
               class="pay-card"

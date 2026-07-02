@@ -9,7 +9,7 @@ import {
   resolveAcceptanceWebBase, localDateString,
 } from './lib/services.mjs'
 import { launchBrowser, gotoStable } from './lib/playwright-utils.mjs'
-import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
+import { allowWriteAcceptanceTests, skipWriteAcceptanceMessage } from './lib/acceptance-env.mjs'
 
 installScriptTimeout('test:accounting-flow', TIMEOUTS.acceptanceFull)
 
@@ -46,6 +46,11 @@ async function testHomeDashboard(token) {
 }
 
 async function testExpenseFlow(token) {
+  if (!allowWriteAcceptanceTests(BASE)) {
+    console.log(`\n--- 记支出 ---\nSKIP — ${skipWriteAcceptanceMessage()}`)
+    pass('生产环境跳过写入型记支出/作废测试')
+    return
+  }
   console.log('\n--- 记支出 ---')
   const today = localDateString()
   const create = await api(token, '/api/expenses', {

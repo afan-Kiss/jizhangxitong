@@ -7,7 +7,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs/promises'
 import { RECOMMENDED_URL } from './lib/deploy-env.mjs'
-import { installScriptTimeout, TIMEOUTS } from './lib/script-timeout.mjs'
+import { allowWriteAcceptanceTests } from './lib/acceptance-env.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(__dirname, '..')
@@ -28,13 +28,14 @@ async function main() {
   const server = process.env.ACCEPTANCE_SERVER || await readDeployUrl()
   console.log(`远程验收目标: ${server}`)
 
-  const child = spawn('node', ['scripts/auto-acceptance.mjs', 'full'], {
+  const mode = allowWriteAcceptanceTests(server) ? 'full' : 'basic'
+  const child = spawn('node', ['scripts/auto-acceptance.mjs', mode], {
     cwd: ROOT,
     stdio: 'inherit',
     env: {
       ...process.env,
       ACCEPTANCE_SERVER: server,
-      ACCEPTANCE_MODE: 'full',
+      ACCEPTANCE_MODE: mode,
     },
     shell: true,
   })

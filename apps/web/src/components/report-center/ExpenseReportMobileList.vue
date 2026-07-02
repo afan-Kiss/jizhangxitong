@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reimbursementStatusLabel } from '@jade-account/shared'
+import { displayExpensePurpose } from '@jade-account/shared'
 
 defineProps<{ items: any[] }>()
 const emit = defineEmits<{ open: [id: number] }>()
@@ -20,12 +20,14 @@ const emit = defineEmits<{ open: [id: number] }>()
       </div>
       <div class="erm-card__meta">
         <span>{{ String(item.occurredAt || '').slice(0, 10) }}</span>
+        <span>{{ displayExpensePurpose(item) }}</span>
         <span>{{ item.operatorName || item.reimbursementPerson || '未标记' }}</span>
-        <span>{{ item.paySource }}</span>
       </div>
       <div class="erm-card__tags">
         <span class="erm-tag">{{ item.attachments?.length ? `有 ${item.attachments.length} 张凭证` : '无凭证' }}</span>
-        <span class="erm-tag">{{ reimbursementStatusLabel(item.reimbursementStatus) }}</span>
+        <span v-if="item.externalOrderNo || item.logisticsNo" class="erm-tag">
+          {{ item.externalOrderNo || item.logisticsNo }}
+        </span>
       </div>
     </button>
     <div v-if="!items.length" class="erm-empty">当前筛选下暂无支出明细</div>

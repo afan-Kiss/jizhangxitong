@@ -17,7 +17,7 @@ onMounted(async () => {
     const res = await api.get(`/finance/share-links/${token}`)
     data.value = res.data.data
   } catch (err: unknown) {
-    error.value = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || '报账链接无效'
+    error.value = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || '对账链接无效'
   } finally {
     loading.value = false
   }
@@ -49,6 +49,7 @@ function printPage() {
           <h1>{{ data.title }}</h1>
           <p>时间范围：{{ data.startDate }} 至 {{ data.endDate }}</p>
           <p class="fshare__muted">生成时间：{{ new Date(data.generatedAt).toLocaleString() }}</p>
+          <p v-if="data.expiresAt" class="fshare__muted">链接有效期至：{{ new Date(data.expiresAt).toLocaleString() }}</p>
         </div>
         <div class="fshare__actions">
           <button type="button" class="fshare__btn fshare__btn--gold" @click="exportExcel">下载 Excel</button>
@@ -60,14 +61,15 @@ function printPage() {
         <div class="fshare__kpi"><span>总金额</span><strong>¥{{ Number(data.summary.totalAmount).toFixed(2) }}</strong></div>
         <div class="fshare__kpi"><span>支出笔数</span><strong>{{ data.summary.totalCount }}</strong></div>
         <div class="fshare__kpi"><span>待补凭证</span><strong>{{ data.summary.needsAttachmentCount }}</strong></div>
-        <div class="fshare__kpi"><span>待报账金额</span><strong>¥{{ Number(data.summary.pendingReimbursementAmount || 0).toFixed(2) }}</strong></div>
+        <div class="fshare__kpi"><span>有凭证笔数</span><strong>{{ data.summary.withVoucherCount ?? 0 }}</strong></div>
+        <div class="fshare__kpi"><span>未关联订单/物流</span><strong>{{ data.summary.unlinkedOrderLogisticsCount ?? 0 }}</strong></div>
       </section>
 
       <section v-if="!data.summary.totalCount" class="fshare__empty">
         <h2>当前时间范围内还没有支出</h2>
         <p>
           本链接时间范围为 {{ data.startDate }} 至 {{ data.endDate }}。
-          记一笔支出并落在该范围内后，刷新此页即可看到报账数据。
+          记一笔支出并落在该范围内后，刷新此页即可看到对账数据。
         </p>
       </section>
 
@@ -120,14 +122,15 @@ function printPage() {
           <table class="fshare__table">
             <thead>
               <tr>
-                <th>日期</th><th>分类</th><th>金额</th><th>经手人</th><th>付款来源</th>
-                <th>关联</th><th>凭证</th><th>报账状态</th><th>备注</th>
+                <th>日期</th><th>分类</th><th>用途</th><th>金额</th><th>经手人</th><th>付款来源</th>
+                <th>关联</th><th>凭证</th><th>备注</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="row in data.details" :key="row.id">
                 <td>{{ row.occurredAt }}</td>
                 <td>{{ row.expenseType }}</td>
+                <td>{{ row.expensePurpose || '普通支出' }}</td>
                 <td class="num">¥{{ row.amount.toFixed(2) }}</td>
                 <td>{{ row.operatorName }}</td>
                 <td>{{ row.paySource }}</td>
@@ -138,7 +141,6 @@ function printPage() {
                   </template>
                   <span v-else>{{ row.voucherLabel }}</span>
                 </td>
-                <td>{{ row.reimbursementStatusLabel }}</td>
                 <td>{{ row.remark || '—' }}</td>
               </tr>
             </tbody>
