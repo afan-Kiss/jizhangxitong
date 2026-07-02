@@ -1,15 +1,21 @@
 <script setup lang="ts">
-import { computed, useAttrs } from 'vue'
+import { computed, useAttrs, withDefaults } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useBreakpoint } from '../composables/useBreakpoint'
 import { shouldShowPageBack } from '../utils/page-back'
 
-const props = defineProps<{
-  title?: string
-  showBack?: boolean
-  noTabPad?: boolean
-  fixedBottom?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    title?: string
+    /** 仅用于强制隐藏返回（Tab 根页一般不必传） */
+    hideBack?: boolean
+    noTabPad?: boolean
+    fixedBottom?: boolean
+  }>(),
+  {
+    hideBack: false,
+  },
+)
 
 const emit = defineEmits<{ back: [] }>()
 const attrs = useAttrs()
@@ -19,7 +25,7 @@ const { isDesktop } = useBreakpoint()
 
 const useFixedFooter = computed(() => Boolean(props.fixedBottom) && !isDesktop.value)
 const showBackButton = computed(() => {
-  if (props.showBack !== undefined) return props.showBack
+  if (props.hideBack) return false
   return shouldShowPageBack(route.path)
 })
 
