@@ -99,8 +99,19 @@ async function drillExpenses(
     occurredAt: { gte: start, lte: end },
   }
   if (filterType === 'missing-attachment') where.needsAttachment = true
-  if (filterType === 'linked-order') where.externalOrderNo = { not: null }
-  if (filterType === 'unlinked-order') where.externalOrderNo = null
+  if (filterType === 'linked-order') {
+    where.AND = [
+      ...(Array.isArray(where.AND) ? where.AND as Record<string, unknown>[] : []),
+      { externalOrderNo: { not: null } },
+      { NOT: { externalOrderNo: '' } },
+    ]
+  }
+  if (filterType === 'unlinked-order') {
+    where.OR = [
+      { externalOrderNo: null },
+      { externalOrderNo: '' },
+    ]
+  }
 
   const expenses = await prisma.expense.findMany({
     where,

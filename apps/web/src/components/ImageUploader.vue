@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { showToast } from 'vant'
 import api, { uploadFileWithProgress, fileThumbUrl } from '../api'
 
@@ -52,7 +52,7 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const dropZone = ref<HTMLElement | null>(null)
 const uploadQueue = ref<Array<{ key: string; file: File }>>([])
 const queueRunning = ref(false)
-const failedCount = ref(0)
+const failedCount = computed(() => localItems.value.filter((i) => i.status === 'failed').length)
 const dragOver = ref(false)
 const isDesktop = ref(false)
 const pasteScopeActive = ref(false)
@@ -103,8 +103,9 @@ function syncModelValue() {
     localItems.value = localItems.value.filter((i) => !promotedKeys.includes(i.key))
   }
   emit('update:modelValue', merged)
-  emit('upload-failures', failedCount.value)
 }
+
+watch(failedCount, (n) => emit('upload-failures', n), { immediate: true })
 
 async function probeUploadChannel() {
   probing.value = true
@@ -421,8 +422,6 @@ async function runUploadQueue() {
     } catch (err: unknown) {
       item.status = 'failed'
       item.error = (err as { userMessage?: string })?.userMessage || '上传失败，稍后再试'
-      failedCount.value += 1
-      emit('upload-failures', failedCount.value)
     }
   }
   queueRunning.value = false

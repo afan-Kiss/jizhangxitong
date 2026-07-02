@@ -34,11 +34,11 @@ async function loadDashboard() {
   }
 }
 
-function goExpenseStats(query: Record<string, string> = {}) {
-  const month = resolveDateRange('this_month')
+function goExpenseStats(query: Record<string, string> = {}, rangeKey: 'today' | 'this_month' = 'this_month') {
+  const range = resolveDateRange(rangeKey)
   router.push({
     path: '/expense/stats',
-    query: { range: 'this_month', startDate: month.startDate, endDate: month.endDate, ...query },
+    query: { range: rangeKey, startDate: range.startDate, endDate: range.endDate, ...query },
   })
 }
 
@@ -89,19 +89,19 @@ const hasData = () => (homeStats.value?.todayExpenseCount ?? 0) > 0 || recentExp
       </section>
 
       <section class="home-kpis" data-testid="home-kpi-grid">
-        <button type="button" class="home-kpi" data-testid="kpi-today-expense" @click="goExpenseStats()">
+        <button type="button" class="home-kpi" data-testid="kpi-today-expense" @click="goExpenseStats({}, 'today')">
           <span class="home-kpi__label">今日支出金额</span>
           <span class="home-kpi__value money">¥{{ Number(homeStats.todayExpenseAmount || 0).toFixed(2) }}</span>
         </button>
-        <button type="button" class="home-kpi" @click="goExpenseStats()">
+        <button type="button" class="home-kpi" @click="goExpenseStats({}, 'today')">
           <span class="home-kpi__label">今日支出笔数</span>
           <span class="home-kpi__value">{{ homeStats.todayExpenseCount ?? 0 }} 笔</span>
         </button>
-        <button type="button" class="home-kpi" data-testid="kpi-missing-attachment" @click="goExpenseStats({ filter: 'missing-attachment' })">
+        <button type="button" class="home-kpi" data-testid="kpi-missing-attachment" @click="goExpenseStats({ filter: 'missing-attachment' }, 'today')">
           <span class="home-kpi__label">待补凭证</span>
           <span class="home-kpi__value">{{ homeStats.missingAttachmentCount ?? 0 }} 笔</span>
         </button>
-        <button type="button" class="home-kpi" @click="goExpenseStats({ filter: 'pending-reimbursement' })">
+        <button type="button" class="home-kpi" @click="goExpenseStats({ filter: 'pending-reimbursement' }, 'this_month')">
           <span class="home-kpi__label">待报账金额</span>
           <span class="home-kpi__value money">¥{{ Number(homeStats.pendingReimbursementAmount || 0).toFixed(2) }}</span>
         </button>

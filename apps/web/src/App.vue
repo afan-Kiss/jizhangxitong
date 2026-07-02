@@ -3,7 +3,7 @@ import { RouterView } from 'vue-router'
 import ResponsiveLayout from './components/ResponsiveLayout.vue'
 
 /** 左侧 Tab 主页面缓存，切换时不再重新挂载 */
-const TAB_VIEWS = ['Home', 'ExpenseCreate', 'ExpenseStats', 'Settings']
+const TAB_VIEWS = ['Home', 'ExpenseStats', 'Settings']
 </script>
 
 <template>

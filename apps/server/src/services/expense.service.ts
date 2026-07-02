@@ -10,7 +10,7 @@ import {
   type ExpenseBusinessType,
 } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
-import { generateNo, startOfDay, endOfDay, startOfWeek, startOfMonth, parseDateInput } from '../lib/utils'
+import { generateNo, startOfDay, endOfDay, startOfWeek, startOfMonth, parseDateInput, validateCustomDateRange } from '../lib/utils'
 import { parseMoneyInput, sumMoney, toMoneyNumber } from '../lib/money'
 import { normalizePaySource } from '../lib/pay-source'
 import { AuthRequest } from '../middleware/auth'
@@ -140,7 +140,11 @@ function buildWhere(filter: ExpenseFilter) {
   }
   if (filter.createdBy) where.createdBy = filter.createdBy
   if (filter.remarkContains) where.remark = { contains: filter.remarkContains }
-  where.isTrialRun = false
+  if (filter.isTrialRun !== undefined) {
+    where.isTrialRun = filter.isTrialRun
+  } else if (filter.excludeTrial !== false) {
+    where.isTrialRun = false
+  }
   return where
 }
 
@@ -182,10 +186,24 @@ async function resolveSaleBinding(input: {
   const logisticsNo = input.logisticsNo?.trim()
   if (logisticsNo) {
     const sale = await prisma.sale.findFirst({
-      where: { logisticsNo: { contains: logisticsNo }, isTrialRun: false },
+      where: { logisticsNo, isTrialRun: false },
       orderBy: { soldAt: 'desc' },
     })
-    if (sale) {
+    if (!sale) {
+      const fuzzy = await prisma.sale.findFirst({
+        where: { logisticsNo: { contains: logisticsNo }, isTrialRun: false },
+        orderBy: { soldAt: 'desc' },
+      })
+      if (fuzzy && fuzzy.logisticsNo?.trim() === logisticsNo) {
+        return {
+          saleId: fuzzy.id,
+          braceletId: fuzzy.braceletId,
+          braceletCode: fuzzy.braceletCode,
+          externalOrderNo: fuzzy.externalOrderNo,
+          logisticsNo: fuzzy.logisticsNo,
+        }
+      }
+    } else {
       return {
         saleId: sale.id,
         braceletId: sale.braceletId,
@@ -218,6 +236,31 @@ function resolvePendingLinkStatus(input: {
 
 function requiresBraceletBinding(businessType?: string | null): boolean {
   return businessType === EXPENSE_BUSINESS_TYPES.item_cost
+}
+
+function assertExpenseAccessible(expense: { isTrialRun: boolean }) {
+  if (expense.isTrialRun) throw new Error('试运行数据不可访问')
+}
+
+async function validateAttachmentFileIds(
+  fileIds: number[],
+  operatorId: number,
+  expenseId?: number,
+) {
+  if (!fileIds.length) return
+  const unique = [...new Set(fileIds)]
+  const files = await prisma.file.findMany({
+    where: { id: { in: unique } },
+    include: { attachments: true },
+  })
+  if (files.length !== unique.length) throw new Error('部分凭证文件不存在')
+  for (const file of files) {
+    if (file.uploadedBy != null && file.uploadedBy !== operatorId) {
+      throw new Error('只能关联自己上传的凭证文件')
+    }
+    const linkedElsewhere = file.attachments.some((a) => a.expenseId !== expenseId)
+    if (linkedElsewhere) throw new Error('凭证文件已关联到其他支出')
+  }
 }
 
 export async function listExpenses(filter: ExpenseFilter) {
@@ -261,6 +304,7 @@ export async function getExpense(id: number) {
     },
   })
   if (!expense) return null
+  if (expense.isTrialRun) return null
   const orderNo = expense.externalOrderNo || expense.sale?.externalOrderNo || ''
   const qianfanTemplate = await getQianfanOrderUrlTemplate()
   const qianfanOrderUrl = expense.qianfanOrderUrl
@@ -315,6 +359,9 @@ export async function createExpense(
   operator: AuthRequest['user'],
 ) {
   if (!input.amount && input.amount !== 0) throw new Error('金额必须大于 0')
+  if (!input.occurredAt?.trim()) throw new Error('请填写支出时间')
+  const occurredAt = parseDateInput(input.occurredAt)
+  if (Number.isNaN(occurredAt.getTime())) throw new Error('支出时间格式无效')
   const amount = parseMoneyInput(input.amount, '金额')
 
   const paySource = normalizePaySource(input.paySource)
@@ -378,7 +425,7 @@ export async function createExpense(
       businessType,
       paySource,
       amount,
-      occurredAt: parseDateInput(input.occurredAt),
+      occurredAt,
       expenseSummary: input.expenseSummary,
       remark: input.remark,
       reimbursementPerson: operatorName,
@@ -403,6 +450,10 @@ export async function createExpense(
     : (input.attachmentFileIds || []).map((fileId) => ({ fileId, fileType: 'payment_screenshot' }))
 
   if (attachmentItems.length) {
+    await validateAttachmentFileIds(
+      attachmentItems.map((i) => i.fileId),
+      operator!.userId,
+    )
     await prisma.expenseAttachment.createMany({
       data: attachmentItems.map((item, idx) => ({
         expenseId: expense.id,
@@ -447,6 +498,7 @@ export async function linkExpense(
 ) {
   const before = await prisma.expense.findUnique({ where: { id } })
   if (!before) throw new Error('支出不存在')
+  assertExpenseAccessible(before)
   if (before.isVoided) throw new Error('这条记录现在不能改')
 
   const saleBinding = await resolveSaleBinding({
@@ -544,6 +596,7 @@ export async function updateExpense(
 ) {
   const before = await prisma.expense.findUnique({ where: { id } })
   if (!before) throw new Error('支出不存在')
+  assertExpenseAccessible(before)
   if (before.isVoided) throw new Error('这条记录现在不能改')
 
   const oldBraceletId = before.braceletId
@@ -556,7 +609,11 @@ export async function updateExpense(
   for (const key of allowedKeys) {
     if (input[key] !== undefined) data[key] = input[key]
   }
-  if (input.occurredAt) data.occurredAt = parseDateInput(input.occurredAt)
+  if (input.occurredAt) {
+    const parsed = parseDateInput(input.occurredAt)
+    if (Number.isNaN(parsed.getTime())) throw new Error('支出时间格式无效')
+    data.occurredAt = parsed
+  }
   if (input.amount !== undefined) {
     data.amount = parseMoneyInput(input.amount, '金额')
   }
@@ -605,11 +662,16 @@ export async function updateExpense(
 
   if (input.braceletCode !== undefined || input.braceletId !== undefined) {
     const binding = await resolveBraceletBinding(input.braceletCode, input.braceletId, operator)
-    if (input.braceletCode?.trim() && !binding.braceletId) {
+    const businessType = (input.businessType || before.businessType) as string
+    if (input.braceletCode?.trim() && !binding.braceletId && requiresBraceletBinding(businessType)) {
       throw new Error('本地电脑没连上，暂时查不到扫码枪里的镯子')
     }
-    data.braceletId = binding.braceletId
-    data.braceletCode = binding.braceletCode || input.braceletCode?.trim().toUpperCase()
+    if (binding.braceletId) {
+      data.braceletId = binding.braceletId
+      data.braceletCode = binding.braceletCode
+    } else if (input.braceletCode?.trim()) {
+      data.braceletCode = input.braceletCode.trim().toUpperCase()
+    }
   }
 
   const expense = await prisma.expense.update({ where: { id }, data: { ...data, updatedBy: operator!.userId } })
@@ -640,6 +702,7 @@ export async function updateExpense(
 export async function voidExpense(id: number, voidReason: string, operator: AuthRequest['user']) {
   const before = await prisma.expense.findUnique({ where: { id } })
   if (!before) throw new Error('支出不存在')
+  assertExpenseAccessible(before)
   if (before.isVoided) throw new Error('这条支出已经作废过了，不能重复作废')
 
   const expense = await prisma.expense.update({
@@ -683,7 +746,12 @@ export async function addAttachments(
 ) {
   const expense = await prisma.expense.findUnique({ where: { id: expenseId } })
   if (!expense) throw new Error('支出不存在')
+  assertExpenseAccessible(expense)
   if (expense.isVoided) throw new Error('这条记录已作废，不能修改')
+
+  if (items.length) {
+    await validateAttachmentFileIds(items.map((i) => i.fileId), operator!.userId, expenseId)
+  }
 
   const maxOrder = await prisma.expenseAttachment.aggregate({
     where: { expenseId },
@@ -748,8 +816,15 @@ export async function getExpenseSummary(
       start = startOfMonth(now)
       break
     case 'custom':
-      start = startDate ? startOfDay(parseDateInput(startDate)) : startOfMonth(now)
-      end = endDate ? endOfDay(parseDateInput(endDate)) : endOfDay(now)
+      if (startDate && endDate) {
+        const range = validateCustomDateRange(startDate, endDate)
+        start = range.start
+        end = range.end
+      } else {
+        start = startDate ? startOfDay(parseDateInput(startDate)) : startOfMonth(now)
+        end = endDate ? endOfDay(parseDateInput(endDate)) : endOfDay(now)
+        if (start > end) throw new Error('开始日期不能晚于结束日期')
+      }
       break
     default:
       start = startOfDay(now)

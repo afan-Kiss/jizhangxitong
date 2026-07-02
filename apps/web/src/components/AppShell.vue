@@ -49,7 +49,7 @@ function goBack() {
     }"
   >
     <header
-      v-if="title && showBackButton"
+      v-if="showBackButton"
       class="app-shell__page-head"
       :class="{ 'app-shell__page-head--sticky': !isDesktop }"
     >
@@ -62,6 +62,7 @@ function goBack() {
       >
         ← 返回
       </button>
+      <span v-if="title" class="app-shell__title">{{ title }}</span>
     </header>
     <div class="app-shell__body page-enter">
       <slot />
@@ -113,6 +114,12 @@ function goBack() {
   padding: 6px 14px;
   font-size: 14px;
   cursor: pointer;
+}
+.app-shell__title {
+  margin-left: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-main);
 }
 .app-shell__body {
   padding: 0 0 16px;

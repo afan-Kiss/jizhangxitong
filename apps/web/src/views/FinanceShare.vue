@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
-import { withBase } from '../api'
+import { downloadFinanceExcel } from '../utils/finance-export'
 
 const route = useRoute()
 const loading = ref(true)
@@ -24,8 +24,14 @@ onMounted(async () => {
 })
 
 function exportExcel() {
+  if (!data.value) return
   const token = route.params.token as string
-  window.open(withBase(`/api/finance/export?token=${encodeURIComponent(token)}&format=xlsx`), '_blank')
+  downloadFinanceExcel({
+    startDate: data.value.startDate,
+    endDate: data.value.endDate,
+    title: data.value.title,
+    token,
+  }).catch(() => { error.value = 'Excel 导出失败' })
 }
 
 function printPage() {

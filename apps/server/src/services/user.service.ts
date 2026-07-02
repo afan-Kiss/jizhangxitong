@@ -237,6 +237,10 @@ export async function disableUser(userId: number, operator: AuthRequest['user'])
 export async function enableUser(userId: number, operator: AuthRequest['user']) {
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) throw new Error('用户不存在')
+  if (user.status !== 'disabled') throw new Error('只能启用已停用的用户')
+
+  const roleCount = await prisma.userRole.count({ where: { userId } })
+  if (roleCount === 0) throw new Error('该用户没有角色，请先审核并分配角色')
 
   await prisma.user.update({
     where: { id: userId },

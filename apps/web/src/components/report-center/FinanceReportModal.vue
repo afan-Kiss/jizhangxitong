@@ -2,7 +2,8 @@
 import { ref, watch, nextTick } from 'vue'
 import { showToast } from 'vant'
 import QRCode from 'qrcode'
-import api, { withBase } from '../../api'
+import api from '../../api'
+import { downloadFinanceExcel } from '../../utils/finance-export'
 
 const props = defineProps<{
   open: boolean
@@ -106,14 +107,13 @@ async function copyUrl() {
 }
 
 function exportExcel() {
-  const q = new URLSearchParams({
+  downloadFinanceExcel({
     startDate: props.startDate,
     endDate: props.endDate,
-    format: 'xlsx',
     title: title.value,
   })
-  window.open(withBase(`/api/finance/export?${q.toString()}`), '_blank')
-  close()
+    .then(() => close())
+    .catch(() => showToast('导出失败'))
 }
 </script>
 

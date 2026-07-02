@@ -21,6 +21,14 @@ statsRouter.get('/monthly', requirePermission('expense:view'), async (req, res) 
   const now = new Date()
   const year = Number(req.query.year || now.getFullYear())
   const month = Number(req.query.month || now.getMonth() + 1)
+  if (!Number.isFinite(year) || year < 2000 || year > 2100) {
+    res.status(400).json({ success: false, message: '年份无效' })
+    return
+  }
+  if (!Number.isFinite(month) || month < 1 || month > 12) {
+    res.status(400).json({ success: false, message: '月份无效，应为 1–12' })
+    return
+  }
   const data = await getMonthlyReport(year, month)
   res.json({ success: true, data })
 })

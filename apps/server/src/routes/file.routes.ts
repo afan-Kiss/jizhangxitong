@@ -6,6 +6,7 @@ import { uploadAndRelay, getFileView, assertFileAccess } from '../services/file.
 import { createFileAccessToken, verifyFileAccessToken } from '../lib/file-access-token'
 import { sanitizeFile } from '../lib/serialize'
 import { verifyToken } from '../lib/jwt'
+import { prisma } from '../lib/prisma'
 import { ERROR_CODES } from '@jade-account/shared'
 
 const upload = multer({ dest: config.tempUploadDir })
@@ -48,6 +49,13 @@ async function resolveFileAuth(req: AuthRequest, fileId: number) {
   if (accessToken) {
     const payload = verifyFileAccessToken(accessToken)
     if (payload.fileId !== fileId) throw Object.assign(new Error('无效的文件访问令牌'), { statusCode: 403 })
+    const account = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { status: true, isActive: true },
+    })
+    if (!account || account.status !== 'active' || !account.isActive) {
+      throw Object.assign(new Error('账号不可用，文件访问令牌已失效'), { statusCode: 403 })
+    }
     const permissions = await getUserPermissions(payload.userId)
     req.user = { userId: payload.userId, username: '', name: '', permissions }
     await assertFileAccess(req.user, fileId)

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { showToast } from 'vant'
-import api, { fileViewUrl, withBase } from '../api'
+import api, { fileViewUrl } from '../api'
 import AppShell from '../components/AppShell.vue'
 import DateRangePicker from '../components/DateRangePicker.vue'
 import ImagePreviewModal from '../components/ImagePreviewModal.vue'
@@ -16,6 +16,9 @@ import {
   toRangeQuery,
   type DateRangeState,
 } from '../utils/date-range'
+import { downloadFinanceExcel } from '../utils/finance-export'
+
+const LIST_PAGE_SIZE = 200
 
 const router = useRouter()
 const route = useRoute()
@@ -29,6 +32,8 @@ const loadError = ref('')
 const loading = ref(false)
 const modalOpen = ref(false)
 const lastShareUrl = ref('')
+const listPage = ref(1)
+const loadingMore = ref(false)
 const searchQ = ref(String(route.query.q || ''))
 const filterStatus = ref(String(route.query.reimbursementStatus || ''))
 const filterType = ref(String(route.query.expenseType || ''))
@@ -55,6 +60,8 @@ const sortedItems = computed(() => {
   return list
 })
 
+const hasMore = computed(() => items.value.length < total.value)
+
 function syncRouteQuery(extra: Record<string, string | undefined> = {}) {
   const q: Record<string, string> = { ...toRangeQuery(dateRange.value) }
   if (searchQ.value.trim()) q.q = searchQ.value.trim()
@@ -62,8 +69,13 @@ function syncRouteQuery(extra: Record<string, string | undefined> = {}) {
   if (filterType.value) q.expenseType = filterType.value
   if (filterOperator.value) q.operator = filterOperator.value
   if (filterPaySource.value) q.paySource = filterPaySource.value
-  if (activeKpi.value) q.filter = activeKpi.value
-  Object.assign(q, Object.fromEntries(Object.entries(extra).filter(([, v]) => v)))
+  if ('filter' in extra) {
+    if (extra.filter) q.filter = extra.filter
+  } else if (activeKpi.value) {
+    q.filter = activeKpi.value
+  }
+  const { filter: _f, ...rest } = extra
+  Object.assign(q, Object.fromEntries(Object.entries(rest).filter(([, v]) => v)))
   router.replace({ query: q })
 }
 
@@ -72,25 +84,31 @@ function listParams() {
   const params: Record<string, string | number> = {
     startDate,
     endDate,
-    pageSize: 200,
-    page: 1,
+    pageSize: LIST_PAGE_SIZE,
+    page: listPage.value,
   }
   if (searchQ.value.trim()) params.q = searchQ.value.trim()
-  if (filterStatus.value) params.reimbursementStatus = filterStatus.value
   if (filterType.value) params.expenseType = filterType.value
   if (filterOperator.value) params.operator = filterOperator.value
   if (filterPaySource.value) params.paySource = filterPaySource.value
 
   const f = activeKpi.value
   if (f === 'missing-attachment') params.needsAttachment = 1
-  if (f === 'pending-reimbursement') params.reimbursementStatus = 'pending_report'
-  if (f === 'reimbursed') params.reimbursementStatus = 'reimbursed'
-  if (f === 'linked') params.linkedOnly = 1
+  else if (f === 'pending-reimbursement') params.reimbursementStatus = 'pending_report'
+  else if (f === 'reimbursed') params.reimbursementStatus = 'reimbursed'
+  else if (f === 'linked') params.linkedOnly = 1
+  else if (filterStatus.value === 'pending' || filterStatus.value === 'pending_report') {
+    params.reimbursementStatus = 'pending_report'
+  } else if (filterStatus.value) {
+    params.reimbursementStatus = filterStatus.value
+  }
   return params
 }
 
-async function load() {
-  loading.value = true
+async function load(reset = true) {
+  if (reset) listPage.value = 1
+  loading.value = reset
+  loadingMore.value = !reset
   loadError.value = ''
   const { startDate, endDate } = dateRange.value
   try {
@@ -99,23 +117,41 @@ async function load() {
       api.get('/expenses', { params: listParams() }),
     ])
     summary.value = sumRes.data.data
-    items.value = listRes.data.data.items
+    const pageItems = listRes.data.data.items
+    items.value = reset ? pageItems : [...items.value, ...pageItems]
     total.value = listRes.data.data.total
   } catch {
     loadError.value = '数据没查出来，刷新试试'
   } finally {
     loading.value = false
+    loadingMore.value = false
   }
 }
 
 function onRangeChange() {
+  lastShareUrl.value = ''
   syncRouteQuery()
   load()
 }
 
 function setKpiFilter(filter: string) {
-  syncRouteQuery({ filter: filter || undefined })
+  syncRouteQuery({ filter: filter || '' })
   load()
+}
+
+function onFilterStatusChange() {
+  if (filterStatus.value && ['pending-reimbursement', 'reimbursed'].includes(activeKpi.value)) {
+    syncRouteQuery({ filter: '' })
+  } else {
+    syncRouteQuery()
+  }
+  load()
+}
+
+async function loadMore() {
+  if (!hasMore.value || loadingMore.value) return
+  listPage.value += 1
+  await load(false)
 }
 
 function applyTypeFilter(name: string) {
@@ -147,23 +183,7 @@ function toggleSort(key: 'occurredAt' | 'amount') {
 
 function exportExcel() {
   const { startDate, endDate } = dateRange.value
-  const q = new URLSearchParams({ startDate, endDate, format: 'xlsx', title: '项目资金报账单' })
-  const token = localStorage.getItem('token')
-  const url = withBase(`/api/finance/export?${q.toString()}`)
-  if (!token) {
-    window.open(url, '_blank')
-    return
-  }
-  fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-    .then((r) => r.blob())
-    .then((blob) => {
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `项目资金报账_${startDate}_${endDate}.xlsx`
-      a.click()
-      URL.revokeObjectURL(a.href)
-    })
-    .catch(() => showToast('导出失败'))
+  downloadFinanceExcel({ startDate, endDate, title: '项目资金报账单' }).catch(() => showToast('导出失败'))
 }
 
 async function copyShareLink() {
@@ -209,9 +229,14 @@ const typeRows = computed(() => {
 })
 
 watch(
-  () => [route.query.range, route.query.startDate, route.query.endDate, route.query.filter],
+  () => route.fullPath,
   () => {
     dateRange.value = parseRouteRange(route.query as Record<string, string>)
+    searchQ.value = String(route.query.q || '')
+    filterStatus.value = String(route.query.reimbursementStatus || '')
+    filterType.value = String(route.query.expenseType || '')
+    filterOperator.value = String(route.query.operator || '')
+    filterPaySource.value = String(route.query.paySource || '')
     load()
   },
 )
@@ -345,7 +370,7 @@ onMounted(() => {
 
       <section class="rc-detail">
         <div class="rc-detail__toolbar">
-          <h3 class="rc-card__title">支出明细（{{ total }} 笔）</h3>
+          <h3 class="rc-card__title">支出明细（{{ total }} 笔<span v-if="items.length < total">，已显示 {{ items.length }} 笔</span>）</h3>
           <input
             v-model="searchQ"
             class="rc-search"
@@ -353,9 +378,9 @@ onMounted(() => {
             placeholder="搜索分类、经手人、备注、订单号…"
             @keyup.enter="syncRouteQuery(); load()"
           />
-          <select v-model="filterStatus" class="rc-select" @change="syncRouteQuery(); load()">
+          <select v-model="filterStatus" class="rc-select" @change="onFilterStatusChange">
             <option value="">全部报账状态</option>
-            <option value="pending">待报账</option>
+            <option value="pending_report">待报账</option>
             <option value="submitted">已提交</option>
             <option value="reimbursed">已报账</option>
             <option value="rejected">已打回</option>
@@ -377,6 +402,11 @@ onMounted(() => {
           :items="sortedItems"
           @open="(id) => router.push(`/expense/${id}`)"
         />
+        <div v-if="hasMore" class="rc-load-more">
+          <button type="button" class="rc-btn" :disabled="loadingMore" @click="loadMore">
+            {{ loadingMore ? '加载中…' : `加载更多（还剩 ${total - items.length} 笔）` }}
+          </button>
+        </div>
       </section>
 
       <FinanceReportModal
@@ -434,6 +464,11 @@ onMounted(() => {
   color: #fff;
 }
 .rc-btn--plain { background: #f8f7f3; }
+.rc-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 8px;
+}
 .rc-date {
   margin-bottom: 16px;
   background: #fff;

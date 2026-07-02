@@ -10,7 +10,7 @@ import {
 } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
 import { config } from '../lib/config'
-import { generateNo, localDateString } from '../lib/utils'
+import { generateNo, localDateString, validateCustomDateRange } from '../lib/utils'
 import { sumMoney, toMoneyNumber } from '../lib/money'
 import { AuthRequest } from '../middleware/auth'
 import { createFileAccessTokenWithTtl } from '../lib/file-access-token'
@@ -77,6 +77,7 @@ export async function createFinanceShareLink(
   operator: NonNullable<AuthRequest['user']>,
   req?: { headers?: { 'x-forwarded-proto'?: string; host?: string } },
 ) {
+  validateCustomDateRange(input.startDate, input.endDate)
   const token = shareToken()
   const cfg: FinanceShareConfig = {
     ...defaultShareConfig(),
@@ -393,6 +394,7 @@ export async function exportFinanceExcel(
   }
 
   if (!startDate || !endDate) throw new Error('请提供时间范围')
+  validateCustomDateRange(startDate, endDate)
 
   const exportNo = generateNo('FIN')
   const fileName = `项目资金报账_${startDate}_${endDate}_${exportNo}.xlsx`

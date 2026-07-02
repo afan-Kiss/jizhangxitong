@@ -12,6 +12,7 @@ import { loginPath } from '../utils/base-path'
 
 const router = useRouter()
 const auth = useAuthStore()
+const canViewLogs = computed(() => auth.hasPermission('log:view'))
 const canManagePermission = computed(() => auth.hasPermission('permission:manage'))
 const settings = ref<any>({})
 const qianfanEnabled = ref(false)
@@ -74,7 +75,7 @@ function logout() {
         <p v-if="!qianfanEnabled" class="settings-hint muted">未配置时，页面会提示「先复制订单号去千帆查」</p>
       </LuxuryCard>
 
-      <LuxuryCard>
+      <LuxuryCard v-if="canViewLogs">
         <van-cell title="操作日志" is-link @click="router.push('/logs')" />
       </LuxuryCard>
 

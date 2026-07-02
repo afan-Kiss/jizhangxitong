@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, Response, NextFunction } from 'express'
 import { authMiddleware, requirePermission, AuthRequest } from '../middleware/auth'
 import {
   createFinanceShareLink,
@@ -7,6 +7,17 @@ import {
 } from '../services/finance.service'
 
 export const financeRouter = Router()
+
+/** 带 share token 可匿名导出；否则需登录且有 expense:view */
+function financeExportAuth(req: AuthRequest, res: Response, next: NextFunction) {
+  if (req.query.token) {
+    next()
+    return
+  }
+  authMiddleware(req, res, () => {
+    requirePermission('expense:view')(req, res, next)
+  })
+}
 
 financeRouter.get('/share-links/:token', async (req, res) => {
   try {
@@ -17,7 +28,7 @@ financeRouter.get('/share-links/:token', async (req, res) => {
   }
 })
 
-financeRouter.get('/export', async (req, res) => {
+financeRouter.get('/export', financeExportAuth, async (req, res) => {
   try {
     const format = String(req.query.format || 'xlsx')
     if (format !== 'xlsx') {

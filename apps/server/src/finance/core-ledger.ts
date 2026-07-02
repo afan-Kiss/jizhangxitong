@@ -83,7 +83,7 @@ function resolveCompensationDeduction(sale: SaleProfitInput): {
   total: number
   items: LedgerBreakdownItem[]
 } {
-  if (sale.expenses?.length) {
+    if (sale.expenses?.length) {
     const items: LedgerBreakdownItem[] = []
     let total = 0
     for (const e of sale.expenses) {
@@ -96,7 +96,7 @@ function resolveCompensationDeduction(sale: SaleProfitInput): {
         refId: String(e.id ?? `expense-${e.expenseType}`),
       })
     }
-    return { total, items }
+    if (total > 0) return { total, items }
   }
   const fallback = toMoneyNumber(sale.compensationAmount as string | number)
   return {

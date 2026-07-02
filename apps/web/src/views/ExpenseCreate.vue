@@ -26,16 +26,7 @@ const { qianfanEnabled, loadQianfanConfig, copyOrderNo, openQianfan } = useQianf
 const settings = ref<any>({})
 const matchedOrder = ref<{ externalOrderNo: string; logisticsNo?: string; orderAmount?: number } | null>(null)
 const lookupLoading = ref(false)
-const form = ref({
-  amount: '',
-  expenseType: '',
-  paySource: '',
-  operatorName: EXPENSE_OPERATORS[0] as string,
-  externalOrderNo: '',
-  logisticsNo: '',
-  occurredAt: new Date().toISOString().slice(0, 10),
-  remark: '',
-})
+const form = ref(defaultForm())
 const uploadedFiles = ref<Array<{ fileId: number; fileType: string; name: string; preview?: string }>>([])
 const uploadFailCount = ref(0)
 const loading = ref(false)
@@ -43,6 +34,28 @@ const pageRef = ref<HTMLElement | null>(null)
 const uploaderRef = ref<{ bindPageRoot: (el: HTMLElement | null) => void; unbindPageRoot: () => void } | null>(null)
 const amountFocused = ref(false)
 const showXhsPicker = ref(false)
+const uploaderSectionRef = ref<HTMLElement | null>(null)
+
+function defaultForm() {
+  return {
+    amount: '',
+    expenseType: '',
+    paySource: '',
+    operatorName: EXPENSE_OPERATORS[0] as string,
+    externalOrderNo: '',
+    logisticsNo: '',
+    occurredAt: new Date().toISOString().slice(0, 10),
+    remark: '',
+  }
+}
+
+function resetCreateForm() {
+  form.value = defaultForm()
+  uploadedFiles.value = []
+  uploadFailCount.value = 0
+  matchedOrder.value = null
+  amountFocused.value = false
+}
 
 const categoryOptions = computed(() => {
   const fromSettings = (settings.value.expenseTypes || []).map((t: { value: string; label: string }) => t.value)
@@ -101,6 +114,11 @@ onMounted(async () => {
     if (orderNo) await lookupOrder()
   }
 
+  if (route.query.focus === 'upload') {
+    await nextTick()
+    uploaderSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   await bindUploaderPageScope()
 })
 
@@ -142,7 +160,12 @@ async function lookupOrder() {
     else params.keyword = logisticsNo
     const res = await api.get('/xhs/orders/search', { params })
     const rows = res.data.data?.items || []
-    const hit = rows.find((r: XhsOrderItem) => r.externalOrderNo === orderNo) || rows[0]
+    let hit: XhsOrderItem | undefined
+    if (orderNo) {
+      hit = rows.find((r: XhsOrderItem) => r.externalOrderNo === orderNo)
+    } else if (logisticsNo) {
+      hit = rows.find((r: XhsOrderItem) => r.logisticsNo === logisticsNo)
+    }
     if (hit) {
       matchedOrder.value = {
         externalOrderNo: hit.externalOrderNo,
@@ -152,7 +175,7 @@ async function lookupOrder() {
       form.value.externalOrderNo = hit.externalOrderNo
       if (hit.logisticsNo) form.value.logisticsNo = hit.logisticsNo
     } else {
-      showToast('暂未查到该订单，可先保存订单号')
+      showToast(orderNo ? '暂未查到该订单，可先保存订单号' : '暂未查到该物流单号对应的订单')
     }
   } catch {
     showToast('查订单失败，稍后再试')
@@ -228,7 +251,9 @@ async function onSubmit() {
     })
     savePrefs()
     showToast('已保存')
-    router.push(`/expense/${res.data.data.id}`)
+    const id = res.data.data.id
+    resetCreateForm()
+    router.push(`/expense/${id}`)
   } catch (err: unknown) {
     showToast(resolveApiErrorMessage(err))
   } finally {
@@ -238,7 +263,7 @@ async function onSubmit() {
 </script>
 
 <template>
-  <AppShell no-tab-pad :fixed-bottom="!isDesktop">
+  <AppShell title="记支出" no-tab-pad :fixed-bottom="!isDesktop">
     <div ref="pageRef" class="desktop-two-column expense-create" data-testid="expense-create-page">
       <header class="expense-create__hero">
         <h1>记一笔项目支出</h1>
@@ -332,7 +357,7 @@ async function onSubmit() {
         </LuxuryCard>
       </div>
 
-      <div class="desktop-two-column__aside">
+      <div ref="uploaderSectionRef" class="desktop-two-column__aside">
         <LuxuryCard>
           <div class="section-title">凭证图片</div>
           <ImageUploader

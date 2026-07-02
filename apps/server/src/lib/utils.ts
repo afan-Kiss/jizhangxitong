@@ -56,3 +56,19 @@ export function startOfMonth(date: Date): Date {
   d.setDate(1)
   return d
 }
+
+/** 校验自定义日期范围，start <= end */
+export function validateCustomDateRange(startDate: string, endDate: string): { start: Date; end: Date } {
+  if (!startDate?.trim() || !endDate?.trim()) {
+    throw new Error('请提供起止日期')
+  }
+  const start = startOfDay(parseDateInput(startDate))
+  const end = endOfDay(parseDateInput(endDate))
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    throw new Error('日期格式无效')
+  }
+  if (start > end) {
+    throw new Error('开始日期不能晚于结束日期')
+  }
+  return { start, end }
+}
