@@ -143,6 +143,19 @@ async function runViewportInner(browser, vp, creds) {
         throw new Error('扫码页应显示下线提示')
       }
     })
+
+    await check('子页操作日志有返回键', async () => {
+      await gotoStable(page, `${WEB_BASE}/logs`)
+      const back = page.locator('[data-testid="page-back-btn"]')
+      if (!(await back.isVisible())) throw new Error('操作日志页缺少返回键')
+    })
+
+    await check('Tab 根页支出统计无返回键', async () => {
+      await gotoStable(page, `${WEB_BASE}/expense/stats`)
+      if (await page.locator('[data-testid="page-back-btn"]').isVisible().catch(() => false)) {
+        throw new Error('支出统计 Tab 根页不应显示返回键')
+      }
+    })
   }
 
   if (vp.desktop) {
@@ -159,6 +172,12 @@ async function runViewportInner(browser, vp, creds) {
       await gotoStable(page, `${WEB_BASE}/expense/stats`)
       const card = page.locator('[data-testid="expense-stats-summary"]')
       await card.waitFor({ state: 'visible', timeout: 10000 })
+    })
+
+    await check('子页操作日志有返回键', async () => {
+      await gotoStable(page, `${WEB_BASE}/logs`)
+      const back = page.locator('[data-testid="page-back-btn"]')
+      if (!(await back.isVisible())) throw new Error('操作日志页缺少返回键')
     })
   }
 

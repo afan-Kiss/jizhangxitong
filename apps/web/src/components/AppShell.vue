@@ -22,8 +22,6 @@ const showBackButton = computed(() => {
   if (props.showBack !== undefined) return props.showBack
   return shouldShowPageBack(route.path)
 })
-const showMobileNavBar = computed(() => Boolean(props.title) && !isDesktop.value)
-const showDesktopHead = computed(() => Boolean(props.title) && isDesktop.value)
 
 function goBack() {
   if (typeof attrs.onBack === 'function') {
@@ -47,24 +45,23 @@ function goBack() {
       'app-shell--desktop': isDesktop,
     }"
   >
-    <div v-if="showDesktopHead" class="app-shell__page-head">
+    <header
+      v-if="title"
+      class="app-shell__page-head"
+      :class="{ 'app-shell__page-head--sticky': !isDesktop }"
+    >
       <button
         v-if="showBackButton"
         type="button"
         class="app-shell__back"
         data-testid="page-back-btn"
+        aria-label="返回上一页"
         @click="goBack"
       >
         ← 返回
       </button>
       <h1 class="app-shell__page-title">{{ title }}</h1>
-    </div>
-    <van-nav-bar
-      v-if="showMobileNavBar"
-      :title="title"
-      :left-arrow="showBackButton"
-      @click-left="goBack"
-    />
+    </header>
     <div class="app-shell__body page-enter">
       <slot />
     </div>
@@ -93,17 +90,31 @@ function goBack() {
 .app-shell__page-head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 0 0 16px;
+  gap: 10px;
+  margin: 0 0 14px;
   flex-wrap: wrap;
 }
+.app-shell__page-head--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  margin-left: -16px;
+  margin-right: -16px;
+  padding: calc(8px + env(safe-area-inset-top)) 16px 10px;
+  background: linear-gradient(180deg, rgba(16, 24, 20, 0.98) 0%, rgba(16, 24, 20, 0.92) 70%, transparent 100%);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(215, 181, 109, 0.1);
+}
 .app-shell__back {
-  border: 1px solid rgba(215, 181, 109, 0.28);
-  background: rgba(255, 255, 255, 0.04);
+  flex-shrink: 0;
+  min-height: 36px;
+  border: 1px solid rgba(215, 181, 109, 0.35);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--color-gold-light);
   border-radius: 999px;
   padding: 6px 14px;
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.2;
   cursor: pointer;
   transition:
     border-color var(--duration-fast),
@@ -119,9 +130,15 @@ function goBack() {
 }
 .app-shell__page-title {
   margin: 0;
-  font-size: 22px;
+  flex: 1;
+  min-width: 0;
+  font-size: 18px;
   font-weight: 600;
   color: var(--color-text-champagne);
+  line-height: 1.3;
+}
+.app-shell--desktop .app-shell__page-title {
+  font-size: 22px;
 }
 .app-shell__body {
   padding: 0 0 16px;
