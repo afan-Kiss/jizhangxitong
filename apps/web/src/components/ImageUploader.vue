@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { showToast } from 'vant'
-import api, { uploadFileWithProgress } from '../api'
+import api, { uploadFileWithProgress, fileThumbUrl } from '../api'
 
 export interface UploadedItem {
   fileId: number
@@ -100,10 +100,6 @@ function syncModelValue() {
     }
   }
   if (promotedKeys.length) {
-    for (const key of promotedKeys) {
-      const item = localItems.value.find((i) => i.key === key)
-      revokePreview(item?.preview)
-    }
     localItems.value = localItems.value.filter((i) => !promotedKeys.includes(i.key))
   }
   emit('update:modelValue', merged)
@@ -414,6 +410,13 @@ async function runUploadQueue() {
       item.fileId = record.id
       item.status = 'success'
       item.progress = 100
+      const blobPreview = item.preview
+      try {
+        item.preview = await fileThumbUrl(record.id)
+        revokePreview(blobPreview)
+      } catch {
+        // 缩略图暂不可用时保留本地 blob 预览
+      }
       syncModelValue()
     } catch (err: unknown) {
       item.status = 'failed'

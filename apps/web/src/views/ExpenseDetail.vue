@@ -260,6 +260,10 @@ function toggleSupplement() {
             <span>{{ expenseTypeLabel }}</span>
           </div>
           <div class="expense-detail__row">
+            <span class="muted">经手人</span>
+            <span data-testid="expense-operator">{{ expense.operatorName || expense.reimbursementPerson || '未标记' }}</span>
+          </div>
+          <div class="expense-detail__row">
             <span class="muted">付款来源</span>
             <span data-testid="expense-pay-source">{{ expense.paySource || '项目专用资金' }}</span>
           </div>

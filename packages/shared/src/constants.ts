@@ -37,6 +37,9 @@ export const PAY_SOURCES = [
   '其他',
 ] as const
 
+/** 记支出时标记的实际经手人 */
+export const EXPENSE_OPERATORS = ['范帅', '逸凡'] as const
+
 export const FILE_TYPES = [
   'payment_screenshot',
   'after_sale_problem',

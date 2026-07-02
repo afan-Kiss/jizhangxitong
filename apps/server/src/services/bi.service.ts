@@ -128,6 +128,7 @@ async function drillExpenses(
       amount: toMoneyNumber(e.amount),
       expenseType: e.expenseType,
       paySource: e.paySource,
+      operatorName: e.reimbursementPerson,
       externalOrderNo: e.externalOrderNo,
       expenseNo: e.expenseNo,
       braceletCode: e.braceletCode,

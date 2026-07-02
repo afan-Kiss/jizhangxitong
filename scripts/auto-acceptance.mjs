@@ -171,6 +171,7 @@ async function main() {
       expenseType: '办公杂费',
       businessType: 'normal',
       paySource: '项目专用资金',
+      operatorName: '范帅',
       occurredAt: new Date().toISOString().slice(0, 10),
       remark: 'test_auto_check 自动联调测试，可删除',
       needsAttachment: true,

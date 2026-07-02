@@ -23,6 +23,7 @@ const EXPORT_COLUMNS = [
   { header: '货品编号', key: 'braceletCode', width: 14 },
   { header: '是否作废', key: 'isVoidedLabel', width: 10 },
   { header: '是否需要凭证', key: 'needsAttachmentLabel', width: 12 },
+  { header: '经手人', key: 'operatorName', width: 10 },
   { header: '创建人', key: 'createdByName', width: 12 },
   { header: '备注', key: 'remark', width: 24 },
 ] as const
@@ -82,6 +83,7 @@ async function buildExpenseWorkbook(
       braceletCode: expense.braceletCode || '',
       isVoidedLabel: expense.isVoided ? '是' : '否',
       needsAttachmentLabel: expense.needsAttachment ? '是' : '否',
+      operatorName: expense.reimbursementPerson || '',
       createdByName: userMap.get(expense.createdBy)?.displayName
         || userMap.get(expense.createdBy)?.username
         || '未知',
@@ -102,6 +104,7 @@ async function buildExpenseWorkbook(
     braceletCode: '',
     isVoidedLabel: '',
     needsAttachmentLabel: '',
+    operatorName: '',
     createdByName: '',
     remark: exportType,
   })

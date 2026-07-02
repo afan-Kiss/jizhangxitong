@@ -4,6 +4,7 @@ import {
   defaultExpenseTypeForBusiness,
   buildQianfanOrderUrl,
   DEFAULT_PAY_SOURCE,
+  EXPENSE_OPERATORS,
   type ExpenseBusinessType,
 } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
@@ -47,6 +48,15 @@ function maskPayeeAccount(account?: string): string | null {
   if (!a) return null
   if (a.length <= 4) return '****'
   return `${a.slice(0, 2)}****${a.slice(-2)}`
+}
+
+function normalizeOperator(name?: string | null): string {
+  const v = (name || '').trim()
+  if (!v) throw new Error('请选择经手人（范帅或逸凡）')
+  if (!(EXPENSE_OPERATORS as readonly string[]).includes(v)) {
+    throw new Error('经手人只能是范帅或逸凡')
+  }
+  return v
 }
 
 function buildWhere(filter: ExpenseFilter) {
@@ -174,6 +184,7 @@ export async function listExpenses(filter: ExpenseFilter) {
   const userMap = await resolveUsersBrief(sanitized.map((e) => e.createdBy))
   const withCreator = sanitized.map((e) => ({
     ...e,
+    operatorName: e.reimbursementPerson || null,
     createdByUser: userMap.get(e.createdBy) || null,
     submitterName: userMap.get(e.createdBy)?.displayName || null,
   }))
@@ -204,6 +215,7 @@ export async function getExpense(id: number) {
 
   return {
     ...expense,
+    operatorName: expense.reimbursementPerson || null,
     qianfanOrderUrl,
     qianfanOrderLinkEnabled: await isQianfanOrderLinkEnabled(),
     affectsProfit: calculateExpenseImpact(expense).affectsProfit,
@@ -234,6 +246,8 @@ export async function createExpense(
     payeeAccount?: string
     linkNote?: string
     pendingLinkStatus?: string
+    operatorName?: string
+    reimbursementPerson?: string
     attachmentFileIds?: number[]
     attachments?: Array<{ fileId: number; fileType: string }>
     needsAttachment?: boolean
@@ -244,6 +258,7 @@ export async function createExpense(
   const amount = parseMoneyInput(input.amount, '金额')
 
   const paySource = normalizePaySource(input.paySource)
+  const operatorName = normalizeOperator(input.operatorName ?? input.reimbursementPerson)
 
   const businessType = (input.businessType || EXPENSE_BUSINESS_TYPES.normal) as ExpenseBusinessType
   const expenseType = input.expenseType || defaultExpenseTypeForBusiness(businessType)
@@ -306,6 +321,7 @@ export async function createExpense(
       occurredAt: parseDateInput(input.occurredAt),
       expenseSummary: input.expenseSummary,
       remark: input.remark,
+      reimbursementPerson: operatorName,
       reimbursementStatus: 'not_required',
       needsAttachment: input.needsAttachment || false,
       isTrialRun: false,
@@ -461,6 +477,8 @@ export async function updateExpense(
     payeeAccount: string
     linkNote: string
     needsAttachment: boolean
+    operatorName: string
+    reimbursementPerson: string
   }>,
   operator: AuthRequest['user'],
 ) {
@@ -473,6 +491,7 @@ export async function updateExpense(
     'amount', 'expenseType', 'businessType', 'paySource', 'occurredAt',
     'braceletCode', 'braceletId', 'saleId', 'externalOrderNo', 'logisticsNo',
     'expenseSummary', 'remark', 'customerPaymentStatus', 'paidAt', 'payeeName', 'payeeAccount', 'linkNote', 'needsAttachment',
+    'operatorName', 'reimbursementPerson',
   ] as const
   const data: Record<string, unknown> = {}
   for (const key of allowedKeys) {
@@ -484,6 +503,9 @@ export async function updateExpense(
   }
   if (input.paySource !== undefined) {
     data.paySource = normalizePaySource(input.paySource)
+  }
+  if (input.operatorName !== undefined || input.reimbursementPerson !== undefined) {
+    data.reimbursementPerson = normalizeOperator(input.operatorName ?? input.reimbursementPerson)
   }
   if (input.payeeAccount !== undefined) {
     data.payeeAccountMasked = maskPayeeAccount(input.payeeAccount)
@@ -681,11 +703,14 @@ export async function getExpenseSummary(
 
   const byType: Record<string, number> = {}
   const byPaySource: Record<string, number> = {}
+  const byOperator: Record<string, number> = {}
 
   for (const e of expenses) {
     const amt = toMoneyNumber(e.amount)
     byType[e.expenseType] = sumMoney([byType[e.expenseType] || 0, amt])
     byPaySource[e.paySource] = sumMoney([byPaySource[e.paySource] || 0, amt])
+    const op = e.reimbursementPerson?.trim() || '未标记'
+    byOperator[op] = sumMoney([byOperator[op] || 0, amt])
   }
 
   const needsAttachment = await prisma.expense.count({
@@ -704,6 +729,7 @@ export async function getExpenseSummary(
     myCount,
     byType,
     byPaySource,
+    byOperator,
     linkedOrderCount,
     unlinkedOrderCount,
     needsAttachmentCount: needsAttachment,

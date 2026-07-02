@@ -39,7 +39,6 @@ async function load() {
       startDate,
       endDate,
       pageSize: 50,
-      mine: 1,
     }
     if (route.query.filter === 'missing-attachment') listParams.needsAttachment = 1
     const list = await api.get('/expenses', { params: listParams })
@@ -137,6 +136,16 @@ onMounted(() => {
       <div v-if="!Object.keys(summary.byType || {}).length" class="muted">暂无分类数据</div>
     </LuxuryCard>
 
+    <LuxuryCard v-if="summary?.byOperator">
+      <div class="section-title">按经手人</div>
+      <div class="type-list">
+        <div v-for="(val, key) in summary.byOperator" :key="key" class="type-list__row">
+          <span class="type-list__label">{{ key }}</span>
+          <span class="type-list__amount money">¥{{ Number(val).toFixed(2) }}</span>
+        </div>
+      </div>
+    </LuxuryCard>
+
     <LuxuryCard v-if="summary?.byPaySource">
       <div class="section-title">按付款来源</div>
       <div class="type-list">
@@ -159,6 +168,7 @@ onMounted(() => {
           <ExpenseItem
             :type="item.expenseType"
             :amount="Number(item.amount)"
+            :person="item.operatorName || item.reimbursementPerson || undefined"
             :pay-source="item.paySource"
             :occurred-at="item.occurredAt"
           />

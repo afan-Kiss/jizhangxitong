@@ -13,7 +13,7 @@ import ActionButton from '../components/ActionButton.vue'
 import XhsOrderPicker from '../components/XhsOrderPicker.vue'
 import type { XhsOrderItem } from '../types/xhs-order'
 import { resolveApiErrorMessage } from '../utils/api-errors'
-import { DEFAULT_PAY_SOURCE, PROJECT_EXPENSE_CATEGORIES } from '@jade-account/shared'
+import { DEFAULT_PAY_SOURCE, PROJECT_EXPENSE_CATEGORIES, EXPENSE_OPERATORS } from '@jade-account/shared'
 
 const STORAGE_KEY = 'jade-expense-prefs'
 
@@ -30,6 +30,7 @@ const form = ref({
   amount: '',
   expenseType: '',
   paySource: '',
+  operatorName: EXPENSE_OPERATORS[0] as string,
   externalOrderNo: '',
   logisticsNo: '',
   occurredAt: new Date().toISOString().slice(0, 10),
@@ -87,6 +88,9 @@ onMounted(async () => {
     } else {
       form.value.paySource = resolveDefaultPaySource()
     }
+    if (saved.operatorName && (EXPENSE_OPERATORS as readonly string[]).includes(saved.operatorName)) {
+      form.value.operatorName = saved.operatorName
+    }
   } catch {
     form.value.expenseType = categoryOptions.value[0] || '其他支出'
     form.value.paySource = resolveDefaultPaySource()
@@ -119,6 +123,7 @@ function savePrefs() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     expenseType: form.value.expenseType,
     paySource: form.value.paySource,
+    operatorName: form.value.operatorName,
   }))
 }
 
@@ -182,6 +187,10 @@ async function onSubmit() {
     showToast('选一下付款来源')
     return
   }
+  if (!form.value.operatorName) {
+    showToast('请选择经手人')
+    return
+  }
   const amount = Number(form.value.amount)
   if (Number.isNaN(amount) || amount <= 0) {
     showToast('支出金额必须大于 0')
@@ -209,6 +218,7 @@ async function onSubmit() {
       amount,
       expenseType: form.value.expenseType,
       paySource: form.value.paySource,
+      operatorName: form.value.operatorName,
       occurredAt: form.value.occurredAt,
       remark: form.value.remark,
       externalOrderNo: form.value.externalOrderNo || undefined,
@@ -294,6 +304,21 @@ async function onSubmit() {
               :class="{ 'pay-card--active': form.paySource === s.value }"
               @click="form.paySource = s.value"
             >{{ s.label }}</button>
+          </div>
+        </LuxuryCard>
+
+        <LuxuryCard>
+          <div class="section-title">经手人</div>
+          <div class="pay-grid">
+            <button
+              v-for="name in EXPENSE_OPERATORS"
+              :key="name"
+              type="button"
+              class="pay-card"
+              :class="{ 'pay-card--active': form.operatorName === name }"
+              :data-testid="`expense-operator-${name}`"
+              @click="form.operatorName = name"
+            >{{ name }}</button>
           </div>
         </LuxuryCard>
 
