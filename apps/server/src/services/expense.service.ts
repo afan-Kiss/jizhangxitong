@@ -470,8 +470,7 @@ export async function updateExpense(
   const allowedKeys = [
     'amount', 'expenseType', 'businessType', 'paySource', 'occurredAt',
     'braceletCode', 'braceletId', 'saleId', 'externalOrderNo', 'logisticsNo',
-    'expenseSummary', 'remark', 'reimbursementPerson', 'reimbursementStatus',
-    'customerPaymentStatus', 'paidAt', 'payeeName', 'payeeAccount', 'linkNote', 'needsAttachment',
+    'expenseSummary', 'remark', 'customerPaymentStatus', 'paidAt', 'payeeName', 'payeeAccount', 'linkNote', 'needsAttachment',
   ] as const
   const data: Record<string, unknown> = {}
   for (const key of allowedKeys) {
