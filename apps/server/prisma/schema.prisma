@@ -346,3 +346,17 @@ model ScanOrderDraft {
 
   @@index([logisticsNo])
 }
+
+model FinanceShareLink {
+  id          Int      @id @default(autoincrement())
+  token       String   @unique
+  title       String   @default("项目资金报账单")
+  startDate   String
+  endDate     String
+  configJson  String
+  createdBy   Int
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+
+  @@index([createdAt])
+}

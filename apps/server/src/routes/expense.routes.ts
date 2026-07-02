@@ -47,6 +47,7 @@ expenseRouter.use(authMiddleware)
 
 expenseRouter.get('/', requirePermission('expense:view'), async (req: AuthRequest, res) => {
   const mine = req.query.mine === '1' || req.query.createdByMe === '1'
+  const hasAtt = req.query.hasAttachment as string | undefined
   const data = await listExpenses({
     startDate: req.query.startDate as string,
     endDate: req.query.endDate as string,
@@ -59,6 +60,11 @@ expenseRouter.get('/', requirePermission('expense:view'), async (req: AuthReques
     pendingLinkStatus: req.query.pendingLinkStatus as string,
     onlyWithBracelet: req.query.onlyWithBracelet === 'true',
     needsAttachment: req.query.needsAttachment === '1' || req.query.needsAttachment === 'true',
+    hasAttachment: hasAtt === '1' || hasAtt === 'true' ? true : hasAtt === '0' || hasAtt === 'false' ? false : undefined,
+    linkedOnly: req.query.linkedOnly === '1' || req.query.linkedOnly === 'true',
+    reimbursementStatus: req.query.reimbursementStatus as string,
+    operator: req.query.operator as string,
+    search: (req.query.q || req.query.search) as string,
     createdBy: mine ? req.user!.userId : undefined,
     page: Number(req.query.page || 1),
     pageSize: Number(req.query.pageSize || 20),

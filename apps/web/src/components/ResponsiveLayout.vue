@@ -19,7 +19,7 @@ const cameraOpen = computed(() => scan.cameraVisible.value)
 const resultOpen = computed(() => scan.resultVisible.value)
 const useCameraForScan = computed(() => !useScannerGun.value)
 
-const isLogin = computed(() => route.path === '/login')
+const isLogin = computed(() => route.path === '/login' || route.path.startsWith('/finance-share/'))
 const showChrome = computed(() => !isLogin.value && Boolean(auth.token))
 
 const hideMobileTab = computed(() => shouldHideMobileTab(route.path, isWide.value))

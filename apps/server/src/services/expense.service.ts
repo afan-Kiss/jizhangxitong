@@ -5,6 +5,8 @@ import {
   buildQianfanOrderUrl,
   DEFAULT_PAY_SOURCE,
   EXPENSE_OPERATORS,
+  isPendingReimbursement,
+  isReimbursedStatus,
   type ExpenseBusinessType,
 } from '@jade-account/shared'
 import { prisma } from '../lib/prisma'
@@ -37,6 +39,11 @@ export interface ExpenseFilter {
   isTrialRun?: boolean
   excludeTrial?: boolean
   needsAttachment?: boolean
+  hasAttachment?: boolean
+  linkedOnly?: boolean
+  reimbursementStatus?: string
+  operator?: string
+  search?: string
   createdBy?: number
   remarkContains?: string
   page?: number
@@ -78,6 +85,55 @@ function buildWhere(filter: ExpenseFilter) {
   if (filter.pendingLinkStatus) where.pendingLinkStatus = filter.pendingLinkStatus
   if (filter.onlyWithBracelet) where.braceletId = { not: null }
   if (filter.needsAttachment) where.needsAttachment = true
+  if (filter.hasAttachment === true) {
+    where.attachments = { some: {} }
+  } else if (filter.hasAttachment === false) {
+    where.attachments = { none: {} }
+  }
+  if (filter.linkedOnly) {
+    where.OR = [
+      { externalOrderNo: { not: null } },
+      { braceletId: { not: null } },
+    ]
+  }
+  if (filter.reimbursementStatus) {
+    const rs = filter.reimbursementStatus
+    if (rs === 'none') {
+      where.reimbursementStatus = { in: ['none', 'not_required'] }
+    } else if (rs === 'pending_report') {
+      where.reimbursementStatus = { in: ['pending', 'submitted'] }
+    } else {
+      where.reimbursementStatus = rs
+    }
+  }
+  if (filter.operator) {
+    if (filter.operator === '未标记') {
+      where.OR = [
+        { reimbursementPerson: null },
+        { reimbursementPerson: '' },
+      ]
+    } else {
+      where.reimbursementPerson = filter.operator
+    }
+  }
+  if (filter.search?.trim()) {
+    const q = filter.search.trim()
+    const searchOr = [
+      { expenseType: { contains: q } },
+      { reimbursementPerson: { contains: q } },
+      { paySource: { contains: q } },
+      { remark: { contains: q } },
+      { externalOrderNo: { contains: q } },
+      { braceletCode: { contains: q } },
+      { expenseNo: { contains: q } },
+    ]
+    if (where.OR) {
+      where.AND = [{ OR: where.OR as unknown[] }, { OR: searchOr }]
+      delete where.OR
+    } else {
+      where.OR = searchOr
+    }
+  }
   if (filter.createdBy) where.createdBy = filter.createdBy
   if (filter.remarkContains) where.remark = { contains: filter.remarkContains }
   where.isTrialRun = false
@@ -712,9 +768,21 @@ export async function getExpenseSummary(
     byOperator[op] = sumMoney([byOperator[op] || 0, amt])
   }
 
-  const needsAttachment = await prisma.expense.count({
-    where: { isVoided: false, isTrialRun: false, needsAttachment: true },
-  })
+  const needsAttachmentCount = expenses.filter((e) => e.needsAttachment).length
+  const pendingReimbursementAmount = sumMoney(
+    expenses.filter((e) => isPendingReimbursement(e.reimbursementStatus)).map((e) => e.amount),
+  )
+  const reimbursedAmount = sumMoney(
+    expenses.filter((e) => isReimbursedStatus(e.reimbursementStatus)).map((e) => e.amount),
+  )
+  const linkedCount = expenses.filter(
+    (e) => !!e.externalOrderNo?.trim() || e.braceletId != null,
+  ).length
+
+  const byTypeCount: Record<string, number> = {}
+  for (const e of expenses) {
+    byTypeCount[e.expenseType] = (byTypeCount[e.expenseType] || 0) + 1
+  }
 
   const totalCount = expenses.length
   const myCount = userId ? expenses.filter((e) => e.createdBy === userId).length : undefined
@@ -727,11 +795,15 @@ export async function getExpenseSummary(
     totalCount,
     myCount,
     byType,
+    byTypeCount,
     byPaySource,
     byOperator,
     linkedOrderCount,
     unlinkedOrderCount,
-    needsAttachmentCount: needsAttachment,
+    linkedCount,
+    needsAttachmentCount,
+    pendingReimbursementAmount,
+    reimbursedAmount,
   }
 }
 

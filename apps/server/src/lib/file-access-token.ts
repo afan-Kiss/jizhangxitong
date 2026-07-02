@@ -8,7 +8,15 @@ function sign(payload: string): string {
 }
 
 export function createFileAccessToken(userId: number, fileId: number): { token: string; expiresAt: string } {
-  const expiresAt = Date.now() + TTL_MS
+  return createFileAccessTokenWithTtl(userId, fileId, TTL_MS)
+}
+
+export function createFileAccessTokenWithTtl(
+  userId: number,
+  fileId: number,
+  ttlMs: number,
+): { token: string; expiresAt: string } {
+  const expiresAt = Date.now() + ttlMs
   const payload = `${userId}:${fileId}:${expiresAt}`
   const token = `${Buffer.from(payload).toString('base64url')}.${sign(payload)}`
   return { token, expiresAt: new Date(expiresAt).toISOString() }
